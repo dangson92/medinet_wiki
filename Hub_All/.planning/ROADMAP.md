@@ -27,7 +27,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 
 ### M2a — Backend Foundation + Ingest MVP
 
-- [ ] **Phase 1: Infra Skeleton + Demolition + EXIT Criteria** — FastAPI skeleton + Docker Compose 3-service + xóa code M1 + CONVENTIONS.md
+- [x] **Phase 1: Infra Skeleton + Demolition + EXIT Criteria** — FastAPI skeleton + Docker Compose 3-service + xóa code M1 + CONVENTIONS.md ✓ (2026-05-13, 6 plans / 4 waves / 28 commits)
 - [ ] **Phase 2: Database Schema + Alembic Baseline** — schema migrations cho users/hubs/documents/chunks/audit_logs/usage_events/refresh_tokens/api_keys + verify HNSW 1536-dim
 - [ ] **Phase 3: Auth Port + RBAC + Response Envelope** — JWT RS256 + Argon2 cross-compat + RBAC + envelope `{success, data, error, meta}`
 - [ ] **Phase 4: CocoIndex Flow MVP + Document Ingest** — cocoindex flow LISTEN/NOTIFY + extract/chunk/embed/pgvector + status tracking
@@ -314,7 +314,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infra Skeleton + Demolition + EXIT Criteria | 0/? | Not started | - |
+| 1. Infra Skeleton + Demolition + EXIT Criteria | 6/6 | ✓ Complete | 2026-05-13 |
 | 2. Database Schema + Alembic Baseline | 0/? | Not started | - |
 | 3. Auth Port + RBAC + Response Envelope | 0/? | Not started | - |
 | 4. CocoIndex Flow MVP + Document Ingest | 0/? | Not started | - |
@@ -326,7 +326,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
-**Tổng:** 0/10 phases complete (M2a: 0/4 + M2b: 0/6)
+**Tổng:** 1/10 phases complete (M2a: 1/4 + M2b: 0/6)
 
 ---
 

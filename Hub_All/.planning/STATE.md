@@ -2,20 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: ready_to_execute
-last_updated: "2026-05-13T17:50:00.000Z"
+status: phase_complete
+last_updated: "2026-05-13T22:00:00.000Z"
 progress:
   total_phases: 10
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 6
+  percent: 10
 current_phase:
   number: 1
   name: Infra Skeleton + Demolition + EXIT Criteria
   plans_total: 6
-  plans_complete: 0
-  status: planned
+  plans_complete: 6
+  status: complete
+next_phase:
+  number: 2
+  name: Database Schema + Alembic Baseline
 ---
 
 # State — MEDWIKI
@@ -49,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 1** (Infra Skeleton + Demolition + EXIT Criteria) — **Planned, ready to execute** |
-| Plan | 6 plans / 4 waves — `01-PLAN.md` ... `06-PLAN.md` |
-| Status | Ready to execute (`/gsd-execute-phase 1`) |
-| Last activity | 2026-05-13 — Phase 1 planned: 6 plans, 4 waves, 0 BLOCKER + 0 WARNING sau revision (iter 1) |
+| Phase | **Phase 1 ✓ COMPLETE** — sẵn sàng Phase 2 (Database Schema + Alembic Baseline) |
+| Plan | 6/6 plans complete · 28 commits · 4 waves done |
+| Status | Phase complete — chờ `/gsd-discuss-phase 2` hoặc `/gsd-plan-phase 2` |
+| Last activity | 2026-05-13 — Phase 1 executed end-to-end: api/ skeleton (uv+Dockerfile+ruff+mypy+pytest) + docker-compose 3-service + FastAPI factory (lifespan+healthz/readyz+envelope) + JWT scripts PKCS#8 + M1 demolition (12.7MB) + CLAUDE.md M1→M2 rewrite + CONVENTIONS.md 5 section. CORE-01..05 ✓ |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
-| Total requirements | 38 v1 REQ-ID |
-| Critical path | 1 → 2 → 4 → 6 → 7 → 9 → 10 |
-| Auth branch | 3 → 5 → 8 (parallel-able với critical path) |
+| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) |
+| Critical path | 1 ✓ → 2 → 4 → 6 → 7 → 9 → 10 |
+| Auth branch | 3 → 5 → 8 (sau Phase 2) |
 
-**Progress bar:** `[░░░░░░░░░░] 0% (0/10 phase)`
+**Progress bar:** `[█░░░░░░░░░] 10% (1/10 phase)`
 
 ---
 
