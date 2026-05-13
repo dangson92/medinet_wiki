@@ -2,14 +2,20 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: roadmap_ready
-last_updated: "2026-05-13T00:00:00.000Z"
+status: ready_to_execute
+last_updated: "2026-05-13T17:50:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 0
-  total_plans: 0
+  total_plans: 6
   completed_plans: 0
   percent: 0
+current_phase:
+  number: 1
+  name: Infra Skeleton + Demolition + EXIT Criteria
+  plans_total: 6
+  plans_complete: 0
+  status: planned
 ---
 
 # State — MEDWIKI
@@ -43,10 +49,10 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | Not started — roadmap đã có, chờ `/gsd-plan-phase 1` |
-| Plan | — |
-| Status | Roadmap ready |
-| Last activity | 2026-05-13 — Roadmap 10 phase tạo xong (gsd-roadmapper); 38/38 REQ mapped |
+| Phase | **Phase 1** (Infra Skeleton + Demolition + EXIT Criteria) — **Planned, ready to execute** |
+| Plan | 6 plans / 4 waves — `01-PLAN.md` ... `06-PLAN.md` |
+| Status | Ready to execute (`/gsd-execute-phase 1`) |
+| Last activity | 2026-05-13 — Phase 1 planned: 6 plans, 4 waves, 0 BLOCKER + 0 WARNING sau revision (iter 1) |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
 | Total requirements | 38 v1 REQ-ID |
 | Critical path | 1 → 2 → 4 → 6 → 7 → 9 → 10 |
