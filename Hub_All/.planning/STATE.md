@@ -2,23 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_complete
-last_updated: "2026-05-13T22:00:00.000Z"
+status: ready_to_execute
+last_updated: "2026-05-13T23:30:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 6
+  total_plans: 11
   completed_plans: 6
   percent: 10
 current_phase:
-  number: 1
-  name: Infra Skeleton + Demolition + EXIT Criteria
-  plans_total: 6
-  plans_complete: 6
-  status: complete
-next_phase:
   number: 2
   name: Database Schema + Alembic Baseline
+  plans_total: 5
+  plans_complete: 0
+  status: ready_to_execute
+next_phase:
+  number: 3
+  name: Auth Port + RBAC + Response Envelope
 ---
 
 # State — MEDWIKI
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 1 ✓ COMPLETE** — sẵn sàng Phase 2 (Database Schema + Alembic Baseline) |
-| Plan | 6/6 plans complete · 28 commits · 4 waves done |
-| Status | Phase complete — chờ `/gsd-discuss-phase 2` hoặc `/gsd-plan-phase 2` |
-| Last activity | 2026-05-13 — Phase 1 executed end-to-end: api/ skeleton (uv+Dockerfile+ruff+mypy+pytest) + docker-compose 3-service + FastAPI factory (lifespan+healthz/readyz+envelope) + JWT scripts PKCS#8 + M1 demolition (12.7MB) + CLAUDE.md M1→M2 rewrite + CONVENTIONS.md 5 section. CORE-01..05 ✓ |
+| Phase | **Phase 2 — Database Schema + Alembic Baseline** (5 plans / 5 waves, ready to execute) |
+| Plan | 5 plan tạo xong (02-01..02-05) — chờ `/gsd-execute-phase 2`. Phase 1: 6/6 plans complete · 28 commits |
+| Status | Plans verified PASSED iter 2/3 (3 warning + 5 nit ban đầu → 0 issue sau revision) — sẵn sàng execute |
+| Last activity | 2026-05-13 — /gsd-plan-phase 2 hoàn tất: 5 plan tạo (02-01 app/db infra + 02-02 10 SQLAlchemy models + 02-03 Alembic init + 02-04 migration 0001_initial_schema + 02-05 verify suite testcontainers), threat model T-02-01..05, mitigation R1/R4/R7 + P1/P7/P8/P17/P20 bake hết vào plans. CORE-02 covered 5/5. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
 | Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) |
 | Critical path | 1 ✓ → 2 → 4 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 → 5 → 8 (sau Phase 2) |
 
-**Progress bar:** `[█░░░░░░░░░] 10% (1/10 phase)`
+**Progress bar:** `[█░░░░░░░░░] 10% (1/10 phase) · Phase 2 planned 5/5 plans · 0/5 executed`
 
 ---
 
@@ -148,9 +148,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-13):** gsd-roadmapper tạo ROADMAP.md 10 phase từ REQUIREMENTS.md (38 REQ-ID) + research SUMMARY.md (10-phase reconciliation từ FEATURES 8 + ARCHITECTURE 12). 100% coverage: CORE-01..05 → Phase 1+2; AUTH-01..06 → Phase 3; INGEST-01..08 → Phase 4; HUB-01..03 + USER-01..03 + AUX-01..03 → Phase 5; SEARCH-01..04 → Phase 6; ASK-01..05 → Phase 7; COMPAT-01 + TEARDOWN-01 → Phase 8; EVAL-01..04 → Phase 9; HARD-01..04 → Phase 10. M2a/M2b split mandatory với EXIT GATE giữa Phase 4 và Phase 5. Critical path 1→2→4→6→7→9→10. Parallel opportunities: 3↔4, 5↔6, 9↔10.
+**Last session (2026-05-13):** `/gsd-plan-phase 2` orchestrator → gsd-planner tạo 5 plan (02-01 app/db infra + 02-02 10 SQLAlchemy models gom theo domain + 02-03 Alembic init async + 02-04 migration 0001_initial_schema paste-ready + 02-05 verify suite testcontainers). Threat model T-02-01..05 (Tampering/Information disclosure/Elevation) bake vào Plan 01. gsd-plan-checker iter 1 phát hiện 3 WARNING + 5 NIT (0 BLOCKER). gsd-planner revision iter 1 apply 6 fix (files_modified completeness + fixture ordering refactor + PK constraint explicit name). Checker iter 2 → VERIFICATION PASSED. Coverage CORE-02 ✓ 5/5 plans. Mitigation R1/R4/R7 + P1/P7/P8/P17/P20 đều có trong plans. 2 commit: `3ccded0` (initial plans) + `67171b7` (revision iter 1).
 
-**Next action:** User review ROADMAP.md → approve → `/gsd-plan-phase 1` để decompose Phase 1 (Infra Skeleton + Demolition + EXIT Criteria) thành plans executable. Trước khi run plan-phase, có thể cần resolve open question (storage backend local/GDrive — confirm với user).
+**Next action:** Chạy `/gsd-execute-phase 2` để thực thi 5 plan tuần tự theo wave 1→5. Tổng dự kiến: ~30 commits (1 commit/task), critical path ~3-4h dev/Docker testcontainers. Trước khi execute: đảm bảo Docker Desktop running (testcontainers Plan 05 cần `pgvector/pgvector:pg16`).
 
 **Files cần đọc khi resume:**
 
@@ -163,4 +163,4 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ---
 
-*Last updated: 2026-05-13 (Roadmap 10 phase tạo xong — đang ở Roadmap Ready, chuẩn bị `/gsd-plan-phase 1`)*
+*Last updated: 2026-05-13 (Phase 2 planned — 5 plan ready to execute, đang chờ `/gsd-execute-phase 2`)*

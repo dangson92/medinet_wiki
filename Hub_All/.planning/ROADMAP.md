@@ -320,7 +320,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Infra Skeleton + Demolition + EXIT Criteria | 6/6 | ✓ Complete | 2026-05-13 |
-| 2. Database Schema + Alembic Baseline | 0/? | Not started | - |
+| 2. Database Schema + Alembic Baseline | 0/5 | Planned (ready to execute) | - |
 | 3. Auth Port + RBAC + Response Envelope | 0/? | Not started | - |
 | 4. CocoIndex Flow MVP + Document Ingest | 0/? | Not started | - |
 | 🚦 M2a EXIT GATE | — | Pending Phase 4 | - |
