@@ -46,3 +46,17 @@ uv run uvicorn app.main:app --reload --port 8080
 - Pitfalls + prevention checklist: `../.planning/research/PITFALLS.md`
 - Coding conventions Python (sẽ tạo ở Plan 06): `../.planning/CONVENTIONS.md`
 - Roadmap 10 phase: `../.planning/ROADMAP.md`
+
+## JWT Keys
+
+JWT RS256 yêu cầu RSA keypair PKCS#8 (PyJWT-compatible). Dùng script đi kèm:
+
+```bash
+make keys           # Sinh keypair RSA 4096-bit PKCS#8 vào api/keys/
+make keys-verify    # Verify format PKCS#8 + 4096-bit
+```
+
+CẢNH BÁO:
+- Thư mục `api/keys/` đã được gitignore — KHÔNG bao giờ commit private key.
+- Mỗi môi trường (dev/staging/prod) phải có keypair RIÊNG. Production keypair sinh trong build pipeline, mount vào container qua volume read-only `./api/keys:/keys:ro` (xem `docker-compose.yml`).
+- Script generate sẽ fail nếu keypair đã tồn tại (chống ghi đè key production). Xoá thủ công nếu cần regenerate.
