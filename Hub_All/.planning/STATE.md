@@ -55,7 +55,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Phase | **Phase 2 — Database Schema + Alembic Baseline** (5 plans / 5 waves, ready to execute) |
 | Plan | 5 plan tạo xong (02-01..02-05) — chờ `/gsd-execute-phase 2`. Phase 1: 6/6 plans complete · 28 commits |
 | Status | Plans verified PASSED iter 2/3 (3 warning + 5 nit ban đầu → 0 issue sau revision) — sẵn sàng execute |
-| Last activity | 2026-05-13 — Plan 02-02 complete: 10 SQLAlchemy models (Base.metadata.tables = 10) — 8 files, 7 commits. HNSW vector_cosine_ops + Vector(1536) + status CHECK enum failed_unsupported đầy đủ. |
+| Last activity | 2026-05-13 — Plan 02-03 complete: Alembic init async + env.py (target_metadata = Base.metadata 10 tables, include_object filter cocoindex P7, compare_type+compare_server_default P20) + alembic.ini + smoke script — 6 files, 6 commits. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
 | Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) |
 | Critical path | 1 ✓ → 2 → 4 → 6 → 7 → 9 → 10 |
