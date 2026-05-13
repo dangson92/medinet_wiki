@@ -14,3 +14,25 @@ Thumbs.db
 
 # Logs
 *.log
+
+# === M2 Python stack (Plan 01) ===
+
+# Python venv & cache
+api/.venv/
+api/__pycache__/
+api/**/__pycache__/
+api/.pytest_cache/
+api/.mypy_cache/
+api/.ruff_cache/
+api/*.egg-info/
+
+# Secrets (M2)
+api/keys/
+api/keys/*.pem
+api/.env
+
+# File store (local uploads)
+file_store/
+
+# Postgres data volume
+medinet_pgdata/
