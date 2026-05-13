@@ -1,0 +1,36 @@
+# Virtualenv & build artifacts
+.venv
+**/__pycache__
+*.pyc
+*.pyo
+*.egg-info
+build
+dist
+
+# Test + lint cache
+tests
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Secrets & local config
+keys/
+*.pem
+.env
+.env.*
+!.env.example
+
+# Editor / OS metadata
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docs (giảm context build)
+README.md
