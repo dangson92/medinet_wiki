@@ -82,4 +82,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Singleton settings instance — cache để tránh re-parse env mỗi lần gọi."""
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
