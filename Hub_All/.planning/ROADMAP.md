@@ -96,7 +96,12 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
   4. `chunks` table có FK constraint đúng (`document_id` → `documents.id`, `hub_id` → `hubs.id`); `documents.status` enum bao gồm `pending | processing | completed | failed | failed_unsupported` (R4 mitigation)
   5. Schema `cocoindex` tồn tại trên DB `medinet_cocoindex` (auto-create bởi cocoindex Phase 4), Alembic KHÔNG touch — verify bằng filter include_object trong `migrations/env.py`
 
-**Plans:** TBD
+**Plans:** 5 plans
+- [ ] 02-01-PLAN.md — SQLAlchemy declarative base + async engine + session factory + mixins (`app/db/`)
+- [ ] 02-02-PLAN.md — SQLAlchemy models cho 10 bảng (9 chính + user_hubs join) trong `app/models/` gom theo domain
+- [ ] 02-03-PLAN.md — Alembic init + async env.py + include_object filter cocoindex schema (P7) + drift-detection (P20)
+- [ ] 02-04-PLAN.md — Migration `0001_initial_schema.py` toàn bộ 10 bảng + HNSW vector_cosine_ops + indexes + CHECK enum
+- [ ] 02-05-PLAN.md — Verify suite: Makefile migrate-* targets + 3 pytest integration test (testcontainers Postgres)
 
 ---
 
