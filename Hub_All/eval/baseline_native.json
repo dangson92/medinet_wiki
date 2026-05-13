@@ -1,0 +1,231 @@
+{
+  "run_id": "2026-04-28T08:38:57Z",
+  "extractor_mode": "native",
+  "embedder_provider": "openai",
+  "embedder_model": "text-embedding-3-large",
+  "embedder_dim": 3072,
+  "chunker": "Semantic Chunker (AI-powered)",
+  "chunk_size": 200,
+  "chunk_overlap": 50,
+  "eval_hub_id": "35337a53-f256-49b9-a32e-fe12435f4af1",
+  "documents": [
+    {
+      "id": "6078fb86-d85c-44f0-8fc6-e1b339f24ffd",
+      "filename": "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 28
+    },
+    {
+      "id": "ae9a611e-9fa4-4354-85cf-a9fcd0c5fba7",
+      "filename": "DMD_T1-02_TuDien_ThuongHieu_v1.docx",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 9
+    },
+    {
+      "id": "02c5f785-ccff-4e34-991f-307d3f785323",
+      "filename": "DMD_T1-03_Script_Library_v1.docx",
+      "status": "timeout",
+      "progress": 0,
+      "error_message": "Poll timeout sau 300s",
+      "headings_gold_count": 50
+    },
+    {
+      "id": "d37a6d1f-0f9b-4e08-b90b-2ff2dd31697b",
+      "filename": "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 67
+    },
+    {
+      "id": "68d09212-fe1a-4dd4-98c4-fa8803038913",
+      "filename": "DMD_T3-02_PhanCong_NhanVat_v1.docx",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 6
+    },
+    {
+      "id": "1c40bfe3-03ba-40c1-8bae-ae169028d1d2",
+      "filename": "DMD_T5-01_ContentStrategy_12TuyenND_v1.docx",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 5
+    },
+    {
+      "id": "e56c0ab6-8ff7-46ef-b264-c268397463f4",
+      "filename": "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 15
+    },
+    {
+      "id": "8d4f8fea-162f-4a35-8a6c-c3237a514b4b",
+      "filename": "tri_thuc_chinh_tri.pdf",
+      "progress": 100,
+      "status": "completed",
+      "headings_gold_count": 11
+    },
+    {
+      "id": "ef73db5e-7c50-4fd6-a7b9-2221dfb51721",
+      "filename": "DMD_T1-01_scanned.pdf",
+      "progress": 0,
+      "status": "error",
+      "headings_gold_count": 28
+    },
+    {
+      "id": "a6c1d277-a7cb-4f39-b8ca-204b13994b69",
+      "filename": "DMD_T1-04_scanned.pdf",
+      "progress": 0,
+      "status": "error",
+      "headings_gold_count": 67
+    }
+  ],
+  "retrieval": {
+    "top_1_hit_rate": 0.75,
+    "top_3_hit_rate": 0.75,
+    "top_5_hit_rate": 0.75,
+    "mrr": 0.75,
+    "per_query": [
+      {
+        "id": "q01",
+        "expected_doc_id": "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q02",
+        "expected_doc_id": "DMD_T1-02_TuDien_ThuongHieu_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-02_TuDien_ThuongHieu_v1.docx",
+          "DMD_T1-02_TuDien_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-02_TuDien_ThuongHieu_v1.docx",
+          "DMD_T1-02_TuDien_ThuongHieu_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q03",
+        "expected_doc_id": "DMD_T1-03_Script_Library_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-03_Script_Library_v1.docx",
+          "DMD_T1-03_Script_Library_v1.docx",
+          "DMD_T1-03_Script_Library_v1.docx",
+          "DMD_T1-03_Script_Library_v1.docx",
+          "DMD_T1-03_Script_Library_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q04",
+        "expected_doc_id": "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q05",
+        "expected_doc_id": "DMD_T3-02_PhanCong_NhanVat_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx"
+        ],
+        "rank": null
+      },
+      {
+        "id": "q06",
+        "expected_doc_id": "DMD_T5-01_ContentStrategy_12TuyenND_v1.docx",
+        "actual_top_5": [
+          "DMD_T5-01_ContentStrategy_12TuyenND_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q07",
+        "expected_doc_id": "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+        "actual_top_5": [
+          "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+          "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+          "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+          "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q08",
+        "expected_doc_id": "tri_thuc_chinh_tri.pdf",
+        "actual_top_5": [
+          "tri_thuc_chinh_tri.pdf",
+          "tri_thuc_chinh_tri.pdf",
+          "tri_thuc_chinh_tri.pdf",
+          "tri_thuc_chinh_tri.pdf",
+          "tri_thuc_chinh_tri.pdf"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q09",
+        "expected_doc_id": "DMD_T1-01_scanned.pdf",
+        "actual_top_5": [
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx"
+        ],
+        "rank": null
+      },
+      {
+        "id": "q10",
+        "expected_doc_id": "DMD_T1-04_scanned.pdf",
+        "actual_top_5": [
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx"
+        ],
+        "rank": null
+      },
+      {
+        "id": "q11",
+        "expected_doc_id": "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx",
+          "DMD_T1-01_DinhVi_TrungTam_v1.docx"
+        ],
+        "rank": 1
+      },
+      {
+        "id": "q12",
+        "expected_doc_id": "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+        "actual_top_5": [
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx",
+          "DMD_T1-03_Script_Library_v1.docx",
+          "DMD_T5-02_Playbook_KenhTruyen_v1.docx",
+          "DMD_T1-04_FAQ_ThuongHieu_v1.docx"
+        ],
+        "rank": 1
+      }
+    ]
+  },
+  "queries_count": 12,
+  "files_count": 10,
+  "_note_heading_recall_deferred": "heading_recall measured in Phase 5 per REQ EVAL-02",
+  "min_score_used": 0.0,
+  "_note_minscore_fix": "Backend default min_score 0.3 → 0 (commit fix in searcher.go). Top-3 jumped 41.7% → 75% with same chunks/embeddings."
+}

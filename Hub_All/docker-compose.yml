@@ -1,0 +1,111 @@
+# Medinet Wiki — infra dev/prod base (M1)
+# Backend Go vẫn chạy NATIVE trên host (make run trong backend/), KHÔNG dockerize trong M1.
+# Quản lý 4 service: postgres, redis, chromadb, docling-pipeline.
+# Lần đầu:
+#   docker compose up -d postgres redis chroma            # chờ healthy
+#   docker compose up -d --build docling-pipeline          # build chậm 5-10 phút lần đầu
+#
+# CẢNH BÁO: Trước khi `docker compose up` lần đầu — backup ./chroma_data/
+# và stop Postgres/Chroma local nếu đang chạy trên cùng port (5432, 8000).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medinet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-medinet_central}
+      POSTGRES_USER: ${POSTGRES_USER:-medinet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medinet_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - medinet-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medinet} -d ${POSTGRES_DB:-medinet_central}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: medinet-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - medinet-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: medinet-chroma
+    restart: unless-stopped
+    ports:
+      - "${CHROMA_PORT:-8000}:8000"
+    volumes:
+      - ./chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    networks:
+      - medinet-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  docling-pipeline:
+    build:
+      context: ./docling-pipeline
+      dockerfile: Dockerfile
+    image: medinet/docling-pipeline:dev
+    container_name: medinet-docling
+    restart: unless-stopped
+    # KHÔNG expose port ra host — chỉ internal medinet-net (DSVC-05)
+    expose:
+      - "8001"
+    env_file:
+      - ./docling-pipeline/.env
+    environment:
+      DOCLING_OCR_ENGINE: ${DOCLING_OCR_ENGINE:-tesseract}
+      DOCLING_OCR_LANGS: ${DOCLING_OCR_LANGS:-vie+eng}
+      DOCLING_TOKENIZER_NAME: ${DOCLING_TOKENIZER_NAME:-cl100k_base}
+      DOCLING_MAX_TOKENS_PER_CHUNK: ${DOCLING_MAX_TOKENS_PER_CHUNK:-512}
+      DOCLING_MAX_FILE_MB: ${DOCLING_MAX_FILE_MB:-50}
+      DOCLING_REQUEST_TIMEOUT_SEC: ${DOCLING_REQUEST_TIMEOUT_SEC:-180}
+      DOCLING_LOG_LEVEL: ${DOCLING_LOG_LEVEL:-INFO}
+      DOCLING_LOG_FORMAT: ${DOCLING_LOG_FORMAT:-json}
+    volumes:
+      # Cache HuggingFace models — tránh re-download mỗi lần rebuild (CONTEXT mục B)
+      - ./docling_models:/root/.cache/docling
+    networks:
+      - medinet-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s   # Docling models warm có thể tốn 30-60s lần đầu
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+
+networks:
+  medinet-net:
+    driver: bridge
+    name: medinet-net

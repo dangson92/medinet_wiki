@@ -1,0 +1,16 @@
+# Local Claude Code config
+.claude/
+
+# Vector store persistence
+chroma_data/
+backend/chroma_data/
+
+# Local test data
+file_test/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

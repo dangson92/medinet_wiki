@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, "Segoe UI", "Roboto", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-indigo: #6366f1;
+  --color-brand-purple: #a855f7;
+  --color-accent: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.05);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.05);
+  --shadow-2xl: 0 25px 50px rgba(0,0,0,0.15);
+  --shadow-primary: 0 8px 24px rgba(99,102,241,0.20);
+  --shadow-accent: 0 8px 24px rgba(59,130,246,0.20);
+
+  --radius-input: 12px;
+  --radius-button: 12px;
+  --radius-card: 20px;
+  --radius-modal: 24px;
+}
+
+@keyframes pulse-border {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased selection:bg-accent/20 selection:text-accent
+      dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors
+      dark:bg-slate-600 dark:hover:bg-slate-500;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white border border-slate-200/50
+      dark:bg-slate-900 dark:border-slate-700/50;
+  }
+
+  .glass-card {
+    @apply bg-white border border-slate-200/60 rounded-card shadow-sm transition-colors duration-200
+      dark:bg-slate-800 dark:border-slate-700/60 dark:shadow-slate-900/30;
+  }
+
+  .btn-primary {
+    @apply bg-brand-indigo text-white text-sm font-semibold rounded-button transition-colors duration-150 hover:bg-brand-indigo/90 disabled:opacity-50 disabled:pointer-events-none px-4 py-2 flex items-center justify-center gap-2 whitespace-nowrap;
+  }
+
+  .btn-accent {
+    @apply bg-accent text-white text-sm font-semibold rounded-button transition-colors duration-150 hover:bg-accent/90 disabled:opacity-50 disabled:pointer-events-none px-4 py-2 flex items-center justify-center gap-2 whitespace-nowrap;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-slate-700 text-sm border border-slate-200 font-medium rounded-button transition-colors duration-150 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:pointer-events-none px-4 py-2 flex items-center justify-center gap-2 whitespace-nowrap
+      dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600 dark:hover:border-slate-500;
+  }
+
+  .btn-ghost {
+    @apply text-slate-500 text-sm font-medium rounded-button transition-colors duration-150 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 disabled:pointer-events-none px-4 py-2 flex items-center justify-center gap-2 whitespace-nowrap
+      dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100;
+  }
+
+  .input-field {
+    @apply bg-white border border-slate-200 rounded-input px-3 py-2 text-sm transition-all duration-200 focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none placeholder:text-slate-400
+      dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-accent dark:focus:ring-accent/20;
+  }
+
+  .badge {
+    @apply text-[10px] font-semibold px-2 py-0.5 rounded-full;
+  }
+
+  .badge-success { @apply bg-success/10 text-success dark:bg-success/20; }
+  .badge-danger { @apply bg-danger/10 text-danger dark:bg-danger/20; }
+  .badge-warning { @apply bg-warning/10 text-warning dark:bg-warning/20; }
+  .badge-accent { @apply bg-accent/10 text-accent dark:bg-accent/20; }
+  .badge-slate { @apply bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400; }
+
+  .rounded-nav {
+    border-radius: 12px;
+  }
+
+  /* Dark mode table helpers */
+  .dark .table-header {
+    @apply bg-slate-800/50;
+  }
+
+  /* Tiptap Editor Styles */
+  .ProseMirror {
+    outline: none;
+  }
+
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: var(--color-slate-400);
+    pointer-events: none;
+    height: 0;
+  }
+
+  .ProseMirror h1 {
+    @apply text-2xl font-bold mb-4 text-slate-900 dark:text-white;
+  }
+
+  .ProseMirror h2 {
+    @apply text-xl font-bold mb-3 text-slate-800 dark:text-slate-100;
+  }
+
+  .ProseMirror p {
+    @apply mb-3;
+  }
+
+  .ProseMirror ul {
+    @apply list-disc list-inside mb-3 pl-2;
+  }
+
+  .ProseMirror ol {
+    @apply list-decimal list-inside mb-3 pl-2;
+  }
+
+  .ProseMirror blockquote {
+    @apply border-l-4 border-slate-200 pl-4 italic my-4 text-slate-600
+      dark:border-slate-600 dark:text-slate-400;
+  }
+
+  .ProseMirror table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+    @apply border border-slate-200 rounded-lg my-4 dark:border-slate-600;
+  }
+
+  .ProseMirror table td,
+  .ProseMirror table th {
+    min-width: 1em;
+    border: 1px solid var(--color-slate-200);
+    padding: 8px 12px;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+    @apply text-sm;
+  }
+
+  :where(.dark, .dark *) .ProseMirror table td,
+  :where(.dark, .dark *) .ProseMirror table th {
+    border-color: var(--color-slate-600);
+  }
+
+  .ProseMirror table th {
+    font-weight: bold;
+    text-align: left;
+    @apply bg-slate-50 dark:bg-slate-700;
+  }
+
+  .ProseMirror table .selectedCell:after {
+    z-index: 2;
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(200, 200, 255, 0.4);
+    pointer-events: none;
+  }
+
+  .ProseMirror table .column-resize-handle {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: -2px;
+    width: 4px;
+    background-color: var(--color-accent);
+    pointer-events: none;
+  }
+
+  .ProseMirror ul[data-type="taskList"] {
+    list-style: none;
+    padding: 0;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    @apply gap-2 mb-1;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > label {
+    flex: 0 0 auto;
+    user-select: none;
+    margin-top: 4px;
+  }
+
+  .ProseMirror ul[data-type="taskList"] li > div {
+    flex: 1 1 auto;
+  }
+
+  .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+    @apply w-4 h-4 rounded border-slate-300 text-accent focus:ring-accent
+      dark:border-slate-600;
+  }
+}
