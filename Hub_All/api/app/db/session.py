@@ -9,7 +9,7 @@ Phase 2 (Plan 01) chỉ define API; Phase 3 (Auth) sẽ wire init_engine vào li
 """
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
