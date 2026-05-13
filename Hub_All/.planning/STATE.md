@@ -55,7 +55,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Phase | **Phase 2 — Database Schema + Alembic Baseline** (5 plans / 5 waves, ready to execute) |
 | Plan | 5 plan tạo xong (02-01..02-05) — chờ `/gsd-execute-phase 2`. Phase 1: 6/6 plans complete · 28 commits |
 | Status | Plans verified PASSED iter 2/3 (3 warning + 5 nit ban đầu → 0 issue sau revision) — sẵn sàng execute |
-| Last activity | 2026-05-13 — /gsd-plan-phase 2 hoàn tất: 5 plan tạo (02-01 app/db infra + 02-02 10 SQLAlchemy models + 02-03 Alembic init + 02-04 migration 0001_initial_schema + 02-05 verify suite testcontainers), threat model T-02-01..05, mitigation R1/R4/R7 + P1/P7/P8/P17/P20 bake hết vào plans. CORE-02 covered 5/5. |
+| Last activity | 2026-05-13 — Plan 02-01 complete: app/db/ infra (Base + async session + mixins + Vector shim) — 5 files, 4 commits. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
 | Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) |
 | Critical path | 1 ✓ → 2 → 4 → 6 → 7 → 9 → 10 |
