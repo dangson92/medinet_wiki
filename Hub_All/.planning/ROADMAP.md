@@ -165,13 +165,14 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Heartbeat watchdog PASS: kill cocoindex worker giữa flow → sau 5 phút (REVISION 2 — Plan 04-05 timeout configurable Settings.watchdog_timeout_seconds=300, headroom cho cocoindex update_blocking documents lớn), `documents.status` tự động flip `processing → failed` với `error_message='timeout: no heartbeat for >300s'` CHỈ khi `last_heartbeat IS NOT NULL` (WARNING #7 fix — Plan 04-04 bootstrap last_heartbeat=NOW() lúc INSERT). KHÔNG stuck `processing` forever
   5. Content-hash incremental verify: upload cùng file 2 lần liên tiếp → lần 2 KHÔNG re-embed (cocoindex memo cache hit); edit 1 chunk content rồi upload lại → CHỈ chunks bị thay đổi re-embed (verify qua OpenAI usage log count)
 
-**Plans:** 6 plans
+**Plans:** 7 plans (6 original + 1 gap closure 04-07)
 - [x] 04-01-PLAN.md — Migration 0002 watchdog index + cocoindex setup scaffolding (Wave 1, INGEST-05/06/08) — DONE (commit fa91275 → e11598f, 2026-05-14)
 - [x] 04-02-PLAN.md — Services file_extract + vn_chunker + embedder + file_store (Wave 1, INGEST-02/04) — DONE (commit b5b3a22 → c4cbbb6, 2026-05-14)
 - [ ] 04-03-PLAN.md — CocoIndex 1.0.3 flow medinet_wiki_ingest (coco.App + mount_table_target) + lifespan auto setup_cocoindex (REVISION 2 — Wave 2, INGEST-01/02/03)
 - [ ] 04-04-PLAN.md — Documents router POST /upload + GET /:id + service layer + A4 BackgroundTasks trigger_cocoindex_update (REVISION 2 — Wave 2, INGEST-04/05)
 - [ ] 04-05-PLAN.md — Watchdog asyncio task (5min timeout REVISION 2) + DELETE + LIST endpoints (Wave 3, INGEST-06/07/08)
 - [ ] 04-06-PLAN.md — M2a EXIT GATE — E2E integration test (A4 BackgroundTasks pattern REVISION 2) + manual demo script (Wave 4, INGEST-01/02/03/04/05)
+- [ ] 04-07-PLAN.md — GAP CLOSURE: VectorSchemaProvider Protocol fix (SC2/SC5 unblock) + lifespan fail-fast + pytest.skip→assert + docstring cleanup (Wave 5, INGEST-01/03 PARTIAL→SATISFIED) — closes 04-VERIFICATION.md gaps_found
 
 ---
 
