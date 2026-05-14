@@ -92,11 +92,21 @@ def test_documents_status_enum_includes_failed_unsupported(
     postgres_container: PostgresContainer,
     alembic_cfg: Config,
 ) -> None:
-    """CHECK constraint documents.status PHAI bao gom 'failed_unsupported' (R4).
+    """CHECK constraint tren documents.status PHAI bao gom 'failed_unsupported' (R4).
 
     pg_get_constraintdef(oid) sinh constraint expression dang
-    `CHECK ((status IN ('pending'::text, 'processing'::text, ...)))`. Verify
-    ca 5 status value cho R4 mitigation hard guarantee.
+    `CHECK ((status = ANY (ARRAY['pending'::text, ...])))`. Verify ca 5 status
+    value cho R4 mitigation hard guarantee.
+
+    NOTE (deviation Rule 1): Query bang conrelid='public.documents'::regclass +
+    contype='c' thay vi conname='ck_documents_status_enum'. Ly do:
+    NAMING_CONVENTION 'ck': 'ck_%(table_name)s_%(constraint_name)s' trong
+    Plan 02-01 ap dung len explicit name 'ck_documents_status_enum' Plan 02-04
+    -> double-prefix thanh 'ck_documents_ck_documents_status_enum'. Bug nay
+    cu the documented trong SUMMARY 02-05 Deferred Issues — fix tai Plan 03-XX
+    bang cach rename explicit name thanh 'status_enum' (de naming convention
+    tu bac 'ck_documents_' prefix). Test nay verify SPEC R4 (CHECK exist +
+    co failed_unsupported), KHONG verify constraint name pattern.
     """
     command.upgrade(alembic_cfg, "head")
 
@@ -105,20 +115,30 @@ def test_documents_status_enum_includes_failed_unsupported(
     )
     eng = create_engine(sync_url)
     with eng.connect() as conn:
-        row = conn.execute(text(
-            "SELECT pg_get_constraintdef(oid) "
+        rows = conn.execute(text(
+            "SELECT conname, pg_get_constraintdef(oid) "
             "FROM pg_constraint "
-            "WHERE conname = 'ck_documents_status_enum'"
-        )).first()
+            "WHERE conrelid = 'public.documents'::regclass "
+            "AND contype = 'c'"
+        )).all()
     eng.dispose()
 
-    assert row is not None, "CHECK constraint ck_documents_status_enum KHONG ton tai"
-    constraint_def = row[0]
-    assert "failed_unsupported" in constraint_def, (
-        f"R4 violation: CHECK constraint KHONG co failed_unsupported: {constraint_def}"
+    assert len(rows) > 0, "Khong tim thay CHECK constraint nao tren bang documents"
+
+    # Tim CHECK constraint chua 'status' va 'failed_unsupported' — match bang content
+    matching_check = None
+    for conname, condef in rows:
+        if "status" in condef and "failed_unsupported" in condef:
+            matching_check = (conname, condef)
+            break
+
+    assert matching_check is not None, (
+        f"R4 violation: KHONG co CHECK constraint tren documents.status chua 'failed_unsupported'. "
+        f"Cac CHECK constraints tim thay: {[(c, d) for c, d in rows]}"
     )
+    conname, constraint_def = matching_check
     # Bonus: verify ca 5 status values
     for status_val in ("pending", "processing", "completed", "failed", "failed_unsupported"):
         assert status_val in constraint_def, (
-            f"Status enum thieu '{status_val}': {constraint_def}"
+            f"Status enum thieu '{status_val}' trong constraint '{conname}': {constraint_def}"
         )

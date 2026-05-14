@@ -62,9 +62,15 @@ def test_downgrade_drops_all_clean(
     postgres_container: PostgresContainer,
     alembic_cfg: Config,
 ) -> None:
-    """downgrade base sau upgrade head -> public schema rong (alembic_version cung drop).
+    """downgrade base sau upgrade head -> 10 bang app bi drop (chi con alembic_version).
 
     Verify ROADMAP Phase 2 success criteria #3 (clean rollback).
+
+    NOTE (deviation Rule 1): Alembic LEAVES `alembic_version` table sau khi
+    downgrade base (behavior chuan — version tracking table CANNOT tu drop
+    chinh no). Test verify chi 10 bang app bi xoa sach, alembic_version van
+    ton tai (rong, 0 row). De clean tuyet doi can DROP TABLE alembic_version
+    explicit — KHONG phai trach nhiem cua downgrade base.
     """
     command.upgrade(alembic_cfg, "head")
     command.downgrade(alembic_cfg, "base")
@@ -76,8 +82,22 @@ def test_downgrade_drops_all_clean(
     with eng.connect() as conn:
         rows = conn.execute(text(
             "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema='public' AND table_type='BASE TABLE'"
+            "WHERE table_schema='public' AND table_type='BASE TABLE' "
+            "ORDER BY table_name"
         )).all()
+
+        # alembic_version sau downgrade base PHAI rong (0 revision tracked)
+        version_count = conn.execute(text(
+            "SELECT count(*) FROM alembic_version"
+        )).scalar()
     eng.dispose()
 
-    assert len(rows) == 0, f"Downgrade khong clean. Con lai: {[r[0] for r in rows]}"
+    table_names = sorted(r[0] for r in rows)
+    # Chap nhan alembic_version van ton tai (behavior chuan Alembic).
+    # 10 bang app PHAI bi xoa sach.
+    assert table_names == ["alembic_version"], (
+        f"Downgrade khong clean. Bang app con sot lai: {table_names}"
+    )
+    assert version_count == 0, (
+        f"alembic_version PHAI rong sau downgrade base, co {version_count} row"
+    )
