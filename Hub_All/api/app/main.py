@@ -4,7 +4,8 @@ Lifespan (in-process, single FastAPI process owns cocoindex theo
 ARCHITECTURE.md Pattern 1):
   - Init `asyncpg.create_pool(DATABASE_URL)` cho app DB.
   - Init `redis.asyncio.from_url(REDIS_URL)` + PING verify connection.
-  - Verify `import cocoindex` được (Phase 4 sẽ thay bằng FlowLiveUpdater thực).
+  - Phase 4 Plan 04-03: setup_cocoindex() qua asyncio.to_thread (cocoindex 1.0.3
+    actual API — coco.start_blocking + cocoindex_app.update_blocking initial backfill).
 
 Phase 1 skeleton design: nếu một dependency fail (e.g., Postgres chưa lên),
 LOG warning + đánh dấu state ready=False — KHÔNG raise/crash. App vẫn start;
@@ -89,15 +90,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     except Exception as e:  # noqa: BLE001 — Phase 1 không crash.
         logger.warning("redis_init_failed: %s", e)
 
-    # 3) cocoindex import verify (Phase 1 chỉ verify package import được;
-    #    FlowLiveUpdater + cocoindex.init() khởi tạo Phase 4 cùng flow định nghĩa).
+    # 3) Cocoindex 1.0.3 init + initial backfill (Phase 4 Plan 04-03 REVISION 2 — INGEST-01..03).
+    #    setup_cocoindex(settings) → register @coco.lifespan + coco.start_blocking
+    #    + cocoindex_app.update_blocking() initial backfill cho mọi pending documents.
+    #    KHÔNG còn live updater pattern cocoindex 0.x (Decision A4 user accepted:
+    #    per-document trigger qua FastAPI BackgroundTasks ở Plan 04-04).
+    #
+    #    setup_cocoindex SYNC blocking — wrap asyncio.to_thread để KHÔNG block
+    #    FastAPI lifespan event loop (cocoindex Rust core init + initial backfill
+    #    có thể tốn vài giây nếu schema apply lần đầu hoặc nhiều pending rows).
+    app.state.cocoindex_app = None
     try:
-        import cocoindex  # noqa: F401 — verify import path resolves
+        import asyncio
 
+        from app.rag.setup import get_cocoindex_app, setup_cocoindex
+
+        await asyncio.to_thread(setup_cocoindex, settings)
+        logger.info("cocoindex_setup_ok")
+        app.state.cocoindex_app = get_cocoindex_app()
         app.state.cocoindex_ready = True
-        logger.info("cocoindex_skeleton_ready (Phase 4 sẽ init FlowLiveUpdater)")
-    except ImportError as e:
-        logger.warning("cocoindex_import_failed: %s", e)
+        logger.info("cocoindex_app_attached_to_app_state")
+    except Exception as e:  # noqa: BLE001 — Phase 1 fail-soft pattern
+        logger.warning("cocoindex_init_failed: %s", e)
 
     # 4) JWTManager — init khoá RS256 từ keys/private.pem + public.pem (Phase 3).
     try:
@@ -153,8 +167,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             logger.warning("sqlalchemy_engine_dispose_failed: %s", e)
         # Reset JWT manager (defensive cho test isolation).
         app.state.jwt_manager = None
+        # Phase 4 Plan 04-03 REVISION 2 — stop cocoindex 1.0.3 default env.
+        if getattr(app.state, "cocoindex_app", None) is not None:
+            try:
+                import asyncio as _asyncio
+
+                from app.rag.setup import stop_cocoindex
+
+                await _asyncio.to_thread(stop_cocoindex)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("cocoindex_stop_failed: %s", e)
+            app.state.cocoindex_app = None
         if app.state.cocoindex_ready:
-            # Phase 4: app.state.cocoindex_updater.abort() ở đây.
             app.state.cocoindex_ready = False
         if app.state.redis is not None:
             try:
