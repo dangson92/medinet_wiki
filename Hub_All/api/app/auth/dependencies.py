@@ -145,17 +145,44 @@ async def get_current_user(
 def require_role(
     *roles: str,
 ) -> Callable[[User], Awaitable[User]]:
-    """Plan 03-05 sẽ implement đầy đủ.
+    """AUTH-04 — gate endpoint chỉ cho role trong `roles` được pass.
 
-    Hiện tại Plan 03-04 KHÔNG dùng (4 endpoint login/refresh/logout/me chỉ
-    cần authenticate, không cần role-gate). Stub raise NotImplementedError
-    nếu gọi để guard regression.
+    Usage:
+        @router.delete("/admin/something", dependencies=[Depends(require_role("admin"))])
+        async def delete(...): ...
+
+    Hoặc inject user trực tiếp:
+        @router.put("/...")
+        async def edit(user: User = Depends(require_role("admin", "editor"))):
+            ...
+
+    Behavior:
+    - Tham số `*roles`: variadic string (e.g., `require_role("admin")`,
+      `require_role("admin", "editor")`).
+    - Return Callable mà FastAPI inject `user = Depends(get_current_user)`.
+    - Nếu `user.role in roles` → return `user` (downstream handler dùng).
+    - Nếu `user.role not in roles` → raise HTTPException 403 với envelope
+      shape `{"code":"FORBIDDEN", "message":"..."}`.
+    - Nếu authentication fail (token sai/missing) → `get_current_user`
+      raise 401 trước, dependency này KHÔNG bao giờ run trong case đó.
+
+    Raise:
+    - ValueError ngay khi gọi `require_role()` không argument — guard tránh
+      khai báo route mở cho mọi role (security gate).
     """
+    if not roles:
+        raise ValueError("require_role cần ít nhất 1 role")
+    allowed = set(roles)
 
     async def _dependency(user: User = Depends(get_current_user)) -> User:  # noqa: B008
-        raise NotImplementedError(
-            "require_role chưa implement — Plan 03-05 sẽ extend. "
-            f"Requested roles: {roles}"
-        )
+        if user.role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "FORBIDDEN",
+                    "message": f"Không đủ quyền — yêu cầu một trong {sorted(allowed)}",
+                },
+            )
+        return user
 
     return _dependency

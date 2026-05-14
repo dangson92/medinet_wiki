@@ -30,8 +30,10 @@ from typing import Any
 
 import asyncpg
 import redis.asyncio as redis_asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.requests import Request as FastAPIRequest
+from starlette.responses import JSONResponse as StarletteJSONResponse
 
 from app.config import get_settings
 from app.middleware import (
@@ -203,6 +205,40 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     from app.auth import auth_router
 
     app.include_router(auth_router)
+
+    # HTTPException → envelope handler (Plan 03-05 AUTH-04).
+    # CRITICAL: Plan 03-01 ErrorHandlerMiddleware đã pass-through StarletteHTTPException
+    # (isinstance check + raise). Mọi HTTPException từ dependency/route — bao gồm
+    # MISSING_AUTHORIZATION/INVALID_TOKEN/TOKEN_REVOKED/USER_DISABLED từ get_current_user
+    # và FORBIDDEN từ require_role — PHẢI reach handler này để envelope shape
+    # {success:false, data:null, error:{code, message}, meta:null} render đúng.
+    # Integration test tests/integration/test_rbac_dependency.py verify shape envelope
+    # cho 401 missing-Bearer + 403 forbidden scenario.
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(
+        request: FastAPIRequest, exc: HTTPException
+    ) -> StarletteJSONResponse:
+        """Map HTTPException → envelope `{success, data, error, meta}` D6 shape."""
+        detail = exc.detail
+        if isinstance(detail, dict) and "code" in detail and "message" in detail:
+            code = str(detail["code"])
+            message = str(detail["message"])
+        elif isinstance(detail, str):
+            code = "ERROR"
+            message = detail
+        else:
+            code = "ERROR"
+            message = str(detail)
+        body = {
+            "success": False,
+            "data": None,
+            "error": {"code": code, "message": message},
+            "meta": None,
+        }
+        headers = exc.headers or None
+        return StarletteJSONResponse(
+            content=body, status_code=exc.status_code, headers=headers
+        )
 
     @app.get("/healthz")
     async def healthz() -> Any:
