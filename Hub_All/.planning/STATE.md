@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_in_progress
-last_updated: "2026-05-14T03:48:18Z"
+last_updated: "2026-05-14T04:01:09Z"
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 16
-  completed_plans: 14
-  percent: 34
+  completed_plans: 15
+  percent: 38
 current_phase:
   number: 3
   name: Auth Port + RBAC + Response Envelope
   plans_total: 5
-  plans_complete: 3
+  plans_complete: 4
   status: in_progress
 next_phase:
   number: 4
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, **3/5 executed** — Plan 03-01 + 03-02 + 03-03 DONE) |
-| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 ✓ DONE (Wave 1: JWT keypair + PyJWT RS256 wrapper). 03-03 ✓ DONE (Wave 2: Argon2 password module + cross-compat R6 verified). 03-04 NEXT (Wave 3: auth router login/refresh/logout/me); 03-05 Wave 4 (RBAC + 5-AC integration test). |
-| Status | Phase 3 in progress — Plan 03-03 thực thi xong 3/3 task, 10/10 pytest PASS (6 unit + 4 critical cross-compat), R6 cross-compat verified, DOC-BUG discovered + fixed (REQUIREMENTS/PITFALLS/CLAUDE ghi t=1,p=2 sai → Go source t=3,p=4 đúng). |
-| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-03`: 3 commits atomic (e205920 → a4f5203 → b68e4d9). 0 deviation — paste-ready code apply nguyên xi (chỉ bỏ unused `import pytest`). app/auth/password.py wrap pwdlib.Argon2Hasher với params LẤY TỪ GO SOURCE (NOT REQUIREMENTS.md doc). R6 mitigation verified: pwdlib verify Go seed.sql production hash 'Admin@123' → True. Test marker `critical` cho CI gate HARD-03. |
+| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, **4/5 executed** — Plan 03-01 + 03-02 + 03-03 + 03-04 DONE) |
+| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 ✓ DONE (Wave 1: JWT keypair + PyJWT RS256 wrapper). 03-03 ✓ DONE (Wave 2: Argon2 password module + cross-compat R6 verified). 03-04 ✓ DONE (Wave 3: 4 endpoint /api/auth/login+refresh+logout+me + AuthService + Redis SETNX P16 + anti-timing dummy_password_hash + lifespan wire). 03-05 NEXT Wave 4 (RBAC require_role + 5-AC integration test). |
+| Status | Phase 3 in progress — Plan 03-04 thực thi xong 5/5 task, 36/36 pytest no regress, AUTH-01/02/03 complete. 4 endpoint mount: POST/login + POST/refresh + POST/logout + GET/me. Lifespan wire JWTManager + dummy_password_hash + SQLAlchemy init_engine. P16 SETNX atomic lock cho refresh race + anti-timing oracle verified. |
+| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-04`: 5 commits atomic (c165c4d → 6b7d8a6 → 31d54fd → 8aaad3f → 1c9237f). 3 deviation Rule 3: (1) pydantic[email] bump pyproject.toml + uv sync install email-validator 2.3.0 cho EmailStr (plan đã anticipate); (2) ruff B008 false positive với FastAPI Depends → noqa 9 vị trí; (3) ruff C901 lifespan+create_app complexity 13/11 → noqa 2 vị trí (init sequence vốn nhiều step). 4 file created (schemas, service, dependencies, router) + 4 file modified (__init__.py extend 8 export, main.py lifespan+include_router+readyz check[jwt], pyproject.toml, uv.lock). |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
-| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) · 4 satisfied Phase 3 (AUTH-01 partial, AUTH-04 partial — middleware+envelope; AUTH-05 — Argon2 cross-compat; AUTH-06 — JWT keypair PKCS#8 verify + PyJWT RS256 wrapper) · 3 planned remaining (AUTH-02, AUTH-03, AUTH-04 full) |
+| Total requirements | 38 v1 REQ-ID · 1 satisfied CORE (CORE-02) · 5 satisfied Phase 3 (AUTH-01 — login; AUTH-02 — refresh + P16 SETNX; AUTH-03 — me + logout; AUTH-05 — Argon2 cross-compat; AUTH-06 — JWT keypair PKCS#8) · 1 planned remaining Phase 3 (AUTH-04 — RBAC require_role + integration test) |
 | Critical path | 1 ✓ → 2 ✓ → 4 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 (2/5 plans) → 5 → 8 |
 
-**Progress bar:** `[████░░░░░░] 34% (2/10 phase + 3/5 Phase 3 plans) · Phase 3 in progress: 3/5 plans done · Next: /gsd-execute-phase 3 plan 03-04 (Auth router login/refresh/logout/me)`
+**Progress bar:** `[████░░░░░░] 38% (2/10 phase + 4/5 Phase 3 plans) · Phase 3 in progress: 4/5 plans done · Next: /gsd-execute-phase 3 plan 03-05 (RBAC require_role + 5-AC integration test suite)`
 
 ---
 
@@ -148,7 +148,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-14 — Plan 03-03 execute):** `/gsd-execute-phase 3 plan 03-03` → executor agent thực thi 3 task atomic:
+**Last session (2026-05-14 — Plan 03-04 execute):** `/gsd-execute-phase 3 plan 03-04` → executor agent thực thi 5 task atomic:
+- Task 01 (`c165c4d`): tạo `app/auth/schemas.py` — 5 Pydantic v2 model (LoginRequest, LoginResponse, UserPublic, RefreshRequest, LogoutRequest). LoginRequest.email: EmailStr + password min/max length. UserPublic.hub_assignments: list[str] (USER-03). role Literal["admin","editor","viewer"] match Go enum. Rule 3 deviation: pyproject `pydantic>=2.7.0,<3` → `pydantic[email]>=2.7.0,<3` + uv sync install email-validator 2.3.0 + dnspython 2.8.0 cho EmailStr (plan đã anticipate trong task 01 lưu ý).
+- Task 02 (`6b7d8a6`): tạo `app/auth/service.py` — AuthService class với 4 async method (login/refresh/logout/get_current_user_info). AuthError(code, message) exception class. _hash_refresh_token SHA-256 64-char (T-02-03). Constructor injection: db, redis, jwt_manager, dummy_password_hash. Anti-timing oracle: login luôn gọi verify_password kể cả user None với dummy hash. P16 SETNX: refresh dùng redis.set(lock:refresh:<jti>, nx=True, ex=30) → fail → AuthError REFRESH_RACE. Blacklist old jti + UPDATE refresh_tokens.revoked_at + INSERT new hash. 5 error code Go-compat (INVALID_CREDENTIALS, INVALID_REFRESH_TOKEN, REFRESH_RACE, TOKEN_REVOKED, USER_DISABLED).
+- Task 03 (`31d54fd`): tạo `app/auth/dependencies.py` — 5 FastAPI dependency + oauth2_scheme + require_role stub. OAuth2PasswordBearer(tokenUrl=/api/auth/login, auto_error=False). get_current_user reject 5 case 401: MISSING_AUTHORIZATION (rỗng) / INVALID_TOKEN (decode fail) / TOKEN_REVOKED (Redis blacklist exists) / USER_DISABLED (user None hoặc is_active False). require_role raise NotImplementedError — Plan 03-05 implement. Rule 3 deviation: noqa B008 cho 4 Depends() default (FastAPI pattern, false positive).
+- Task 04 (`8aaad3f`): tạo `app/auth/router.py` (4 endpoint) + extend `app/auth/__init__.py` re-export 8 symbol mới (15 export total). APIRouter(prefix=/api/auth, tags=[auth]). _auth_error_to_response helper map AuthError.code → resp.unauthorized. POST /login + /refresh + /logout (Bearer + body LogoutRequest) + GET /me. Logout endpoint: parse Authorization header lấy access JTI + exp → service.logout(jti, exp, refresh_token). Rule 3 deviation: noqa B008 cho 5 Depends() default.
+- Task 05 (`1c9237f`): extend `app/main.py` — lifespan +3 step (JWTManager init từ keys/private.pem + public.pem, dummy_password_hash = hash_password("dummy..."), init_engine cho SQLAlchemy async session), shutdown +1 (dispose_engine + reset jwt_manager), create_app +1 (include_router(auth_router)), readyz +1 check (jwt). Rule 3 deviation: noqa C901 cho lifespan (complexity 13) + create_app (complexity 11) — init sequence vốn nhiều step linear.
+- Verification suite 13/13 PASS: 6 path mount (4 auth + 2 health), all exports OK, ruff app/auth + main.py clean (8 source), mypy strict clean (8 source), pytest 36/36 no regress (25 unit + 11 integration), schemas/service/deps/router import + functional verify.
+- SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-04-SUMMARY.md` tạo với 5 commit hash + threat model 7 entry (6 mitigated + 1 accepted Redis fail-open Phase 3) + forward links cho Plan 03-05 (RBAC require_role + integration test) + Phase 5 (CRUD endpoint với get_current_user).
+
+**Previous session (2026-05-14 — Plan 03-03 execute):** `/gsd-execute-phase 3 plan 03-03` → executor agent thực thi 3 task atomic:
 - Task 01 (`e205920`): tạo `app/auth/password.py` wrap `pwdlib.PasswordHash` + `pwdlib.hashers.argon2.Argon2Hasher` với params LẤY TỪ GO SOURCE (`backend/internal/pkg/hash/argon2.go` line 13-19): `memory_cost=65_536, time_cost=3, parallelism=4, salt_len=16, hash_len=32`. Expose 2 helper `hash_password(plain) -> str` + `verify_password(plain, hash) -> bool`. verify_password wrap try/except để KHÔNG raise UnknownHashError — trả False. Extend `app/auth/__init__.py` re-export 7 symbol (hash_password, verify_password + 5 ARGON2_* constants). Docstring document DOC-BUG explicit. Pre-implementation verify pwdlib API qua `inspect.signature(Argon2Hasher.__init__)` — defaults match Go source nguyên xi.
 - Task 02 (`a4f5203`): tests/unit/test_password.py — 6 unit test pure Python (KHÔNG cần Postgres): hash prefix Go-compat / round-trip Tiếng Việt / reject wrong / garbage hash → False / salt random / params constants regression guard. 6/6 PASS in 0.61s.
 - Task 03 (`b68e4d9`): tests/integration/test_argon2_cross_compat.py — 4 critical R6 mitigation test với fixture hash thật từ `Hub_All/backend/scripts/seed.sql` line 13 (admin@medinet.vn, plaintext "Admin@123"). All 4 test marker `@pytest.mark.critical + @pytest.mark.integration` cho CI gate HARD-03. Test 1: pwdlib verify Go-generated hash production → True (R6 CORE proof). Test 2: phản chứng wrong password / case-sensitive / empty → False. Test 3: 5 Python plaintext sample round-trip. Test 4: hash format byte-identical Go (split $ → 6 segment với parts[3]='m=65536,t=3,p=4'). 4/4 PASS in 1.39s.
@@ -157,7 +166,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **DOC-BUG DISCOVERED + DOCUMENTED:** REQUIREMENTS.md AUTH-05 + PITFALLS.md P6 + CLAUDE.md section 3 ghi `t=1, p=2` SAI — Go source `backend/internal/pkg/hash/argon2.go` line 13-19 ghi `t=3, p=4`. Production seed hash prefix `$argon2id$v=19$m=65536,t=3,p=4$...` confirm Go source là single source of truth. SUMMARY.md document doc-bug explicit + suggest follow-up sed fix 3 doc (out of Plan 03-03 scope, defer Plan 03-04/03-05 cleanup commit).
 - SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-03-SUMMARY.md` tạo với 3 commit hash + threat model 5 entry (1 partial T-03-pw-timing chờ Plan 03-04 dummy compare + 2 accepted + 2 mitigated) + forward links cho Plan 03-04/03-05.
 
-**Next action:** Chạy `/gsd-execute-phase 3 plan 03-04` để tiếp tục Wave 3 (auth router 4 endpoint /api/auth/login + /refresh + /logout + /me wire `JWTManager` + `verify_password` + Redis SETNX P16 atomic refresh, AUTH-01/02/03). Plan 03-04 sẽ wire dependency `get_jwt_manager()` ở lifespan + bake dummy hash compare cho user-not-found case (T-03-pw-timing mitigation). Plan 03-04 cần Redis container — verify Docker daemon running trước khi execute. Sau 03-04 → Wave 4 (03-05 RBAC require_role + 5-AC integration test suite Postgres+Redis testcontainers).
+**Next action:** Chạy `/gsd-execute-phase 3 plan 03-05` để tiếp tục Wave 4 (RBAC `require_role(*roles)` implement đầy đủ + 5-AC integration test suite với testcontainers Postgres+Redis: login envelope shape + JWT compat / RBAC 403 viewer-editor / refresh race concurrent / PKCS#8 cross-process Go→Python verify / logout blacklist). Plan 03-05 sẽ extend `app/auth/dependencies.py::require_role` từ stub NotImplementedError → check `user.role in roles raise resp.forbidden()`. Sẽ wire FastAPI exception_handler render envelope cho HTTPException pass-through từ get_current_user. Sau 03-05 → Phase 3 COMPLETE → Phase 4 (CocoIndex Flow MVP).
 
 **Files cần đọc khi resume:**
 
