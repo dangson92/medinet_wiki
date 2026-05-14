@@ -24,6 +24,7 @@ Yeu cau prereq:
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -150,13 +151,35 @@ async def app_with_auth(auth_env: None, alembic_cfg: Config) -> AsyncIterator[An
     tạo schema. Tests sẽ INSERT vào users / refresh_tokens / user_hubs.
     """
     # Apply migration schema trước khi lifespan init.
+    # CRITICAL: alembic env.py dùng `asyncio.run(run_async_migrations())` — call
+    # từ trong async fixture sẽ raise "asyncio.run() cannot be called from a
+    # running event loop". Chạy command.upgrade qua to_thread() → thread mới
+    # tạo event loop riêng cho asyncio.run của alembic.
     from alembic import command
-    command.upgrade(alembic_cfg, "head")
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
 
     # Reset SQLAlchemy engine state cho test isolation (lifespan trước có thể
     # đã init engine với DSN cũ — phải dispose trước khi init lại).
     from app.db.session import dispose_engine
     await dispose_engine()
+
+    # TRUNCATE per-test isolation — postgres_container scope=module nên data
+    # giữa các test trong cùng module sẽ leak. Phase 3 Plan 05 cần fresh state
+    # mỗi test (admin_user fixture INSERT cùng email → unique violation lần 2).
+    # Dùng raw sync engine TRƯỚC khi lifespan init (init_engine chưa chạy).
+    import os
+    sync_dsn = os.environ["DATABASE_URL"].replace(
+        "postgresql+asyncpg://", "postgresql://"
+    )
+    sync_eng = create_engine(sync_dsn)
+    with sync_eng.begin() as conn:
+        # CASCADE truncate — refresh_tokens.user_id + user_hubs.user_id FK reference users.
+        conn.execute(
+            text(
+                "TRUNCATE TABLE users, refresh_tokens, user_hubs RESTART IDENTITY CASCADE"
+            )
+        )
+    sync_eng.dispose()
 
     from app.main import create_app
     app = create_app()
