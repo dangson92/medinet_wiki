@@ -1,5 +1,5 @@
 # Medinet Wiki API — dev tasks
-.PHONY: install keys keys-verify lint test test-cov clean migrate-up migrate-down migrate-check migrate-history
+.PHONY: install keys keys-verify keys-verify-jwt lint test test-cov clean migrate-up migrate-down migrate-check migrate-history
 
 UV ?= uv
 
@@ -11,6 +11,9 @@ keys:
 
 keys-verify:
 	bash scripts/verify_keys.sh
+
+keys-verify-jwt:
+	bash scripts/verify_jwt_format.sh
 
 lint:
 	$(UV) run ruff check app tests
