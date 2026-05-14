@@ -50,6 +50,9 @@ dev = [
     "ruff>=0.6,<1",
     "mypy>=1.11,<2",
     "pre-commit>=3,<4",
+    # Integration test infrastructure (Phase 2 Plan 05 — testcontainers Postgres pgvector pg16)
+    "testcontainers[postgres]>=4.7,<5",
+    "psycopg2-binary>=2.9,<3",
 ]
 prod = [
     "gunicorn>=23,<24",
