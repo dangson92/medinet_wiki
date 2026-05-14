@@ -160,18 +160,18 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 **Success Criteria** (what must be TRUE):
   1. Admin `POST /api/documents/upload` (multipart, file `Khám bệnh.docx`, hub_id="hub_y_te") → response 202 với `document_id`, file lưu `file_store/<uuid>.docx`, row `documents` INSERT với `status='pending'` trong <500ms
-  2. Trong <5s sau upload, `documents.status` tự động chuyển `pending → processing → completed` (qua cocoindex LISTEN/NOTIFY); `GET /api/documents/:id` trả `chunk_count > 0` và `chunks` table có rows với `hub_id` đúng, `vector` dim=1536, `content_hash BYTEA` set
+  2. Trong <5s sau upload, `documents.status` tự động chuyển `pending → completed` (REVISION 2 — cocoindex 1.0.3 KHÔNG support source LISTEN/NOTIFY; A4 BackgroundTasks pattern: router add_task `trigger_cocoindex_update` chạy `cocoindex_app.update_blocking()` ngay sau response 202 → preserve <5s SLA); `GET /api/documents/:id` trả `chunk_count > 0` và `chunks` table có rows với `hub_id` đúng, `vector` dim=1536, `content_hash BYTEA` set
   3. Upload scanned PDF VN (sample 3 file y tế) → response 415 với envelope `{success:false, error:{code:"unsupported_format", message:"PDF scan chưa hỗ trợ trong M2. Khuyến nghị: chuyển sang DOCX."}}`; `documents.status='failed_unsupported'` (khác `failed`)
-  4. Heartbeat watchdog PASS: kill cocoindex worker giữa flow → sau 2 phút, `documents.status` tự động flip `processing → failed` với `error_message='timeout: no heartbeat for >120s'` (KHÔNG stuck `processing` forever)
+  4. Heartbeat watchdog PASS: kill cocoindex worker giữa flow → sau 5 phút (REVISION 2 — Plan 04-05 timeout configurable Settings.watchdog_timeout_seconds=300, headroom cho cocoindex update_blocking documents lớn), `documents.status` tự động flip `processing → failed` với `error_message='timeout: no heartbeat for >300s'` CHỈ khi `last_heartbeat IS NOT NULL` (WARNING #7 fix — Plan 04-04 bootstrap last_heartbeat=NOW() lúc INSERT). KHÔNG stuck `processing` forever
   5. Content-hash incremental verify: upload cùng file 2 lần liên tiếp → lần 2 KHÔNG re-embed (cocoindex memo cache hit); edit 1 chunk content rồi upload lại → CHỈ chunks bị thay đổi re-embed (verify qua OpenAI usage log count)
 
 **Plans:** 6 plans
-- [ ] 04-01-PLAN.md — Migration 0002 watchdog index + cocoindex setup scaffolding (Wave 1, INGEST-05/06/08)
-- [ ] 04-02-PLAN.md — Services file_extract + vn_chunker + embedder + file_store (Wave 1, INGEST-02/04)
-- [ ] 04-03-PLAN.md — CocoIndex flow medinet_wiki_ingest + lifespan FlowLiveUpdater (Wave 2, INGEST-01/02/03)
-- [ ] 04-04-PLAN.md — Documents router POST /upload + GET /:id + service layer (Wave 2, INGEST-04/05)
-- [ ] 04-05-PLAN.md — Watchdog asyncio task + DELETE + LIST endpoints (Wave 3, INGEST-06/07/08)
-- [ ] 04-06-PLAN.md — M2a EXIT GATE — E2E integration test + manual demo script (Wave 4, INGEST-01/02/03/04/05)
+- [x] 04-01-PLAN.md — Migration 0002 watchdog index + cocoindex setup scaffolding (Wave 1, INGEST-05/06/08) — DONE (commit fa91275 → e11598f, 2026-05-14)
+- [x] 04-02-PLAN.md — Services file_extract + vn_chunker + embedder + file_store (Wave 1, INGEST-02/04) — DONE (commit b5b3a22 → c4cbbb6, 2026-05-14)
+- [ ] 04-03-PLAN.md — CocoIndex 1.0.3 flow medinet_wiki_ingest (coco.App + mount_table_target) + lifespan auto setup_cocoindex (REVISION 2 — Wave 2, INGEST-01/02/03)
+- [ ] 04-04-PLAN.md — Documents router POST /upload + GET /:id + service layer + A4 BackgroundTasks trigger_cocoindex_update (REVISION 2 — Wave 2, INGEST-04/05)
+- [ ] 04-05-PLAN.md — Watchdog asyncio task (5min timeout REVISION 2) + DELETE + LIST endpoints (Wave 3, INGEST-06/07/08)
+- [ ] 04-06-PLAN.md — M2a EXIT GATE — E2E integration test (A4 BackgroundTasks pattern REVISION 2) + manual demo script (Wave 4, INGEST-01/02/03/04/05)
 
 ---
 
