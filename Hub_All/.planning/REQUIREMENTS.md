@@ -25,7 +25,7 @@
 - [ ] **AUTH-02**: `POST /api/auth/refresh` — body `{refresh_token}` → rotate refresh token (Redis SETNX atomic chống concurrent refresh race) → return access + refresh mới. Token cũ blacklist Redis TTL=access_token_ttl.
 - [ ] **AUTH-03**: `GET /api/auth/me` (Bearer) → return user info + roles + hub assignments. `POST /api/auth/logout` blacklist refresh token.
 - [ ] **AUTH-04**: RBAC dependency `require_role("admin"|"editor"|"viewer")` qua FastAPI `Depends`. Endpoint admin-only refuse với 403 cho viewer/editor. Test integration: viewer KHÔNG thể `PUT /api/hubs/:id`.
-- [ ] **AUTH-05**: **Argon2 cross-compat test (R6 mitigation)** — pin pwdlib params Go-compat `m=65536, t=1, p=2, saltLen=16, keyLen=32`. Test: pwdlib `verify_password()` PASS hash do Go `alexedwards/argon2id` sinh ra (5 sample hash). Fail-fast (CI error) nếu mismatch.
+- [x] **AUTH-05**: **Argon2 cross-compat test (R6 mitigation)** — pin pwdlib params Go-compat `m=65536, t=3, p=4, saltLen=16, keyLen=32` (DOC-BUG fix: trước đó ghi `t=1, p=2` sai; Go source `backend/internal/pkg/hash/argon2.go` line 13-19 là source of truth — verified by production seed hash prefix `$argon2id$v=19$m=65536,t=3,p=4$`). Test: pwdlib `verify_password()` PASS hash do Go `alexedwards/argon2id` sinh ra (1 Go production hash từ seed.sql + 5 Python round-trip — full 5+5 bi-directional defer Phase 5/8). Fail-fast (CI error) nếu mismatch. ✓ (Plan 03-03, 2026-05-14 — `app/auth/password.py` + 4 critical integration test PASS).
 - [x] **AUTH-06**: JWT keypair `Hub_All/api/keys/` (gitignored). Format compat verify: `openssl rsa -in private.pem -text -noout` xác định PKCS#1 vs PKCS#8. Convert PKCS#1→PKCS#8 nếu cần (`openssl pkcs8 -topk8 -nocrypt`). Token Go cũ (nếu có user đang đăng nhập) phải decode được bởi PyJWT. ✓ (Plan 03-02, 2026-05-14 — `scripts/verify_jwt_format.sh` + `app/auth/jwt.py` JWTManager PyJWT RS256, 8/8 unit test PASS, 5 attack vector reject verified, cross-process Go→Python defer rời Plan 03-05 integration test)
 
 ### HUB — Hub Registry CRUD + Isolation (3 REQ)
@@ -180,7 +180,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | AUTH-02 | Phase 3 (refresh) | Pending |
 | AUTH-03 | Phase 3 (me + logout) | Pending |
 | AUTH-04 | Phase 3 (RBAC dependency) | Pending |
-| AUTH-05 | Phase 3 (Argon2 cross-compat test) | Pending |
+| AUTH-05 | Phase 3 Plan 03-03 (Argon2 cross-compat test) | ✓ Done 2026-05-14 (10/10 unit+critical PASS, R6 cross-compat verified: pwdlib verify Go seed hash) |
 | AUTH-06 | Phase 3 Plan 03-02 (JWT keypair format + PyJWT RS256 wrapper) | ✓ Done 2026-05-14 (8/8 unit test PASS, T-03-jwt-alg-confusion mitigated) |
 | INGEST-01 | Phase 4 (cocoindex flow Postgres source LISTEN/NOTIFY) | Pending |
 | INGEST-02 | Phase 4 (extract + scanned detect + chunk VN + embed dim 1536) | Pending |
