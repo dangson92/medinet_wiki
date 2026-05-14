@@ -230,6 +230,11 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
 
     app.include_router(auth_router)
 
+    # Mount documents router (Plan 04-04 INGEST-04..05).
+    from app.routers import documents_router
+
+    app.include_router(documents_router)
+
     # HTTPException → envelope handler (Plan 03-05 AUTH-04).
     # CRITICAL: Plan 03-01 ErrorHandlerMiddleware đã pass-through StarletteHTTPException
     # (isinstance check + raise). Mọi HTTPException từ dependency/route — bao gồm
