@@ -25,7 +25,10 @@ if [[ ! -f "$KEY" ]]; then
   exit 2
 fi
 
-HEADER=$(head -1 "$KEY")
+# Strip CR khi key file có Windows line ending (CRLF) — git for windows mặc định
+# checkout CRLF nếu .gitattributes không pin LF. Không strip → case match fail
+# với header chứa trailing \r invisible.
+HEADER=$(head -1 "$KEY" | tr -d '\r')
 
 case "$HEADER" in
   "-----BEGIN PRIVATE KEY-----")
