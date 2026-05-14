@@ -1,5 +1,5 @@
 # Medinet Wiki API — dev tasks
-.PHONY: install keys keys-verify lint test test-cov clean
+.PHONY: install keys keys-verify lint test test-cov clean migrate-up migrate-down migrate-check migrate-history
 
 UV ?= uv
 
@@ -24,3 +24,18 @@ test-cov:
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .venv
+
+# === Alembic migration targets (Phase 2 Plan 05) ===
+# Tien dieu kien: docker compose up -d postgres (Phase 1 Plan 02) + .env file day DSN.
+
+migrate-up:
+	uv run alembic upgrade head
+
+migrate-down:
+	uv run alembic downgrade base
+
+migrate-check:
+	uv run alembic check
+
+migrate-history:
+	uv run alembic history --verbose
