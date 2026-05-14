@@ -144,17 +144,51 @@ def auth_env(
 
 
 @pytest.fixture
-async def app_with_auth(auth_env: None, alembic_cfg: Config) -> AsyncIterator[Any]:
+async def app_with_auth(
+    postgres_container: PostgresContainer,
+    redis_container: RedisContainer,
+    alembic_cfg: Config,
+    monkeypatch: pytest.MonkeyPatch,
+) -> AsyncIterator[Any]:
     """FastAPI app + alembic upgrade head + lifespan ready.
 
     Migration chạy TRƯỚC lifespan vì lifespan chỉ verify connection, KHÔNG
     tạo schema. Tests sẽ INSERT vào users / refresh_tokens / user_hubs.
+
+    CRITICAL — set env vars CUỐI CÙNG TRONG fixture này (sau alembic_cfg):
+    alembic_cfg setEnv REDIS_URL=localhost:6379 (placeholder Phase 2 — không
+    dùng redis cho migration). Plan 03-05 cần REDIS_URL trỏ vào testcontainer
+    port — phải override SAU alembic_cfg, rồi clear cache, rồi gọi create_app.
+    Cùng lý do với DATABASE_URL/JWT_*_PATH.
     """
+    # CRITICAL: alembic_cfg đã setEnv (Phase 2 style — localhost:6379 cho Redis,
+    # không cần redis cho migration). Plan 03-05 cần override REDIS_URL +
+    # JWT keys + CORS để create_app dùng testcontainer Redis. Set TẠI ĐÂY
+    # đảm bảo override xảy ra SAU alembic_cfg.
+    sync_url = postgres_container.get_connection_url().replace(
+        "postgresql+psycopg2://", "postgresql://"
+    )
+    async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://")
+    redis_host = redis_container.get_container_host_ip()
+    redis_port = redis_container.get_exposed_port(6379)
+
+    monkeypatch.setenv("DATABASE_URL", async_url)
+    monkeypatch.setenv("COCOINDEX_DATABASE_URL", sync_url)
+    monkeypatch.setenv("REDIS_URL", f"redis://{redis_host}:{redis_port}/0")
+    monkeypatch.setenv("APP_ENV", "dev")
+    monkeypatch.setenv("JWT_PRIVATE_KEY_PATH", "keys/private.pem")
+    monkeypatch.setenv("JWT_PUBLIC_KEY_PATH", "keys/public.pem")
+    monkeypatch.setenv("JWT_ACCESS_TOKEN_TTL", "900")
+    monkeypatch.setenv("JWT_REFRESH_TOKEN_TTL", "604800")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
+
+    from app.config import get_settings
+    get_settings.cache_clear()
+
     # Apply migration schema trước khi lifespan init.
-    # CRITICAL: alembic env.py dùng `asyncio.run(run_async_migrations())` — call
-    # từ trong async fixture sẽ raise "asyncio.run() cannot be called from a
-    # running event loop". Chạy command.upgrade qua to_thread() → thread mới
-    # tạo event loop riêng cho asyncio.run của alembic.
+    # alembic env.py dùng `asyncio.run(run_async_migrations())` — call từ
+    # trong async fixture sẽ raise "asyncio.run() cannot be called from a
+    # running event loop". Wrap qua to_thread() → thread mới có event loop riêng.
     from alembic import command
     await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
 
