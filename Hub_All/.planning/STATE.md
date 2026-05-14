@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_in_progress
-last_updated: "2026-05-14T03:32:00.000Z"
+last_updated: "2026-05-14T03:39:27Z"
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 16
-  completed_plans: 12
-  percent: 30
+  completed_plans: 13
+  percent: 32
 current_phase:
   number: 3
   name: Auth Port + RBAC + Response Envelope
   plans_total: 5
-  plans_complete: 1
+  plans_complete: 2
   status: in_progress
 next_phase:
   number: 4
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, **1/5 executed** — Plan 03-01 DONE) |
-| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 NEXT (Wave 1: JWT keypair); 03-03 Wave 2 (Argon2); 03-04 Wave 3 (auth router); 03-05 Wave 4 (RBAC + 5-AC integration test). |
-| Status | Phase 3 in progress — Plan 03-01 thực thi xong 5/5 task, 9/9 pytest PASS, 11/11 acceptance check PASS. |
-| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-01`: 5 commits atomic (14e1e5f → 5a3c844). 2 deviation Rule 3: pydantic-settings NoDecode cho CSV env vars + bỏ LifespanManager test vì asyncpg blocking Windows. Forward links rõ cho 03-02/03/04/05 dùng resp helpers + RequestId middleware. |
+| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, **2/5 executed** — Plan 03-01 + 03-02 DONE) |
+| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 ✓ DONE (Wave 1: JWT keypair + PyJWT RS256 wrapper). 03-03 NEXT (Wave 2: Argon2 cross-compat); 03-04 Wave 3 (auth router); 03-05 Wave 4 (RBAC + 5-AC integration test). |
+| Status | Phase 3 in progress — Plan 03-02 thực thi xong 3/3 task, 8/8 pytest PASS (5 attack vector reject verified), 14/14 acceptance check PASS. |
+| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-02`: 3 commits atomic (50def00 → 6b512c4 → 7448e29). 0 deviation — paste-ready code apply nguyên xi. JWTManager (RS256), JWTClaims (Pydantic v2), TokenPair (frozen dataclass), JWT_ALGORITHMS_ALLOWED cứng ['RS256'] T-03-jwt-alg-confusion mitigation. Forward links rõ cho 03-04 dùng issue_token_pair + verify_token + jti cho Redis blacklist. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
-| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) · 2 satisfied Phase 3 (AUTH-01, AUTH-04 partial — middleware+envelope) · 4 planned remaining (AUTH-02, AUTH-03, AUTH-05, AUTH-06) |
+| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) · 3 satisfied Phase 3 (AUTH-01 partial, AUTH-04 partial — middleware+envelope; AUTH-06 — JWT keypair PKCS#8 verify + PyJWT RS256 wrapper) · 3 planned remaining (AUTH-02, AUTH-03, AUTH-05) |
 | Critical path | 1 ✓ → 2 ✓ → 4 → 6 → 7 → 9 → 10 |
-| Auth branch | 3 (1/5 plans) → 5 → 8 |
+| Auth branch | 3 (2/5 plans) → 5 → 8 |
 
-**Progress bar:** `[███░░░░░░░] 30% (2/10 phase + 1/5 Phase 3 plans) · Phase 3 in progress: 1/5 plans done · Next: /gsd-execute-phase 3 plan 03-02 (JWT keypair)`
+**Progress bar:** `[████░░░░░░] 32% (2/10 phase + 2/5 Phase 3 plans) · Phase 3 in progress: 2/5 plans done · Next: /gsd-execute-phase 3 plan 03-03 (Argon2 cross-compat)`
 
 ---
 
@@ -148,16 +148,15 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-14 — Plan 03-01 execute):** `/gsd-execute-phase 3 plan 03-01` → executor agent thực thi 5 task atomic:
-- Task 01 (`14e1e5f`): tạo 4 middleware file (`__init__.py`, `request_id.py`, `security_headers.py`, `error_handler.py`) — BaseHTTPMiddleware pattern, HTTPException pass-through để Plan 03-05 exception_handler render envelope.
-- Task 02 (`464902b`): sửa `pkg/response.py` — 9 error code lowercase → UPPER_SNAKE_CASE (D6 Go-compat) + thêm `validation_error(422)` helper.
-- Task 03 (`fb5c9e8`): config.py thêm `_no_lan_in_prod` validator (P12 mitigation, mode='after') + Rule 3 fix `Annotated[list[str], NoDecode]` vì pydantic-settings v2 auto-JSON-decode complex types break CSV env var.
-- Task 04 (`3bbca23`): main.py wire 3 middleware theo P11 reversed (CORS → SecurityHeaders → RequestId → ErrorHandler outermost).
-- Task 05 (`5a3c844`): tests/test_middleware.py — 9 unit test cover 5 behavior (request_id sinh/echo, security headers, error envelope, HTTPException pass-through, CORS prod reject + dev allow). Rule 3 fix bỏ LifespanManager vì asyncpg blocking Windows >5s khi không có Postgres.
-- Verification suite 11/11 PASS: pytest 9/9 + ruff 7/7 + mypy 7/7 + middleware factory wired 4/4.
-- SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-01-SUMMARY.md` tạo với 5 commit hash + 2 deviation log + threat model tracking + forward links cho 03-02/03/04/05.
+**Last session (2026-05-14 — Plan 03-02 execute):** `/gsd-execute-phase 3 plan 03-02` → executor agent thực thi 3 task atomic:
+- Task 01 (`50def00`): tạo `scripts/verify_jwt_format.sh` detect PKCS#1 vs PKCS#8 qua `head -1` PEM header (exit 0 PKCS#8, exit 1 PKCS#1 + in lệnh convert, exit 2 format khác) + thêm Makefile target `keys-verify-jwt`. Verify trên `keys/private.pem` Phase 1: PKCS#8 OK 4096-bit (KHÔNG cần convert).
+- Task 02 (`6b512c4`): tạo `app/auth/__init__.py` (re-export 6 symbol) + `app/auth/jwt.py` — `JWTManager` PyJWT RS256 + `JWTClaims` Pydantic v2 (10 field: sub/email/name/role/hub_ids/iss/iat/exp/jti/token_type) + `TokenPair` frozen dataclass (access/refresh + jti + expires_at) + `JWTError` Exception. `JWT_ALGORITHMS_ALLOWED=["RS256"]` cứng module constant — T-03-jwt-alg-confusion mitigation. PEM load 1 lần ở constructor (KHÔNG re-read mỗi call). Claims shape: `hub_ids: list[str]` (M2 multi-hub) KHÁC Go single `hub_id`. Message lỗi tiếng Việt: "Token đã hết hạn", "Loại token sai", "issuer sai".
+- Task 03 (`7448e29`): tests/unit/__init__.py + tests/unit/test_jwt.py — 8 unit test cover 5 attack vector + 2 happy path + 1 claims shape spec. Fixture dùng `keys/private.pem` + `keys/public.pem` Phase 1 thật, bake `_access_ttl = timedelta(seconds=-10)` cho test expired (fast, deterministic).
+- Verification suite 14/14 PASS: pytest 8/8 + ruff 2/2 (app/auth + tests/unit) + mypy 2/2 + imports OK + verify_jwt_format.sh exit 0 + full pytest suite 19/19 (no regress).
+- 0 deviation — toàn bộ paste-ready code apply nguyên xi (chỉ adjust line-length wrap + thêm `-> Any` cho fixture cho mypy --strict).
+- SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-02-SUMMARY.md` tạo với 3 commit hash + threat model 5 entry (4 mitigated + 1 partial cho replay attack chờ Plan 03-04 Redis blacklist + 1 accepted clock skew) + forward links rõ cho Plan 03-03/03-04/03-05.
 
-**Next action:** Chạy `/gsd-execute-phase 3 plan 03-02` để tiếp tục Wave 1 (JWT keypair format detection + PyJWT RS256 wrapper — JWTManager + JWTClaims + TokenPair). Plan 03-02 có thể parallel với Plan 03-01 đã xong, nhưng đợt này executor chạy tuần tự. Sau 03-02 → Wave 2 (03-03 Argon2 cross-compat — cần Docker testcontainers Postgres).
+**Next action:** Chạy `/gsd-execute-phase 3 plan 03-03` để tiếp tục Wave 2 (Argon2 password hasher + cross-compat test Go alexedwards ↔ pwdlib — params m=65536/t=3/p=4 keyLen=32 saltLen=16, R6 mitigation). Plan 03-03 cần Docker testcontainers Postgres (xem CONVENTIONS test strategy section 1) — verify Docker daemon running trước khi execute. Sau 03-03 → Wave 3 (03-04 auth router — login/refresh/logout/me wire `JWTManager` + `PasswordHasher`).
 
 **Files cần đọc khi resume:**
 

@@ -26,7 +26,7 @@
 - [ ] **AUTH-03**: `GET /api/auth/me` (Bearer) → return user info + roles + hub assignments. `POST /api/auth/logout` blacklist refresh token.
 - [ ] **AUTH-04**: RBAC dependency `require_role("admin"|"editor"|"viewer")` qua FastAPI `Depends`. Endpoint admin-only refuse với 403 cho viewer/editor. Test integration: viewer KHÔNG thể `PUT /api/hubs/:id`.
 - [ ] **AUTH-05**: **Argon2 cross-compat test (R6 mitigation)** — pin pwdlib params Go-compat `m=65536, t=1, p=2, saltLen=16, keyLen=32`. Test: pwdlib `verify_password()` PASS hash do Go `alexedwards/argon2id` sinh ra (5 sample hash). Fail-fast (CI error) nếu mismatch.
-- [ ] **AUTH-06**: JWT keypair `Hub_All/api/keys/` (gitignored). Format compat verify: `openssl rsa -in private.pem -text -noout` xác định PKCS#1 vs PKCS#8. Convert PKCS#1→PKCS#8 nếu cần (`openssl pkcs8 -topk8 -nocrypt`). Token Go cũ (nếu có user đang đăng nhập) phải decode được bởi PyJWT.
+- [x] **AUTH-06**: JWT keypair `Hub_All/api/keys/` (gitignored). Format compat verify: `openssl rsa -in private.pem -text -noout` xác định PKCS#1 vs PKCS#8. Convert PKCS#1→PKCS#8 nếu cần (`openssl pkcs8 -topk8 -nocrypt`). Token Go cũ (nếu có user đang đăng nhập) phải decode được bởi PyJWT. ✓ (Plan 03-02, 2026-05-14 — `scripts/verify_jwt_format.sh` + `app/auth/jwt.py` JWTManager PyJWT RS256, 8/8 unit test PASS, 5 attack vector reject verified, cross-process Go→Python defer rời Plan 03-05 integration test)
 
 ### HUB — Hub Registry CRUD + Isolation (3 REQ)
 
@@ -181,7 +181,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | AUTH-03 | Phase 3 (me + logout) | Pending |
 | AUTH-04 | Phase 3 (RBAC dependency) | Pending |
 | AUTH-05 | Phase 3 (Argon2 cross-compat test) | Pending |
-| AUTH-06 | Phase 3 (JWT keypair format) | Pending |
+| AUTH-06 | Phase 3 Plan 03-02 (JWT keypair format + PyJWT RS256 wrapper) | ✓ Done 2026-05-14 (8/8 unit test PASS, T-03-jwt-alg-confusion mitigated) |
 | INGEST-01 | Phase 4 (cocoindex flow Postgres source LISTEN/NOTIFY) | Pending |
 | INGEST-02 | Phase 4 (extract + scanned detect + chunk VN + embed dim 1536) | Pending |
 | INGEST-03 | Phase 4 (cocoindex target chunks + HNSW + stable chunk_id) | Pending |
