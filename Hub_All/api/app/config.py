@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # fingerprint, lineage) lưu LMDB local filesystem. Default tương đối project root.
     cocoindex_lmdb_path: Path = Path("Hub_All/.cocoindex/state.lmdb")
 
+    # Watchdog timeout — Plan 04-05 REVISION 2 NEW (INGEST-06, P8 mitigation).
+    # 5 phút headroom cho `cocoindex_app.update_blocking()` documents lớn (DOCX 50
+    # trang + N×embed LiteLLM có thể chạy >2 phút). Tránh false-flip processing
+    # rows. Configurable qua env `WATCHDOG_TIMEOUT_SECONDS`.
+    watchdog_timeout_seconds: int = 300
+
     # JWT
     jwt_private_key_path: Path = Path("./keys/private.pem")
     jwt_public_key_path: Path = Path("./keys/public.pem")

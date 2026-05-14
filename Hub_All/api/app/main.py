@@ -155,10 +155,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     except Exception as e:  # noqa: BLE001
         logger.warning("sqlalchemy_engine_init_failed: %s", e)
 
+    # 7) Watchdog asyncio task (Plan 04-05 REVISION 2 — INGEST-06, P8 + WARNING #7 mitigation).
+    #    APPEND-ONLY sau cocoindex setup (Plan 04-03 REVISION 2 step 3) +
+    #    SQLAlchemy engine init (step 6 — watchdog_tick gọi get_engine()).
+    #    Flip stuck `processing` rows → `failed` CHỈ nếu last_heartbeat IS NOT NULL
+    #    + stale > 5 phút (WARNING #7 NOT NULL guard + REVISION 2 5min timeout
+    #    cho cocoindex 1.0.3 update_blocking documents lớn).
+    app.state.watchdog_task = None
+    try:
+        import asyncio as _asyncio_wd
+
+        from app.services.watchdog import watchdog_loop
+
+        app.state.watchdog_task = _asyncio_wd.create_task(watchdog_loop())
+        logger.info("watchdog_task_started")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("watchdog_task_start_failed: %s", e)
+
     try:
         yield
     finally:
-        # Shutdown ngược thứ tự init — sqlalchemy → jwt → cocoindex → redis → db_pool.
+        # Shutdown ngược thứ tự init — watchdog → sqlalchemy → jwt → cocoindex → redis → db_pool.
+        # Cancel watchdog task TRƯỚC dispose_engine — watchdog_tick dùng engine,
+        # cancel sớm tránh race "engine disposed mid-tick" (Plan 04-05 APPEND-ONLY).
+        if getattr(app.state, "watchdog_task", None) is not None:
+            app.state.watchdog_task.cancel()
+            try:
+                await app.state.watchdog_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("watchdog_task_stop_failed: %s", e)
+            app.state.watchdog_task = None
         try:
             from app.db.session import dispose_engine
 
