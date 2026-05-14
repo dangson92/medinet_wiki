@@ -165,7 +165,13 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Heartbeat watchdog PASS: kill cocoindex worker giữa flow → sau 2 phút, `documents.status` tự động flip `processing → failed` với `error_message='timeout: no heartbeat for >120s'` (KHÔNG stuck `processing` forever)
   5. Content-hash incremental verify: upload cùng file 2 lần liên tiếp → lần 2 KHÔNG re-embed (cocoindex memo cache hit); edit 1 chunk content rồi upload lại → CHỈ chunks bị thay đổi re-embed (verify qua OpenAI usage log count)
 
-**Plans:** TBD
+**Plans:** 6 plans
+- [ ] 04-01-PLAN.md — Migration 0002 watchdog index + cocoindex setup scaffolding (Wave 1, INGEST-05/06/08)
+- [ ] 04-02-PLAN.md — Services file_extract + vn_chunker + embedder + file_store (Wave 1, INGEST-02/04)
+- [ ] 04-03-PLAN.md — CocoIndex flow medinet_wiki_ingest + lifespan FlowLiveUpdater (Wave 2, INGEST-01/02/03)
+- [ ] 04-04-PLAN.md — Documents router POST /upload + GET /:id + service layer (Wave 2, INGEST-04/05)
+- [ ] 04-05-PLAN.md — Watchdog asyncio task + DELETE + LIST endpoints (Wave 3, INGEST-06/07/08)
+- [ ] 04-06-PLAN.md — M2a EXIT GATE — E2E integration test + manual demo script (Wave 4, INGEST-01/02/03/04/05)
 
 ---
 
