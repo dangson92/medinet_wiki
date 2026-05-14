@@ -83,6 +83,10 @@ tmp/
 # ===== Docker =====
 docker-compose.override.yml.local
 
+# ===== Cocoindex 1.0.3 LMDB state (Plan 04-03 Q5) =====
+.cocoindex/
+**/.cocoindex/
+
 # ===== Misc =====
 *.bak
 *.tmp

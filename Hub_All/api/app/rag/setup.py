@@ -1,95 +1,136 @@
-"""Cocoindex setup helper — Plan 04-01 (INGEST-01 prerequisite).
+"""Cocoindex 1.0.3 setup helper — Plan 04-03 REVISION 2 (INGEST-01 prerequisite).
 
-Chạy MỘT LẦN sau alembic upgrade head để cocoindex 1.0.3 tự tạo internal state
-tables (schema `cocoindex` — P7 mitigation isolate khỏi schema `public` app data).
+REWRITE từ Plan 04-01 skeleton (cocoindex.start_blocking() trống) sang đầy đủ
+cocoindex 1.0.3 lifespan + initial backfill pattern (RESEARCH.md Section 9.2).
 
 Sequence (cocoindex 1.0.3 actual API):
-    1. Set env vars (COCOINDEX_DATABASE_URL + APP_NAMESPACE + COCOINDEX_DB_SCHEMA)
-       để cocoindex.Settings.from_env() đọc khi default_env() khởi tạo.
-    2. import app.rag.flow (nếu module tồn tại — Plan 04-02 sẽ tạo) để
-       flow decorator register flow vào cocoindex registry tại import time.
-    3. cocoindex.start_blocking() — start default environment (đồng bộ).
-       Cocoindex Rust core tạo connection pool nội bộ, mở LMDB local,
-       initialize global execution scheduler, và apply schema cho mọi
-       flow đã register (auto-create internal state tables prefix
-       `medinet_prod__*` trong schema `cocoindex`).
+    1. Set os.environ["COCOINDEX_DB"] = settings.cocoindex_lmdb_path (Q5).
+    2. Register @coco.lifespan provide asyncpg.Pool to PG_POOL_KEY (cho mount_table_target).
+    3. Import app.rag.flow → side-effect register coco.App vào _default_env._info.
+    4. coco.start_blocking() — enter lifespan + start default env (sync).
+    5. cocoindex_app.update_blocking() — apply chunks schema diff + initial
+       backfill cho mọi pending documents rows.
 
-Plan 04-01 ship setup helper RỖNG (skip flow import nếu chưa có).
-Plan 04-02 sau khi tạo app/rag/flow.py: chạy lại `make cocoindex-setup` để
-cocoindex tạo bảng `cocoindex.medinet_prod__medinet_wiki_ingest__*`.
+Idempotent: chạy nhiều lần OK. Cocoindex 1.0.3 schema apply diff-only.
 
-Lý do isolation schema:
-- Pitfall P7 — cocoindex internal tables (lineage, fingerprint, memo cache)
-  KHÔNG trộn schema `public` để Alembic env.py include_object filter
-  (Plan 02-03 line 40-55) loại trừ chính xác.
+Decision A4 forward reference:
+    Plan 04-04 router upload → INSERT documents row → FastAPI BackgroundTasks
+    add_task(trigger_cocoindex_update, app.state.cocoindex_app, doc_id) →
+    `cocoindex_app.update_blocking()` chạy lại trong background thread → cocoindex
+    memo skip rows unchanged + process row mới (status='pending').
 
-Lý do APP_NAMESPACE cố định:
-- Pitfall P2 / R5 — APP_NAMESPACE đổi giữa env = re-index toàn bộ corpus.
-  M2 PIN "medinet_prod" mọi env (xem CONVENTIONS.md section 3).
-
-Deviation note (Rule 1 — Plan 04-01 paste-ready vs actual API):
-- Plan 04-01 PASTE-READY code reference `cocoindex.init()` + `cocoindex.setup_flow()`.
-  Hai hàm này KHÔNG tồn tại trong cocoindex 1.0.3 đã pin (pyproject.toml line 15).
-  Verified `dir(cocoindex)` không liệt kê `init` hay `setup_flow`.
-- Cocoindex 1.0.3 API tương đương: `cocoindex.start_blocking()` (sync, đồng bộ
-  init default environment + apply registered flow schema). API async tương đương
-  là `await cocoindex.start()`. Plan executor (sync CLI script) dùng sync version.
-- `cocoindex.Settings.from_env()` đọc env COCOINDEX_DATABASE_URL/APP_NAMESPACE/
-  COCOINDEX_DB_SCHEMA + COCOINDEX_LMDB_* — pattern os.environ.setdefault giữ.
-- Document Rule 1 deviation đầy đủ trong SUMMARY.md để Plan 04-02 (flow definition)
-  biết phải dùng API nào (likely `cocoindex.mount` / `cocoindex.lifespan` decorator
-  thay vì `@cocoindex.flow_def`).
+Replace toàn bộ revision 1 paste-ready (deprecated 0.x init helpers / flow setup
+helpers / live updater) — các API này KHÔNG tồn tại cocoindex 1.0.3.
 """
 from __future__ import annotations
 
 import logging
 import os
+from typing import Any
+
+import asyncpg
+import cocoindex as coco
 
 from app.config import Settings
 
 logger = logging.getLogger(__name__)
 
 
-def setup_cocoindex(settings: Settings) -> None:
-    """Init cocoindex 1.0.3 + apply flow schema.
+def _to_asyncpg_dsn(sqlalchemy_dsn: str) -> str:
+    """SQLAlchemy DSN `postgresql+asyncpg://...` → asyncpg DSN `postgresql://...`."""
+    return sqlalchemy_dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
 
-    Idempotent: chạy nhiều lần OK (cocoindex tự skip nếu schema đã match).
+
+def setup_cocoindex(settings: Settings) -> None:
+    """Init cocoindex 1.0.3 default env + apply chunks schema + initial backfill.
+
+    Sequence:
+        1. Set COCOINDEX_DB env var (LMDB filesystem path) — Q5.
+        2. Register @coco.lifespan provide asyncpg.Pool cho PG_POOL_KEY.
+        3. Import app.rag.flow → register coco.App vào registry.
+        4. coco.start_blocking() — enter lifespan + start default env.
+        5. cocoindex_app.update_blocking() — apply schema + initial backfill.
+
+    Idempotent: chạy nhiều lần OK. App.update_blocking() là delta-only.
+
+    Caller (FastAPI lifespan trong main.py) PHẢI wrap qua
+    `await asyncio.to_thread(setup_cocoindex, settings)` để KHÔNG block event loop.
 
     Raises:
-        RuntimeError: cocoindex.start_blocking() fail (Postgres không lên hoặc DSN sai).
+        RuntimeError: cocoindex.start_blocking fail (Postgres không lên / DSN sai).
     """
-    # Cocoindex 1.0.3 đọc env vars qua os.environ tại thời điểm Settings.from_env().
-    # Set lại để đảm bảo Settings → env (settings có thể override .env mặc định).
-    os.environ.setdefault("COCOINDEX_DATABASE_URL", settings.cocoindex_database_url)
-    os.environ.setdefault("APP_NAMESPACE", settings.app_namespace)
-    os.environ.setdefault("COCOINDEX_DB_SCHEMA", settings.cocoindex_db_schema)
-
-    import cocoindex
-
+    # 1) Set COCOINDEX_DB (LMDB path) — Q5.
+    #    Cocoindex 1.0.3 đọc env tại default_env() init time — set trước import flow.
+    os.environ.setdefault("COCOINDEX_DB", str(settings.cocoindex_lmdb_path))
     logger.info(
-        "cocoindex_setup_start: namespace=%s schema=%s",
-        settings.app_namespace,
-        settings.cocoindex_db_schema,
+        "cocoindex_setup_start: lmdb=%s asyncpg_dsn=%s",
+        settings.cocoindex_lmdb_path,
+        "<redacted>",
     )
 
-    # 1) Import flow module (Plan 04-02 sẽ tạo app/rag/flow.py).
-    #    Decorator chạy ở import time → register flow vào cocoindex registry
-    #    TRƯỚC khi start_blocking() apply schema.
-    try:
-        # Plan 04-02 sẽ tạo app/rag/flow.py; mypy strict báo missing attr cho
-        # intentional optional import này — type: ignore inline.
-        from app.rag import flow as _flow  # type: ignore[attr-defined]  # noqa: F401
+    # 2) Register lifespan — provide asyncpg.Pool cho mount_table_target.
+    #    Import PG_POOL_KEY trước import cocoindex_app để @coco.lifespan có thể
+    #    reference key.
+    from app.rag.flow import PG_POOL_KEY
 
-        logger.info("cocoindex_flow_imported: %s", _flow.__name__)
-    except ImportError as e:
-        logger.warning(
-            "cocoindex_flow_skip: flow module chưa tồn tại (Plan 04-02 sẽ tạo) — %s",
-            e,
+    asyncpg_dsn = _to_asyncpg_dsn(settings.database_url)
+
+    @coco.lifespan
+    async def _lifespan(env_builder: Any) -> Any:
+        pool = await asyncpg.create_pool(
+            dsn=asyncpg_dsn,
+            min_size=2,
+            max_size=10,
         )
+        env_builder.provide(PG_POOL_KEY, pool)
+        try:
+            yield
+        finally:
+            await pool.close()
 
-    # 2) start_blocking() = sync init default environment + apply schema cho mọi
-    #    flow đã register. Idempotent — chạy lại không tạo trùng bảng.
-    #    (Plan PASTE-READY ghi cocoindex.init() + cocoindex.setup_flow() — Rule 1
-    #     deviation: API này KHÔNG tồn tại cocoindex 1.0.3, dùng start_blocking().)
-    cocoindex.start_blocking()
-    logger.info("cocoindex.start_blocking() OK")
+    # 3) Import flow → register coco.App vào registry (side-effect tại import time).
+    from app.rag.flow import cocoindex_app
+
+    app_name = getattr(cocoindex_app, "name", None) or getattr(
+        cocoindex_app, "_name", "<unknown>"
+    )
+    logger.info("cocoindex_app_registered: %s", app_name)
+
+    # 4) Start env + apply schema (sync — Rust core init).
+    coco.start_blocking()
+    logger.info("cocoindex_default_env_started")
+
+    # 5) One-shot update — apply chunks schema diff + initial backfill cho mọi
+    #    pending documents rows. Idempotent — chạy nhiều lần OK (memo skip).
+    cocoindex_app.update_blocking()
+    logger.info("cocoindex_initial_backfill_complete")
+
+
+def get_cocoindex_app() -> Any:
+    """Return registered cocoindex_app instance.
+
+    Plan 04-04 router truy cập trong BackgroundTasks (A4 trigger update_blocking).
+
+    KHÔNG re-import nếu đã import sẵn — module-level import idempotent. Caller
+    (main.py lifespan) gọi sau setup_cocoindex để lưu app.state.cocoindex_app.
+
+    Returns:
+        cocoindex_app: coco.App instance (opaque type — KHÔNG type-annotate vì
+        cocoindex 1.0.3 wheel có thể chưa export type stub đầy đủ).
+    """
+    from app.rag.flow import cocoindex_app
+
+    return cocoindex_app
+
+
+def stop_cocoindex() -> None:
+    """Clean shutdown cocoindex (call ở lifespan finally).
+
+    Cocoindex 1.0.3 stop_blocking() exit lifespan + close asyncpg.Pool +
+    teardown default env. Try/except để KHÔNG block FastAPI shutdown.
+    """
+    try:
+        coco.stop_blocking()
+        logger.info("cocoindex_default_env_stopped")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("cocoindex_stop_failed: %s", e)

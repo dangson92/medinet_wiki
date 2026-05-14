@@ -36,3 +36,9 @@ file_store/
 
 # Postgres data volume
 medinet_pgdata/
+
+# === Cocoindex 1.0.3 LMDB state (Plan 04-03 Q5) ===
+# Cocoindex 1.0.3 lưu memo cache + fingerprint + lineage local LMDB.
+# Operator KHÔNG commit state — re-build từ scratch acceptable cho M2.
+.cocoindex/
+api/.cocoindex/

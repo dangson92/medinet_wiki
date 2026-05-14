@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     app_namespace: str = "medinet_prod"
     cocoindex_db_schema: str = "cocoindex"
 
+    # Cocoindex 1.0.3 LMDB path (Q5 — replace COCOINDEX_DATABASE_URL Postgres
+    # cocoindex 0.x assumption sai). Cocoindex internal state (memo cache,
+    # fingerprint, lineage) lưu LMDB local filesystem. Default tương đối project root.
+    cocoindex_lmdb_path: Path = Path("Hub_All/.cocoindex/state.lmdb")
+
     # JWT
     jwt_private_key_path: Path = Path("./keys/private.pem")
     jwt_public_key_path: Path = Path("./keys/public.pem")
