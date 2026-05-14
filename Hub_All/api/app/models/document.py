@@ -77,4 +77,8 @@ class Document(UUIDMixin, TimestampMixin, Base):
         ),
         Index("ix_documents_hub_id_status", "hub_id", "status"),
         Index("ix_documents_uploaded_by", "uploaded_by"),
+        # Phase 4 Plan 04-01 — composite index cho watchdog query
+        # `WHERE status='processing' AND last_heartbeat < NOW() - INTERVAL '2 minutes'`.
+        # Migration 0002 tạo index; ORM phải khai báo để alembic check không drift (P20).
+        Index("ix_documents_status_last_heartbeat", "status", "last_heartbeat"),
     )
