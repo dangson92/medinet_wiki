@@ -128,7 +128,12 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
   4. Argon2 cross-compat test PASS: 5 sample hash do Go `alexedwards/argon2id` sinh được pwdlib `verify_password()` PASS; ngược lại Python-sinh hash được Go verify PASS (CI fail-fast nếu mismatch)
   5. Concurrent refresh integration test PASS: 5 tab giả lập đồng thời `POST /api/auth/refresh` → chỉ 1 succeed với token mới, 4 còn lại nhận token cũ (Redis SETNX atomic) — KHÔNG infinite loop logout
 
-**Plans:** TBD
+**Plans:** 5 plans (đợi execute)
+- [ ] 03-01-PLAN.md — Middleware infra + envelope error helpers (UPPER_SNAKE_CASE Go-compat) + CORS production validator (P11 + P12) — Wave 1
+- [ ] 03-02-PLAN.md — JWT keypair format detection (PKCS#8 verify AUTH-06) + PyJWT RS256 wrapper (JWTManager + JWTClaims + TokenPair) — Wave 1
+- [ ] 03-03-PLAN.md — Argon2 password module (params Go-source m=65536/t=3/p=4) + cross-compat test (R6 / AUTH-05) — Wave 2
+- [ ] 03-04-PLAN.md — Auth schemas + service (Redis SETNX P16) + router 4 endpoint (login/refresh/logout/me) + lifespan wire (AUTH-01..03) — Wave 3
+- [ ] 03-05-PLAN.md — RBAC require_role + 5-AC integration test suite (Postgres+Redis testcontainers): login envelope / JWT compat / RBAC 403 / refresh race / PKCS#8 (AUTH-04) — Wave 4
 
 ---
 

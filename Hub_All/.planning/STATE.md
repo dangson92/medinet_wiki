@@ -2,23 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_in_progress
-last_updated: "2026-05-14T01:00:00.000Z"
+status: phase_planned
+last_updated: "2026-05-14T10:00:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 11
+  total_plans: 16
   completed_plans: 11
   percent: 28
 current_phase:
-  number: 2
-  name: Database Schema + Alembic Baseline
-  plans_total: 5
-  plans_complete: 5
-  status: complete
-next_phase:
   number: 3
   name: Auth Port + RBAC + Response Envelope
+  plans_total: 5
+  plans_complete: 0
+  status: ready_to_execute
+next_phase:
+  number: 4
+  name: CocoIndex Flow MVP + Document Ingest
 ---
 
 # State — MEDWIKI
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 2 — Database Schema + Alembic Baseline** (5 plans / 5 waves, 5/5 executed ✓ COMPLETE) |
-| Plan | 02-01..02-05 ✓ COMPLETE (28 commit, app/db infra + 10 SQLAlchemy models + Alembic init async + migration 0001 + testcontainers verify suite 7/7 PASS). |
-| Status | Phase 2 complete — 100% code + runtime verified, ready cho Phase 3 (Auth) |
-| Last activity | 2026-05-13 — Plan 02-05 complete: Makefile migrate-* targets + 3 pytest integration test file (testcontainers pgvector/pgvector:pg16) verify 5 ROADMAP success criteria + R1 dim pin + P20 drift check — 7 files (5 created + 3 modified — Makefile, pyproject.toml, uv.lock, conftest.py, 3 test_*.py, __init__.py), 6 commits, 7 pytest PASS in 9.19s. |
+| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, 0/5 executed — ready to execute) |
+| Plan | 03-01..03-05 ĐÃ PLAN (Wave 1: 03-01 envelope+middleware, 03-02 JWT keypair; Wave 2: 03-03 Argon2 cross-compat; Wave 3: 03-04 auth router+service; Wave 4: 03-05 RBAC + 5-AC integration test). |
+| Status | Phase 3 planned — verified 0 blockers, 0 warnings sau 2 iteration plan-checker. Ready cho `/gsd-execute-phase 3`. |
+| Last activity | 2026-05-14 — `/gsd-plan-phase 3 --auto`: 5 plans tạo + verify PASS. Argon2 params pin theo Go source (`m=65536, t=3, p=4` — fix doc-bug REQUIREMENTS.md/PITFALLS.md ghi sai `t=1, p=2`). P11/P12/P16 mitigations explicit. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
-| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) |
-| Critical path | 1 ✓ → 2 → 4 → 6 → 7 → 9 → 10 |
-| Auth branch | 3 → 5 → 8 (sau Phase 2) |
+| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) · 6 planned (AUTH-01..06 Phase 3) |
+| Critical path | 1 ✓ → 2 ✓ → 4 → 6 → 7 → 9 → 10 |
+| Auth branch | 3 (planned) → 5 → 8 |
 
-**Progress bar:** `[██▊░░░░░░░] 28% (2/10 phase) · Phase 2 COMPLETE: 5/5 plans executed, 7/7 pytest PASS · Next: Phase 3 Auth Port`
+**Progress bar:** `[██▊░░░░░░░] 28% (2/10 phase) · Phase 3 PLANNED: 5/5 plans verified · Next: /gsd-execute-phase 3`
 
 ---
 
