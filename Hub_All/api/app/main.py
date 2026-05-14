@@ -34,6 +34,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.middleware import (
+    ErrorHandlerMiddleware,
+    RequestIdMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.pkg import response as resp
 
 logger = logging.getLogger(__name__)
@@ -121,16 +126,18 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Middleware Phase 1 — chỉ CORS placeholder (config rỗng default trong dev).
-    # NOTE P11: FastAPI executes last-added middleware FIRST cho incoming
-    # request. Order REVERSED từ Go Gin. Phase 3 (Auth) sẽ add theo thứ tự
-    # (TRƯỚC ra NGOÀI):
-    #   1) gzip          (add đầu tiên = innermost — chạy cuối cùng cho request)
-    #   2) rate_limit
-    #   3) CORS          ← Phase 1 đang ở đây
-    #   4) security_headers
-    #   5) request_id
-    #   6) error_handler (add cuối cùng = outermost wrap, bắt mọi exception).
+    # Middleware order — P11 PITFALL (FastAPI executes last-added FIRST cho
+    # incoming request). Order REVERSED từ Go Gin. Outer-to-inner cho REQUEST:
+    #   1) ErrorHandler   (outermost — catch mọi exception kể cả CORS leak)
+    #   2) RequestId      (gắn X-Request-Id sớm để log downstream có ID)
+    #   3) SecurityHeaders (X-Content-Type-Options, X-Frame-Options, ...)
+    #   4) CORS           (preflight OPTIONS + Access-Control-Allow-*)
+    #   5) [Phase 5 AUX-03] rate_limit (slowapi — placeholder stub Phase 3,
+    #      Plan 03-04 KHÔNG wire; full enable Phase 5)
+    #   6) router handler (innermost)
+    #
+    # Add order = REVERSED (innermost trước, outermost sau):
+    #   add CORS → add SecurityHeaders → add RequestId → add ErrorHandler
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
@@ -138,6 +145,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(ErrorHandlerMiddleware)  # LAST add = OUTERMOST
 
     @app.get("/healthz")
     async def healthz() -> Any:
