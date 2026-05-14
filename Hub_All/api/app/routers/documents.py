@@ -1,11 +1,11 @@
-"""Documents router — Plan 04-04 REVISION 2 (INGEST-04, INGEST-05).
+"""Documents router — Plan 04-04 REVISION 2 (INGEST-04, INGEST-05) + Plan 04-05 (INGEST-07, INGEST-08).
 
-2 endpoint:
-    POST /api/documents/upload   — multipart + admin → 202 document_id
-                                   + BackgroundTask trigger_cocoindex_update (A4)
-    GET  /api/documents/:id      — Bearer → 200 DocumentResponse / 404
-
-Plan 04-05 EXTEND: GET / (list) + DELETE /:id.
+4 endpoint:
+    POST   /api/documents/upload  — multipart + admin → 202 document_id
+                                    + BackgroundTask trigger_cocoindex_update (A4)
+    GET    /api/documents/:id     — Bearer → 200 DocumentResponse / 404
+    DELETE /api/documents/:id     — admin → 204 No Content + cascade chunks + audit log (Plan 04-05)
+    GET    /api/documents         — Bearer → 200 paginated list + filter (Plan 04-05)
 
 Auth pattern:
 - POST upload: require_role("admin") — chỉ admin upload (D6 frontend admin-only).
@@ -36,8 +36,9 @@ from fastapi import (
     Form,
     Request,
     UploadFile,
+    status,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user, require_role
@@ -181,3 +182,111 @@ async def get_by_id(
             code="NOT_FOUND",
         )
     return resp.ok(data=doc.model_dump(mode="json"))
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_by_id(
+    document_id: str,
+    request: Request,
+    user: User = Depends(require_role("admin")),  # noqa: B008
+    service: DocumentService = Depends(get_document_service),  # noqa: B008
+) -> Response:
+    """DELETE /api/documents/:id — admin → 204 + cascade chunks + audit log (Plan 04-05 INGEST-07).
+
+    Sequence:
+    - require_role("admin") → 403 nếu viewer/editor.
+    - service.delete: SELECT exists → DELETE documents (chunks CASCADE FK Phase 2)
+      → INSERT audit_logs(action='document_delete') → best-effort unlink file.
+    - Return 204 No Content (KHÔNG body theo HTTP spec).
+
+    NOTE: T-04-05-03 accept — admin có quyền cross-hub DELETE; Phase 5 HUB-02
+    sẽ thêm hub_id permission check cho role=editor.
+    """
+    try:
+        doc_uuid = UUID(document_id)
+    except ValueError:
+        return resp.bad_request(
+            message=f"document_id không phải UUID hợp lệ: {document_id!r}",
+            code="INVALID_DOCUMENT_ID",
+        )
+
+    request_id = getattr(request.state, "request_id", None)
+    deleted = await service.delete(
+        doc_uuid,
+        deleted_by=user.id,
+        request_id=request_id,
+    )
+    if not deleted:
+        return resp.not_found(
+            message=f"Document {document_id} không tồn tại",
+            code="NOT_FOUND",
+        )
+    # 204 No Content — Starlette emit empty body khi status_code=204.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("")
+async def list_documents(
+    hub_id: str | None = None,
+    status_filter: str | None = None,
+    uploaded_by: str | None = None,
+    search: str | None = None,
+    page: int = 1,
+    per_page: int = 20,
+    user: User = Depends(get_current_user),  # noqa: B008
+    service: DocumentService = Depends(get_document_service),  # noqa: B008
+) -> JSONResponse:
+    """GET /api/documents — list paginated (Plan 04-05 INGEST-08).
+
+    Query params:
+        hub_id: filter UUID.
+        status_filter: filter status enum (pending|processing|completed|failed|failed_unsupported).
+        uploaded_by: filter user upload UUID.
+        search: ILIKE filename %search%.
+        page: 1-based (default 1).
+        per_page: 20 default, CAP min(per_page, 100) (T-04-05-01 DoS mitigation).
+
+    Phase 5 HUB-02 sẽ thêm hub_assignments intersection (T-04-05-02 + T-04-05-06 accept).
+    """
+    _ = user  # Reserved cho Phase 5 hub_assignments filter.
+
+    # Validate optional UUIDs.
+    hub_uuid: UUID | None = None
+    if hub_id:
+        try:
+            hub_uuid = UUID(hub_id)
+        except ValueError:
+            return resp.bad_request(
+                message=f"hub_id không phải UUID hợp lệ: {hub_id!r}",
+                code="INVALID_HUB_ID",
+            )
+
+    uploaded_uuid: UUID | None = None
+    if uploaded_by:
+        try:
+            uploaded_uuid = UUID(uploaded_by)
+        except ValueError:
+            return resp.bad_request(
+                message=f"uploaded_by không phải UUID hợp lệ: {uploaded_by!r}",
+                code="INVALID_UPLOADED_BY",
+            )
+
+    # Cap per_page ≤ 100 + page ≥ 1 (INGEST-08, T-04-05-01).
+    capped_per_page = max(1, min(per_page, 100))
+    capped_page = max(1, page)
+
+    items, total = await service.list(
+        hub_id=hub_uuid,
+        status_filter=status_filter,
+        uploaded_by=uploaded_uuid,
+        search=search,
+        page=capped_page,
+        per_page=capped_per_page,
+    )
+
+    return resp.paginated(
+        items=[item.model_dump(mode="json") for item in items],
+        page=capped_page,
+        per_page=capped_per_page,
+        total=total,
+    )
