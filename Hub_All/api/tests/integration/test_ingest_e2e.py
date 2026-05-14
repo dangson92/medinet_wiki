@@ -187,10 +187,17 @@ async def test_e2e_upload_docx_to_chunks_completed(
         3. Poll GET /:id → status 'completed' + chunk_count > 0.
         4. SELECT chunks → vector dim=1536 (R1) + hub_id match + content_hash NOT NULL.
     """
-    # Verify lifespan đã setup cocoindex_app real (Plan 04-03 REVISION 2)
+    # Plan 04-07 gap closure: assert thay pytest.skip — CI gate enforce architectural
+    # blocker recurrence. Task 2 lifespan fail-fast: nếu cocoindex_app=None ở đây →
+    # lifespan đã raise → app_with_auth fixture KHÔNG resolve được (test FAIL ở fixture
+    # setup) HOẶC test isolation broken. Cả 2 trường hợp đều phải FAIL loud, KHÔNG SKIP.
     cocoindex_app = getattr(app_with_auth.state, "cocoindex_app", None)
-    if cocoindex_app is None:
-        pytest.skip("cocoindex_app KHÔNG setup được (Docker postgres/redis không lên?)")
+    assert cocoindex_app is not None, (
+        "Plan 04-07 architectural regression — app.state.cocoindex_app=None sau lifespan. "
+        "Expected: Task 2 fail-fast pattern (uvicorn crash startup nếu setup_cocoindex fail) → "
+        "test KHÔNG bao giờ reach point này với cocoindex_app=None. "
+        "Check: uvicorn startup logs cho 'cocoindex_init_failed_fail_fast' ERROR trace."
+    )
 
     hub_id = await _create_hub(app_with_auth)
     content = _make_docx_vn(tmp_path)
@@ -317,9 +324,12 @@ async def test_e2e_content_hash_incremental_dedup(
     chunk_id (KHÔNG conflict). Acceptance: total chunks = n1 + n2 (tuyến tính),
     KHÔNG bloated >2x baseline (verify cocoindex memo hoạt động).
     """
+    # Plan 04-07 gap closure: assert thay pytest.skip — CI gate enforce.
     cocoindex_app = getattr(app_with_auth.state, "cocoindex_app", None)
-    if cocoindex_app is None:
-        pytest.skip("cocoindex_app KHÔNG setup được")
+    assert cocoindex_app is not None, (
+        "Plan 04-07 architectural regression — app.state.cocoindex_app=None sau lifespan. "
+        "Expected: Task 2 fail-fast pattern. Check uvicorn startup logs."
+    )
 
     hub_id = await _create_hub(app_with_auth)
     content = _make_docx_vn(tmp_path)
