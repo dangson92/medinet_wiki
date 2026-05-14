@@ -12,6 +12,7 @@ thuộc Plan 04-06.
 """
 from __future__ import annotations
 
+import asyncio as _asyncio  # Plan 04-07 gap closure regression tests
 import os
 import uuid
 
@@ -212,3 +213,79 @@ def test_settings_has_cocoindex_lmdb_path_q5() -> None:
     )
     # Path object hoặc str Path-castable.
     assert settings.cocoindex_lmdb_path is not None
+
+
+# ===== Plan 04-07 gap closure regression tests (VectorSchemaProvider fix) =====
+
+
+def test_chunk_row_vector_schema_build_no_raise() -> None:
+    """Plan 04-07 gap closure regression — ChunkRow.vector phải satisfy VectorSchemaProvider.
+
+    BEFORE fix: `await pg.TableSchema.from_class(ChunkRow, primary_key=['id'])` raise
+    `ValueError: VectorSpecProvider is required for NumPy ndarray type` vì
+    `Annotated[NDArray, EMBEDDER]` — EMBEDDER là @coco.fn callable KHÔNG implement
+    VectorSchemaProvider Protocol.
+
+    AFTER fix: dùng cocoindex.resources.schema.VectorSchema(dtype=np.dtype(np.float32),
+    size=1536) làm provider — itself implements VectorSchemaProvider (frozen msgspec.Struct
+    với __coco_vector_schema__ method). Schema build PASS exit 0.
+
+    KHÔNG cần Postgres pool — chỉ test schema build (sync compute từ annotation).
+    """
+    from cocoindex.connectors import postgres as pg
+
+    from app.rag.flow import ChunkRow
+
+    # Build schema từ dataclass — async classmethod, run trong sync test qua asyncio.run.
+    schema = _asyncio.run(pg.TableSchema.from_class(ChunkRow, primary_key=["id"]))
+
+    # Verify vector column resolved thành pgvector type "vector(1536)".
+    assert "vector" in schema.columns, "ChunkRow.vector phải thành column"
+    vector_col = schema.columns["vector"]
+    assert vector_col.type == "vector(1536)", (
+        f"Vector dim mismatch: {vector_col.type} (expect 'vector(1536)' R1 pin)"
+    )
+
+
+def test_chunk_row_vector_uses_vector_schema_provider() -> None:
+    """Plan 04-07 gap closure — VectorSchema constant phải implement VectorSchemaProvider."""
+    import numpy as np
+    from cocoindex.resources import schema as _coco_schema
+
+    from app.rag import flow as flow_module
+
+    # _VECTOR_SCHEMA module-level constant — must exist sau Plan 04-07.
+    assert hasattr(flow_module, "_VECTOR_SCHEMA"), (
+        "Plan 04-07 phải define _VECTOR_SCHEMA module-level constant"
+    )
+    vs = flow_module._VECTOR_SCHEMA
+    assert isinstance(vs, _coco_schema.VectorSchema), (
+        f"_VECTOR_SCHEMA phải là VectorSchema instance, got {type(vs).__name__}"
+    )
+    assert isinstance(vs, _coco_schema.VectorSchemaProvider), (
+        "_VECTOR_SCHEMA phải satisfy VectorSchemaProvider Protocol (runtime_checkable)"
+    )
+    assert vs.size == 1536, f"Plan 04-02 R1 pin dim=1536, got {vs.size}"
+    assert vs.dtype == np.dtype(np.float32), (
+        f"R1 pin dtype float32, got {vs.dtype}"
+    )
+
+
+def test_flow_no_embedder_constant_for_vector_annotation() -> None:
+    """Plan 04-07 gap closure — KHÔNG còn `EMBEDDER` annotation dùng cho vector field.
+
+    BEFORE: `vector: Annotated[NDArray[np.float32], EMBEDDER]` (WRONG — EMBEDDER là
+    @coco.fn callable).
+    AFTER: `vector: Annotated[NDArray[np.float32], _VECTOR_SCHEMA]` (CORRECT —
+    VectorSchema implements VectorSchemaProvider Protocol).
+    """
+    import app.rag.flow as flow_module
+
+    with open(flow_module.__file__, encoding="utf-8") as f:
+        source = f.read()
+    assert "Annotated[NDArray[np.float32], EMBEDDER]" not in source, (
+        "Plan 04-07 violated — flow.py vẫn dùng EMBEDDER (@coco.fn) làm vector provider"
+    )
+    assert "Annotated[NDArray[np.float32], _VECTOR_SCHEMA]" in source, (
+        "Plan 04-07 phải dùng _VECTOR_SCHEMA (VectorSchema) làm vector provider"
+    )

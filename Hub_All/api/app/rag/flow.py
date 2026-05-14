@@ -42,6 +42,10 @@ Defensive carry-over từ revision 1:
   Flow Plan 04-03 chỉ chạy với DOCX/TXT/MD/PDF text-only — `extract_text` defensive
   trả tuple với is_scanned flag, flow skip nếu True (router đã loại trước nhưng
   defensive vẫn check).
+- BLOCKER #1 (Plan 04-07 gap closure): ChunkRow.vector dùng VectorSchema(dtype=np.dtype(np.float32),
+  size=1536) làm provider — implements cocoindex.resources.schema.VectorSchemaProvider Protocol.
+  KHÔNG dùng EMBEDDER (@coco.fn _embed_one) — @coco.fn wraps callable, KHÔNG có
+  __coco_vector_schema__ method → TableSchema.from_class raise ValueError.
 """
 from __future__ import annotations
 
@@ -56,6 +60,9 @@ import cocoindex as coco
 import numpy as np
 from cocoindex.connectorkits import target as ck_target
 from cocoindex.connectors import postgres as pg
+from cocoindex.resources import (
+    schema as _coco_schema,  # Plan 04-07 gap closure (VectorSchemaProvider)
+)
 from numpy.typing import NDArray
 
 # Plan 04-02 ship `embed_text` (KHÔNG `aembedding_one`). Alias để paste-ready
@@ -97,8 +104,20 @@ async def _embed_one(content: str) -> NDArray[np.float32]:
     return np.asarray(vec_list, dtype=np.float32)
 
 
-# Stub VectorSchemaProvider cho ChunkRow.vector annotation — _embed_one làm provider.
-# Cocoindex 1.0.3 dùng Annotated[NDArray, provider] để auto-resolve vector(N) Postgres type.
+# === VectorSchemaProvider cho ChunkRow.vector annotation (Plan 04-07 gap closure) ===
+# Cocoindex 1.0.3 yêu cầu VectorSchemaProvider Protocol (cocoindex.resources.schema)
+# cho NumPy ndarray field annotation. VectorSchema itself IS VectorSchemaProvider
+# (verified isinstance check) — frozen msgspec.Struct safe để reuse module-level.
+# KHÔNG dùng @coco.fn _embed_one làm provider — @coco.fn wraps callable,
+# KHÔNG có __coco_vector_schema__ method.
+_VECTOR_SCHEMA = _coco_schema.VectorSchema(
+    dtype=np.dtype(np.float32),
+    size=EMBEDDING_DIM,  # 1536 — R1 mitigation pgvector 2000-dim limit
+)
+
+# DEPRECATED — giữ alias backward-compat với Plan 04-03 (KHÔNG export public).
+# Code hiện tại vẫn gọi `await _embed_one(...)` trong index_document — runtime call OK.
+# Plan 04-07: KHÔNG dùng EMBEDDER làm vector annotation provider.
 EMBEDDER = _embed_one
 
 
@@ -114,11 +133,15 @@ class ChunkRow:
         str → "text"
         bytes → "bytea"
         Annotated[int, pg.PgType("integer")] → "integer" (mặc định int → "bigint")
-        NDArray[np.float32] với Annotated[..., EMBEDDER] → "vector(1536)" auto
+        NDArray[np.float32] với Annotated[..., _VECTOR_SCHEMA] → "vector(1536)" auto
         dict → "jsonb"
 
     `created_at` server-side DEFAULT NOW() — KHÔNG khai dataclass (Migration 0001
     line 326-331 chunks.created_at TIMESTAMPTZ DEFAULT NOW()).
+
+    Plan 04-07 gap closure: vector annotation dùng `_VECTOR_SCHEMA` (VectorSchema instance)
+    THAY VÌ `EMBEDDER` (@coco.fn callable). VectorSchema implements VectorSchemaProvider
+    Protocol — TableSchema.from_class auto-resolve thành "vector(1536)" Postgres type.
     """
 
     id: uuid.UUID
@@ -129,7 +152,7 @@ class ChunkRow:
     heading_path: str | None
     page_start: Annotated[int, pg.PgType("integer")] | None
     page_end: Annotated[int, pg.PgType("integer")] | None
-    vector: Annotated[NDArray[np.float32], EMBEDDER]
+    vector: Annotated[NDArray[np.float32], _VECTOR_SCHEMA]
     metadata: dict[str, Any]
 
 
@@ -248,7 +271,6 @@ cocoindex_app = coco.App(coco.AppConfig(name="medinet_wiki_ingest"), medinet_wik
 __all__ = [
     "CHUNK_ID_NAMESPACE",
     "ChunkRow",
-    "EMBEDDER",
     "EMBEDDING_DIM",
     "PG_POOL_KEY",
     "cocoindex_app",
