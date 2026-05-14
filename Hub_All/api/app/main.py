@@ -53,7 +53,7 @@ def _to_asyncpg_dsn(sqlalchemy_dsn: str) -> str:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init sequence
     """Async context manager quản lý startup/shutdown của FastAPI app."""
     settings = get_settings()
 
@@ -97,10 +97,60 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except ImportError as e:
         logger.warning("cocoindex_import_failed: %s", e)
 
+    # 4) JWTManager — init khoá RS256 từ keys/private.pem + public.pem (Phase 3).
+    try:
+        from app.auth import JWTManager
+
+        app.state.jwt_manager = JWTManager(settings)
+        logger.info(
+            "jwt_manager_ready: access_ttl=%ds refresh_ttl=%ds",
+            settings.jwt_access_token_ttl,
+            settings.jwt_refresh_token_ttl,
+        )
+    except Exception as e:  # noqa: BLE001
+        app.state.jwt_manager = None
+        logger.warning("jwt_manager_init_failed: %s", e)
+
+    # 5) Anti-timing dummy hash — pre-compute 1 hash để service.login dùng
+    #    khi user không tồn tại (response time KHÔNG leak email enumeration —
+    #    T-03-04-timing-oracle mitigation).
+    try:
+        from app.auth import hash_password
+
+        app.state.dummy_password_hash = hash_password(
+            "dummy-not-a-real-password-Đ#"
+        )
+        logger.info("dummy_password_hash_ready (anti-timing oracle)")
+    except Exception as e:  # noqa: BLE001
+        # Fallback dummy hash (định dạng hợp lệ nhưng KHÔNG verify password thật).
+        app.state.dummy_password_hash = (
+            "$argon2id$v=19$m=65536,t=3,p=4"
+            "$AAAAAAAAAAAAAAAAAAAAAAA"
+            "$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        )
+        logger.warning("dummy_password_hash_fallback: %s", e)
+
+    # 6) SQLAlchemy async engine — init cho FastAPI Depends(get_session) (Phase 3).
+    try:
+        from app.db.session import init_engine
+
+        init_engine(settings)
+        logger.info("sqlalchemy_engine_ready")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("sqlalchemy_engine_init_failed: %s", e)
+
     try:
         yield
     finally:
-        # Shutdown ngược thứ tự init — cocoindex updater → redis → db_pool.
+        # Shutdown ngược thứ tự init — sqlalchemy → jwt → cocoindex → redis → db_pool.
+        try:
+            from app.db.session import dispose_engine
+
+            await dispose_engine()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("sqlalchemy_engine_dispose_failed: %s", e)
+        # Reset JWT manager (defensive cho test isolation).
+        app.state.jwt_manager = None
         if app.state.cocoindex_ready:
             # Phase 4: app.state.cocoindex_updater.abort() ở đây.
             app.state.cocoindex_ready = False
@@ -117,7 +167,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("lifespan_shutdown_complete")
 
 
-def create_app() -> FastAPI:
+def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     """Factory tạo FastAPI app — gọi 1 lần ở module-level và trong unit test."""
     settings = get_settings()
     app = FastAPI(
@@ -148,6 +198,11 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(ErrorHandlerMiddleware)  # LAST add = OUTERMOST
+
+    # Mount auth router (Phase 3 AUTH-01..03 — login/refresh/logout/me).
+    from app.auth import auth_router
+
+    app.include_router(auth_router)
 
     @app.get("/healthz")
     async def healthz() -> Any:
@@ -194,6 +249,13 @@ def create_app() -> FastAPI:
             checks["cocoindex"] = "ok"
         else:
             checks["cocoindex"] = "not_ready"
+            all_ok = False
+
+        # JWT manager check (Phase 3).
+        if getattr(app.state, "jwt_manager", None) is not None:
+            checks["jwt"] = "ok"
+        else:
+            checks["jwt"] = "not_ready"
             all_ok = False
 
         if all_ok:
