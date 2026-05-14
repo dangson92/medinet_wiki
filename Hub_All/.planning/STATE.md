@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_in_progress
-last_updated: "2026-05-14T00:30:00.000Z"
+last_updated: "2026-05-14T01:00:00.000Z"
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 10
-  percent: 19
+  completed_plans: 11
+  percent: 28
 current_phase:
   number: 2
   name: Database Schema + Alembic Baseline
   plans_total: 5
-  plans_complete: 4
-  status: plan_05_deferred_docker
+  plans_complete: 5
+  status: complete
 next_phase:
   number: 3
   name: Auth Port + RBAC + Response Envelope
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 2 — Database Schema + Alembic Baseline** (5 plans / 5 waves, 4/5 executed — Plan 05 deferred Docker) |
-| Plan | 02-01..02-04 ✓ COMPLETE (22 commit, app/db infra + 10 SQLAlchemy models + Alembic init async + migration 0001). Plan 02-05 (testcontainers) DEFERRED — chờ Docker Desktop start để chạy `make test-integration`. |
-| Status | Phase 2 in_progress — 80% code complete, runtime verify defer |
-| Last activity | 2026-05-13 — Plan 02-04 complete: migration 0001_initial_schema.py paste-ready (10 op.create_table + HNSW vector_cosine_ops raw SQL + pgcrypto ext + status CHECK failed_unsupported + 10 PrimaryKeyConstraint explicit) — 1 file 494 dòng, 1 commit. |
+| Phase | **Phase 2 — Database Schema + Alembic Baseline** (5 plans / 5 waves, 5/5 executed ✓ COMPLETE) |
+| Plan | 02-01..02-05 ✓ COMPLETE (28 commit, app/db infra + 10 SQLAlchemy models + Alembic init async + migration 0001 + testcontainers verify suite 7/7 PASS). |
+| Status | Phase 2 complete — 100% code + runtime verified, ready cho Phase 3 (Auth) |
+| Last activity | 2026-05-13 — Plan 02-05 complete: Makefile migrate-* targets + 3 pytest integration test file (testcontainers pgvector/pgvector:pg16) verify 5 ROADMAP success criteria + R1 dim pin + P20 drift check — 7 files (5 created + 3 modified — Makefile, pyproject.toml, uv.lock, conftest.py, 3 test_*.py, __init__.py), 6 commits, 7 pytest PASS in 9.19s. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
 | Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) |
 | Critical path | 1 ✓ → 2 → 4 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 → 5 → 8 (sau Phase 2) |
 
-**Progress bar:** `[█▊░░░░░░░░] 19% (1/10 phase) · Phase 2: 4/5 plans executed (Plan 05 deferred Docker)`
+**Progress bar:** `[██▊░░░░░░░] 28% (2/10 phase) · Phase 2 COMPLETE: 5/5 plans executed, 7/7 pytest PASS · Next: Phase 3 Auth Port`
 
 ---
 

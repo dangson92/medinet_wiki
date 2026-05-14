@@ -28,7 +28,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 ### M2a — Backend Foundation + Ingest MVP
 
 - [x] **Phase 1: Infra Skeleton + Demolition + EXIT Criteria** — FastAPI skeleton + Docker Compose 3-service + xóa code M1 + CONVENTIONS.md ✓ (2026-05-13, 6 plans / 4 waves / 28 commits)
-- [ ] **Phase 2: Database Schema + Alembic Baseline** — schema migrations cho users/hubs/documents/chunks/audit_logs/usage_events/refresh_tokens/api_keys + verify HNSW 1536-dim
+- [x] **Phase 2: Database Schema + Alembic Baseline** — schema migrations cho users/hubs/documents/chunks/audit_logs/usage_events/refresh_tokens/api_keys/user_hubs/settings + HNSW vector_cosine_ops 1536-dim verified runtime ✓ (2026-05-13, 5 plans / 5 waves / 28 commits, 7/7 pytest PASS)
 - [ ] **Phase 3: Auth Port + RBAC + Response Envelope** — JWT RS256 + Argon2 cross-compat + RBAC + envelope `{success, data, error, meta}`
 - [ ] **Phase 4: CocoIndex Flow MVP + Document Ingest** — cocoindex flow LISTEN/NOTIFY + extract/chunk/embed/pgvector + status tracking
 
@@ -96,12 +96,12 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
   4. `chunks` table có FK constraint đúng (`document_id` → `documents.id`, `hub_id` → `hubs.id`); `documents.status` enum bao gồm `pending | processing | completed | failed | failed_unsupported` (R4 mitigation)
   5. Schema `cocoindex` tồn tại trên DB `medinet_cocoindex` (auto-create bởi cocoindex Phase 4), Alembic KHÔNG touch — verify bằng filter include_object trong `migrations/env.py`
 
-**Plans:** 5 plans
-- [ ] 02-01-PLAN.md — SQLAlchemy declarative base + async engine + session factory + mixins (`app/db/`)
-- [ ] 02-02-PLAN.md — SQLAlchemy models cho 10 bảng (9 chính + user_hubs join) trong `app/models/` gom theo domain
-- [ ] 02-03-PLAN.md — Alembic init + async env.py + include_object filter cocoindex schema (P7) + drift-detection (P20)
-- [ ] 02-04-PLAN.md — Migration `0001_initial_schema.py` toàn bộ 10 bảng + HNSW vector_cosine_ops + indexes + CHECK enum
-- [ ] 02-05-PLAN.md — Verify suite: Makefile migrate-* targets + 3 pytest integration test (testcontainers Postgres)
+**Plans:** 5 plans (5/5 COMPLETE ✓)
+- [x] 02-01-PLAN.md — SQLAlchemy declarative base + async engine + session factory + mixins (`app/db/`) ✓
+- [x] 02-02-PLAN.md — SQLAlchemy models cho 10 bảng (9 chính + user_hubs join) trong `app/models/` gom theo domain ✓
+- [x] 02-03-PLAN.md — Alembic init + async env.py + include_object filter cocoindex schema (P7) + drift-detection (P20) ✓
+- [x] 02-04-PLAN.md — Migration `0001_initial_schema.py` toàn bộ 10 bảng + HNSW vector_cosine_ops + indexes + CHECK enum ✓
+- [x] 02-05-PLAN.md — Verify suite: Makefile migrate-* targets + 3 pytest integration test (testcontainers Postgres pgvector pg16) — 7/7 PASS ✓
 
 ---
 

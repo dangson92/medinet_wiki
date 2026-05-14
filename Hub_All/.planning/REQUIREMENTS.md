@@ -14,7 +14,7 @@
 ### CORE — Infra + Skeleton + Demolition (5 REQ)
 
 - [ ] **CORE-01**: `Hub_All/api/` Python project skeleton (pyproject.toml + uv lockfile + Dockerfile multi-stage + ruff + mypy + pytest config). Lock-in version: `python>=3.11,<3.13`, `fastapi==0.136.1`, `cocoindex==1.0.3`, các dep khác theo `.planning/research/STACK.md`.
-- [ ] **CORE-02**: `docker-compose.yml` 3 services (`pgvector/pgvector:pg16` + `redis:7-alpine` + `python-api`); init script tạo 2 logical DB (`medinet_central` + `medinet_cocoindex`) + `CREATE EXTENSION vector` trên cả 2 + verify HNSW index 1536-dim build được trước khi viết flow (R1 mitigation). **Note:** Phần schema migrations (Alembic baseline) tách sang Phase 2.
+- [x] **CORE-02**: `docker-compose.yml` 3 services (`pgvector/pgvector:pg16` + `redis:7-alpine` + `python-api`); init script tạo 2 logical DB (`medinet_central` + `medinet_cocoindex`) + `CREATE EXTENSION vector` trên cả 2 + verify HNSW index 1536-dim build được trước khi viết flow (R1 mitigation). **Note:** Phần schema migrations (Alembic baseline) tách sang Phase 2. ✓ COMPLETE — Phase 1 Plan 02 docker-compose + Phase 2 Plan 01-05 schema baseline (10 bang + HNSW vector_cosine_ops + Vector(1536) verified runtime qua testcontainers 7/7 pytest PASS).
 - [ ] **CORE-03**: Xóa code cũ — `Hub_All/docling-pipeline/`, `Hub_All/eval/`, `Hub_All/chroma_data/` (nếu còn). Cập nhật `Hub_All/.gitignore` cho `api/keys/`, `api/.venv/`, `medinet_pgdata/`. Giữ `Hub_All/backend/` đến Phase 8 (tear-down sau frontend smoke pass).
 - [ ] **CORE-04**: FastAPI app factory `api/app/main.py` với `lifespan` event (init+abort `cocoindex.FlowLiveUpdater`), `pydantic-settings BaseSettings` đọc env, response envelope `{success, data, error, meta}` ở `api/app/pkg/response.py`. Healthcheck `GET /healthz` + `GET /readyz` (ready khi cocoindex flow updater started + DB pool connected).
 - [ ] **CORE-05**: `.planning/CONVENTIONS.md` mới cho stack Python — test strategy (critical-path mandatory, coverage target 50%+ trên auth/ingest/search/ask), naming `snake_case` cho cocoindex flow/target (R5 mitigation), `APP_NAMESPACE=medinet_prod` cố định trong `.env.example`, middleware order (FastAPI reverse: error→security→CORS→rate-limit), logging fields match Go `log/slog` semantics.
@@ -172,7 +172,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | Requirement | Phase | Status |
 |---|---|---|
 | CORE-01 | Phase 1 (Infra Skeleton + Demolition + EXIT Criteria) | Pending |
-| CORE-02 | Phase 1 (docker-compose 3-service + HNSW 1536-dim verify) + Phase 2 (schema migrations Alembic baseline) | Pending |
+| CORE-02 | Phase 1 (docker-compose 3-service + HNSW 1536-dim verify) + Phase 2 (schema migrations Alembic baseline) | ✓ Complete (2026-05-13) |
 | CORE-03 | Phase 1 (xóa code M1 cũ) | Pending |
 | CORE-04 | Phase 1 (FastAPI app factory + lifespan + envelope + healthz) | Pending |
 | CORE-05 | Phase 1 (CONVENTIONS.md) | Pending |
