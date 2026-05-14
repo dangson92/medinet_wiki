@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_planned
-last_updated: "2026-05-14T10:00:00.000Z"
+status: phase_in_progress
+last_updated: "2026-05-14T03:32:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 16
-  completed_plans: 11
-  percent: 28
+  completed_plans: 12
+  percent: 30
 current_phase:
   number: 3
   name: Auth Port + RBAC + Response Envelope
   plans_total: 5
-  plans_complete: 0
-  status: ready_to_execute
+  plans_complete: 1
+  status: in_progress
 next_phase:
   number: 4
   name: CocoIndex Flow MVP + Document Ingest
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, 0/5 executed — ready to execute) |
-| Plan | 03-01..03-05 ĐÃ PLAN (Wave 1: 03-01 envelope+middleware, 03-02 JWT keypair; Wave 2: 03-03 Argon2 cross-compat; Wave 3: 03-04 auth router+service; Wave 4: 03-05 RBAC + 5-AC integration test). |
-| Status | Phase 3 planned — verified 0 blockers, 0 warnings sau 2 iteration plan-checker. Ready cho `/gsd-execute-phase 3`. |
-| Last activity | 2026-05-14 — `/gsd-plan-phase 3 --auto`: 5 plans tạo + verify PASS. Argon2 params pin theo Go source (`m=65536, t=3, p=4` — fix doc-bug REQUIREMENTS.md/PITFALLS.md ghi sai `t=1, p=2`). P11/P12/P16 mitigations explicit. |
+| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, **1/5 executed** — Plan 03-01 DONE) |
+| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 NEXT (Wave 1: JWT keypair); 03-03 Wave 2 (Argon2); 03-04 Wave 3 (auth router); 03-05 Wave 4 (RBAC + 5-AC integration test). |
+| Status | Phase 3 in progress — Plan 03-01 thực thi xong 5/5 task, 9/9 pytest PASS, 11/11 acceptance check PASS. |
+| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-01`: 5 commits atomic (14e1e5f → 5a3c844). 2 deviation Rule 3: pydantic-settings NoDecode cho CSV env vars + bỏ LifespanManager test vì asyncpg blocking Windows. Forward links rõ cho 03-02/03/04/05 dùng resp helpers + RequestId middleware. |
 | Total phases | 10 (M2a: 4 + M2b: 6) |
-| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) · 6 planned (AUTH-01..06 Phase 3) |
+| Total requirements | 38 v1 REQ-ID · 5 satisfied (CORE-01..05) · 2 satisfied Phase 3 (AUTH-01, AUTH-04 partial — middleware+envelope) · 4 planned remaining (AUTH-02, AUTH-03, AUTH-05, AUTH-06) |
 | Critical path | 1 ✓ → 2 ✓ → 4 → 6 → 7 → 9 → 10 |
-| Auth branch | 3 (planned) → 5 → 8 |
+| Auth branch | 3 (1/5 plans) → 5 → 8 |
 
-**Progress bar:** `[██▊░░░░░░░] 28% (2/10 phase) · Phase 3 PLANNED: 5/5 plans verified · Next: /gsd-execute-phase 3`
+**Progress bar:** `[███░░░░░░░] 30% (2/10 phase + 1/5 Phase 3 plans) · Phase 3 in progress: 1/5 plans done · Next: /gsd-execute-phase 3 plan 03-02 (JWT keypair)`
 
 ---
 
@@ -148,9 +148,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-13):** `/gsd-plan-phase 2` orchestrator → gsd-planner tạo 5 plan (02-01 app/db infra + 02-02 10 SQLAlchemy models gom theo domain + 02-03 Alembic init async + 02-04 migration 0001_initial_schema paste-ready + 02-05 verify suite testcontainers). Threat model T-02-01..05 (Tampering/Information disclosure/Elevation) bake vào Plan 01. gsd-plan-checker iter 1 phát hiện 3 WARNING + 5 NIT (0 BLOCKER). gsd-planner revision iter 1 apply 6 fix (files_modified completeness + fixture ordering refactor + PK constraint explicit name). Checker iter 2 → VERIFICATION PASSED. Coverage CORE-02 ✓ 5/5 plans. Mitigation R1/R4/R7 + P1/P7/P8/P17/P20 đều có trong plans. 2 commit: `3ccded0` (initial plans) + `67171b7` (revision iter 1).
+**Last session (2026-05-14 — Plan 03-01 execute):** `/gsd-execute-phase 3 plan 03-01` → executor agent thực thi 5 task atomic:
+- Task 01 (`14e1e5f`): tạo 4 middleware file (`__init__.py`, `request_id.py`, `security_headers.py`, `error_handler.py`) — BaseHTTPMiddleware pattern, HTTPException pass-through để Plan 03-05 exception_handler render envelope.
+- Task 02 (`464902b`): sửa `pkg/response.py` — 9 error code lowercase → UPPER_SNAKE_CASE (D6 Go-compat) + thêm `validation_error(422)` helper.
+- Task 03 (`fb5c9e8`): config.py thêm `_no_lan_in_prod` validator (P12 mitigation, mode='after') + Rule 3 fix `Annotated[list[str], NoDecode]` vì pydantic-settings v2 auto-JSON-decode complex types break CSV env var.
+- Task 04 (`3bbca23`): main.py wire 3 middleware theo P11 reversed (CORS → SecurityHeaders → RequestId → ErrorHandler outermost).
+- Task 05 (`5a3c844`): tests/test_middleware.py — 9 unit test cover 5 behavior (request_id sinh/echo, security headers, error envelope, HTTPException pass-through, CORS prod reject + dev allow). Rule 3 fix bỏ LifespanManager vì asyncpg blocking Windows >5s khi không có Postgres.
+- Verification suite 11/11 PASS: pytest 9/9 + ruff 7/7 + mypy 7/7 + middleware factory wired 4/4.
+- SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-01-SUMMARY.md` tạo với 5 commit hash + 2 deviation log + threat model tracking + forward links cho 03-02/03/04/05.
 
-**Next action:** Chạy `/gsd-execute-phase 2` để thực thi 5 plan tuần tự theo wave 1→5. Tổng dự kiến: ~30 commits (1 commit/task), critical path ~3-4h dev/Docker testcontainers. Trước khi execute: đảm bảo Docker Desktop running (testcontainers Plan 05 cần `pgvector/pgvector:pg16`).
+**Next action:** Chạy `/gsd-execute-phase 3 plan 03-02` để tiếp tục Wave 1 (JWT keypair format detection + PyJWT RS256 wrapper — JWTManager + JWTClaims + TokenPair). Plan 03-02 có thể parallel với Plan 03-01 đã xong, nhưng đợt này executor chạy tuần tự. Sau 03-02 → Wave 2 (03-03 Argon2 cross-compat — cần Docker testcontainers Postgres).
 
 **Files cần đọc khi resume:**
 
