@@ -77,8 +77,10 @@ def test_chunk_vietnamese_long_text_splits() -> None:
 
 def test_chunk_draft_immutable() -> None:
     """frozen=True dataclass — KHÔNG cho phép set attribute."""
+    from dataclasses import FrozenInstanceError
+
     c = ChunkDraft(content="x", heading_path=None, page_start=1, page_end=1)
-    with pytest.raises(Exception):  # FrozenInstanceError
+    with pytest.raises(FrozenInstanceError):
         c.content = "y"  # type: ignore[misc]
 
 
