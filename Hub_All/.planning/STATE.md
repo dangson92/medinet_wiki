@@ -2,23 +2,24 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_complete
-last_updated: "2026-05-14T06:30:00Z"
+status: phase_planned
+last_updated: "2026-05-14T11:45:00Z"
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 16
+  total_plans: 22
   completed_plans: 16
   percent: 50
 current_phase:
-  number: 3
-  name: Auth Port + RBAC + Response Envelope
-  plans_total: 5
-  plans_complete: 5
-  status: complete
-next_phase:
   number: 4
   name: CocoIndex Flow MVP + Document Ingest
+  plans_total: 6
+  plans_complete: 0
+  status: planned
+  waves: 4
+next_phase:
+  number: 5
+  name: Hub + User + Audit + APIKey + Settings CRUD
 ---
 
 # State — MEDWIKI
@@ -52,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** ✓ COMPLETE (5 plans / 4 waves / 5/5 executed) |
-| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 ✓ DONE (Wave 1: JWT keypair + PyJWT RS256 wrapper). 03-03 ✓ DONE (Wave 2: Argon2 password module + cross-compat R6 verified). 03-04 ✓ DONE (Wave 3: 4 endpoint /api/auth/login+refresh+logout+me + AuthService + Redis SETNX P16 + anti-timing dummy_password_hash + lifespan wire). 03-05 ✓ DONE (Wave 4: RBAC require_role(*roles) factory + HTTPException envelope handler + 5-AC integration test suite Postgres+Redis testcontainers — 27 test mới + 62/62 baseline + 29/29 critical PASS). |
-| Status | **Phase 3 COMPLETE** — Plan 03-05 thực thi xong 6/6 task, 62/62 full pytest no regress, 29/29 critical PASS. 5/5 ROADMAP success criteria verified end-to-end: AC1 envelope shape (login byte-identical Go) + AC2 JWT decode/PKCS#8 + AC3 RBAC 403/200 + AC4 Argon2 cross-compat (regression) + AC5 concurrent refresh race (1 PASS + 4 fail). 6/6 AUTH requirements complete (AUTH-01..06). Ready for Phase 4 (CocoIndex Flow MVP). |
-| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-05`: 6 commits atomic (010c8a1 → 29d4edf → a01b7d1 → 41b8d5c → 0f1fdc6 → 6e178e4). 4 Rule fixes: (1) Rule 3 alembic.command.upgrade trong async fixture → asyncio.to_thread; (2) Rule 1 postgres_container scope=module data leak → TRUNCATE users/refresh_tokens/user_hubs RESTART IDENTITY CASCADE per-test; (3) Rule 1 lifespan đọc REDIS_URL=localhost → chuyển env override từ auth_env fixture vào app_with_auth trực tiếp; (4) Rule 1 verify_jwt_format.sh fail trên Windows do CRLF → strip \\r với tr -d. 5 file created (test_require_role + 4 integration test) + 6 file modified (dependencies.py require_role impl, main.py HTTPException handler, conftest.py 10 fixture extension, pyproject.toml testcontainers[redis], uv.lock, scripts/verify_jwt_format.sh CRLF fix). AUTH-04 done — full 6/6 AUTH requirements complete. |
-| Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** |
-| Total requirements | 38 v1 REQ-ID · 1 satisfied CORE (CORE-02) · **6 satisfied Phase 3** (AUTH-01 login; AUTH-02 refresh P16 SETNX; AUTH-03 me+logout; AUTH-04 RBAC require_role; AUTH-05 Argon2 cross-compat; AUTH-06 JWT keypair PKCS#8) |
-| Critical path | 1 ✓ → 2 ✓ → 4 → 6 → 7 → 9 → 10 |
+| Phase | **Phase 4 — CocoIndex Flow MVP + Document Ingest** 📋 PLANNED (6 plans / 4 waves / 0/6 executed) — Ready to execute |
+| Plan | 04-01 📋 PLAN ready (Wave 1: Migration 0002 watchdog index + cocoindex setup [BLOCKING], INGEST-05/06/08). 04-02 📋 PLAN ready (Wave 1: services file_extract + vn_chunker + embedder + file_store TDD, INGEST-02/04). 04-03 📋 PLAN ready (Wave 2: cocoindex flow medinet_wiki_ingest + lifespan FlowLiveUpdater + dataclass ExtractResult/ChunkPayload + chunk wire hub_id/document_id/content_hash + asyncio.to_thread, INGEST-01/02/03). 04-04 📋 PLAN ready (Wave 2: documents router POST /upload + GET /:id + early-detect scanned PDF synchronously + Content-Length DoS guard + last_heartbeat=NOW() bootstrap, INGEST-04/05). 04-05 📋 PLAN ready (Wave 3: watchdog asyncio task NOT NULL guard + DELETE + LIST endpoints, INGEST-06/07/08). 04-06 📋 PLAN ready (Wave 4: M2a EXIT GATE — E2E integration test + manual demo + human checkpoint, INGEST-01..05). |
+| Status | **Phase 4 PLANNED** — `/gsd-plan-phase 4 --auto` ship 6 PLAN.md (~5,247 dòng). Plan checker iter 1: 4 BLOCKER + 7 WARNING (chunk wire hub_id/cocoindex typed struct/R4 scanned PDF gap/datetime.utcnow + lifespan blocking/VectorIndexDef param/test message text/main.py overlap/DoS upload/watchdog NULL flip). Iter 2: 0 BLOCKER + 1 WARNING (frontmatter files_modified inconsistency). Patch trực tiếp Plan 04-04 frontmatter + artifact entry → 0/0 issues. Coverage: 8/8 INGEST REQ-ID. Wave structure: W1 (04-01+04-02 parallel) → W2 (04-03→04-04 sequential do main.py overlap) → W3 (04-05) → W4 (04-06 checkpoint). Schema push [BLOCKING] task injected (Plan 04-01: alembic 0002 + cocoindex setup). Ready for `/gsd-execute-phase 4`. |
+| Last activity | 2026-05-14 — `/gsd-plan-phase 4 --auto`: spawn gsd-planner (1 lần draft + 1 lần revision) + gsd-plan-checker (2 lần verify). Manual patch Plan 04-04 frontmatter `files_modified` thêm `app/services/file_extract.py` + artifact entry. ROADMAP.md Phase 4 Plans entry update với 6 plan list. Total context Phase 4 plans: ~5,247 dòng / 6 file (04-01: 632, 04-02: 1055, 04-03: 670, 04-04: ~990, 04-05: 1019, 04-06: 891). KHÔNG run research (config research:false + --auto skip silently); KHÔNG run pattern-mapper (no CONTEXT/RESEARCH); KHÔNG run UI gate (Phase 4 backend-only, D6 frontend untouched). |
+| Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** · **Phase 4 planned** |
+| Total requirements | 38 v1 REQ-ID · 1 satisfied CORE (CORE-02) · 6 satisfied Phase 3 (AUTH-01..06) · **8 planned Phase 4** (INGEST-01 flow_def Postgres LISTEN/NOTIFY; INGEST-02 extract+chunk VN+embed dim 1536; INGEST-03 target chunks + stable chunk_id; INGEST-04 POST /upload; INGEST-05 GET /:id + status enum 5; INGEST-06 heartbeat + watchdog; INGEST-07 DELETE + audit; INGEST-08 GET list + filter + per_page≤100) |
+| Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 → 8 |
 
-**Progress bar:** `[██████░░░░] 50% (3/10 phase complete · Phase 3 ✓ all 5 plans + 6/6 AUTH reqs) · Next: /gsd-execute-phase 4 (CocoIndex Flow MVP + Document Ingest — INGEST-01..08)`
+**Progress bar:** `[██████░░░░] 50% (3/10 phase complete · Phase 4 📋 planned 6/6 plans + 0/6 executed · M2a EXIT GATE coming sau Phase 4) · Next: /gsd-execute-phase 4 (INGEST-01..08, ~5247 dòng plan)`
 
 ---
 
