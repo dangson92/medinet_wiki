@@ -99,19 +99,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     #    setup_cocoindex SYNC blocking — wrap asyncio.to_thread để KHÔNG block
     #    FastAPI lifespan event loop (cocoindex Rust core init + initial backfill
     #    có thể tốn vài giây nếu schema apply lần đầu hoặc nhiều pending rows).
+    #
+    #    Plan 04-07 gap closure: FAIL-FAST pattern thay fail-soft. Nếu setup_cocoindex
+    #    raise (VectorSchemaProvider sai, Postgres không lên, schema build fail) →
+    #    lifespan re-raise → uvicorn crash startup → operator phải fix root cause.
+    #    KHÔNG mask architectural blocker bằng silent warning + cocoindex_app=None.
     app.state.cocoindex_app = None
+    import asyncio
+
+    from app.rag.setup import get_cocoindex_app, setup_cocoindex
+
     try:
-        import asyncio
-
-        from app.rag.setup import get_cocoindex_app, setup_cocoindex
-
         await asyncio.to_thread(setup_cocoindex, settings)
-        logger.info("cocoindex_setup_ok")
-        app.state.cocoindex_app = get_cocoindex_app()
-        app.state.cocoindex_ready = True
-        logger.info("cocoindex_app_attached_to_app_state")
-    except Exception as e:  # noqa: BLE001 — Phase 1 fail-soft pattern
-        logger.warning("cocoindex_init_failed: %s", e)
+    except Exception as exc:
+        logger.error("cocoindex_init_failed_fail_fast: %s", exc, exc_info=True)
+        raise  # ← Plan 04-07: fail-fast — KHÔNG mask blocker
+    logger.info("cocoindex_setup_ok")
+    app.state.cocoindex_app = get_cocoindex_app()
+    app.state.cocoindex_ready = True
+    logger.info("cocoindex_app_attached_to_app_state")
 
     # 4) JWTManager — init khoá RS256 từ keys/private.pem + public.pem (Phase 3).
     try:

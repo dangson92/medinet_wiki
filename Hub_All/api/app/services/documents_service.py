@@ -394,18 +394,23 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
     runs sau response client → exception KHÔNG return được lên user).
     """
     if cocoindex_app is None:
-        logger.warning(
-            "trigger_cocoindex_update_skip: cocoindex_app=None (lifespan setup failed?) doc_id=%s",
+        # Plan 04-07 gap closure: ERROR level thay WARNING. Sau Task 2 lifespan
+        # fail-fast, cocoindex_app=None CHỈ xảy ra trong test isolation (test KHÔNG
+        # setup cocoindex full) HOẶC architectural regression. ERROR log để alerting
+        # bắt được. KHÔNG silent skip — set status='failed' rõ ràng.
+        logger.error(
+            "trigger_cocoindex_update_no_app: cocoindex_app=None doc_id=%s "
+            "(Plan 04-07: lifespan fail-fast nên branch này CHỈ xảy ra trong test/regression)",
             doc_id,
         )
-        # Set status='failed' để watchdog/UI phản ánh đúng.
         try:
             engine = get_engine()
             async with engine.begin() as conn:
                 await conn.execute(
                     text(
                         "UPDATE documents SET status='failed', "
-                        "error_message='cocoindex_app unavailable (lifespan failed)', "
+                        "error_message='cocoindex_app unavailable — lifespan setup did not "
+                        "complete (Plan 04-07: should fail-fast, check uvicorn startup logs)', "
                         "last_heartbeat=NOW(), updated_at=NOW() "
                         "WHERE id = :id"
                     ),
