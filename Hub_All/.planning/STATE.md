@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_in_progress
-last_updated: "2026-05-14T04:01:09Z"
+status: phase_complete
+last_updated: "2026-05-14T06:30:00Z"
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 16
-  completed_plans: 15
-  percent: 38
+  completed_plans: 16
+  percent: 50
 current_phase:
   number: 3
   name: Auth Port + RBAC + Response Envelope
   plans_total: 5
-  plans_complete: 4
-  status: in_progress
+  plans_complete: 5
+  status: complete
 next_phase:
   number: 4
   name: CocoIndex Flow MVP + Document Ingest
@@ -52,16 +52,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** (5 plans / 4 waves, **4/5 executed** — Plan 03-01 + 03-02 + 03-03 + 03-04 DONE) |
-| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 ✓ DONE (Wave 1: JWT keypair + PyJWT RS256 wrapper). 03-03 ✓ DONE (Wave 2: Argon2 password module + cross-compat R6 verified). 03-04 ✓ DONE (Wave 3: 4 endpoint /api/auth/login+refresh+logout+me + AuthService + Redis SETNX P16 + anti-timing dummy_password_hash + lifespan wire). 03-05 NEXT Wave 4 (RBAC require_role + 5-AC integration test). |
-| Status | Phase 3 in progress — Plan 03-04 thực thi xong 5/5 task, 36/36 pytest no regress, AUTH-01/02/03 complete. 4 endpoint mount: POST/login + POST/refresh + POST/logout + GET/me. Lifespan wire JWTManager + dummy_password_hash + SQLAlchemy init_engine. P16 SETNX atomic lock cho refresh race + anti-timing oracle verified. |
-| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-04`: 5 commits atomic (c165c4d → 6b7d8a6 → 31d54fd → 8aaad3f → 1c9237f). 3 deviation Rule 3: (1) pydantic[email] bump pyproject.toml + uv sync install email-validator 2.3.0 cho EmailStr (plan đã anticipate); (2) ruff B008 false positive với FastAPI Depends → noqa 9 vị trí; (3) ruff C901 lifespan+create_app complexity 13/11 → noqa 2 vị trí (init sequence vốn nhiều step). 4 file created (schemas, service, dependencies, router) + 4 file modified (__init__.py extend 8 export, main.py lifespan+include_router+readyz check[jwt], pyproject.toml, uv.lock). |
-| Total phases | 10 (M2a: 4 + M2b: 6) |
-| Total requirements | 38 v1 REQ-ID · 1 satisfied CORE (CORE-02) · 5 satisfied Phase 3 (AUTH-01 — login; AUTH-02 — refresh + P16 SETNX; AUTH-03 — me + logout; AUTH-05 — Argon2 cross-compat; AUTH-06 — JWT keypair PKCS#8) · 1 planned remaining Phase 3 (AUTH-04 — RBAC require_role + integration test) |
+| Phase | **Phase 3 — Auth Port + RBAC + Response Envelope** ✓ COMPLETE (5 plans / 4 waves / 5/5 executed) |
+| Plan | 03-01 ✓ DONE (Wave 1: middleware infra + envelope UPPER_SNAKE_CASE + CORS P12 validator). 03-02 ✓ DONE (Wave 1: JWT keypair + PyJWT RS256 wrapper). 03-03 ✓ DONE (Wave 2: Argon2 password module + cross-compat R6 verified). 03-04 ✓ DONE (Wave 3: 4 endpoint /api/auth/login+refresh+logout+me + AuthService + Redis SETNX P16 + anti-timing dummy_password_hash + lifespan wire). 03-05 ✓ DONE (Wave 4: RBAC require_role(*roles) factory + HTTPException envelope handler + 5-AC integration test suite Postgres+Redis testcontainers — 27 test mới + 62/62 baseline + 29/29 critical PASS). |
+| Status | **Phase 3 COMPLETE** — Plan 03-05 thực thi xong 6/6 task, 62/62 full pytest no regress, 29/29 critical PASS. 5/5 ROADMAP success criteria verified end-to-end: AC1 envelope shape (login byte-identical Go) + AC2 JWT decode/PKCS#8 + AC3 RBAC 403/200 + AC4 Argon2 cross-compat (regression) + AC5 concurrent refresh race (1 PASS + 4 fail). 6/6 AUTH requirements complete (AUTH-01..06). Ready for Phase 4 (CocoIndex Flow MVP). |
+| Last activity | 2026-05-14 — `/gsd-execute-phase 3 plan 03-05`: 6 commits atomic (010c8a1 → 29d4edf → a01b7d1 → 41b8d5c → 0f1fdc6 → 6e178e4). 4 Rule fixes: (1) Rule 3 alembic.command.upgrade trong async fixture → asyncio.to_thread; (2) Rule 1 postgres_container scope=module data leak → TRUNCATE users/refresh_tokens/user_hubs RESTART IDENTITY CASCADE per-test; (3) Rule 1 lifespan đọc REDIS_URL=localhost → chuyển env override từ auth_env fixture vào app_with_auth trực tiếp; (4) Rule 1 verify_jwt_format.sh fail trên Windows do CRLF → strip \\r với tr -d. 5 file created (test_require_role + 4 integration test) + 6 file modified (dependencies.py require_role impl, main.py HTTPException handler, conftest.py 10 fixture extension, pyproject.toml testcontainers[redis], uv.lock, scripts/verify_jwt_format.sh CRLF fix). AUTH-04 done — full 6/6 AUTH requirements complete. |
+| Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** |
+| Total requirements | 38 v1 REQ-ID · 1 satisfied CORE (CORE-02) · **6 satisfied Phase 3** (AUTH-01 login; AUTH-02 refresh P16 SETNX; AUTH-03 me+logout; AUTH-04 RBAC require_role; AUTH-05 Argon2 cross-compat; AUTH-06 JWT keypair PKCS#8) |
 | Critical path | 1 ✓ → 2 ✓ → 4 → 6 → 7 → 9 → 10 |
-| Auth branch | 3 (2/5 plans) → 5 → 8 |
+| Auth branch | 3 ✓ (5/5 plans done) → 5 → 8 |
 
-**Progress bar:** `[████░░░░░░] 38% (2/10 phase + 4/5 Phase 3 plans) · Phase 3 in progress: 4/5 plans done · Next: /gsd-execute-phase 3 plan 03-05 (RBAC require_role + 5-AC integration test suite)`
+**Progress bar:** `[██████░░░░] 50% (3/10 phase complete · Phase 3 ✓ all 5 plans + 6/6 AUTH reqs) · Next: /gsd-execute-phase 4 (CocoIndex Flow MVP + Document Ingest — INGEST-01..08)`
 
 ---
 
@@ -148,7 +148,18 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-14 — Plan 03-04 execute):** `/gsd-execute-phase 3 plan 03-04` → executor agent thực thi 5 task atomic:
+**Last session (2026-05-14 — Plan 03-05 execute — PHASE 3 COMPLETE):** `/gsd-execute-phase 3 plan 03-05` → executor agent thực thi 6 task atomic:
+- Task 01 (`010c8a1`): replace `app/auth/dependencies.py::require_role` stub NotImplementedError → implementation đầy đủ. ValueError gate empty roles (security gate — tránh route mở cho mọi role). `allowed = set(roles)` + `user.role in allowed` check → raise HTTPException 403 `{code:FORBIDDEN, message:...}`. Thêm `@app.exception_handler(HTTPException)` trong `app/main.py::create_app()` map `exc.detail` dict {code, message} → envelope `{success:false, data:null, error:{code, message}, meta:null}`. Plan 03-01 ErrorHandlerMiddleware pass-through StarletteHTTPException → handler này render envelope đúng cho mọi 401/403 từ get_current_user + require_role. 5 unit test test_require_role.py PASS.
+- Task 02 (`29d4edf`): extend `tests/integration/conftest.py` với 10 fixture Plan 03-05: `redis_container` (scope=module, redis:7-alpine), `auth_env` (legacy backward-compat), `app_with_auth` (alembic upgrade + lifespan), `auth_client` (httpx ASGITransport), `admin_user/editor_user/viewer_user` (INSERT users qua engine với Go seed hash), `admin_token/editor_token/viewer_token` (POST /login), `admin_token_pair` (cả access+refresh cho AC5). pyproject.toml bump `testcontainers[postgres]` → `testcontainers[postgres,redis]`. uv sync install redis extra. docker pull redis:7-alpine prerequisite.
+- Task 03 (`a01b7d1`): tests/integration/test_auth_login.py — 5 critical test AC1: happy admin Go-seed hash → 200 envelope; wrong password → 401 INVALID_CREDENTIALS; unknown email → 401 same shape (anti-timing oracle); bad email → 422; envelope keys EXACTLY {success, data, error, meta}. **Rule 3 fix**: alembic.command.upgrade trong async fixture → asyncio.to_thread. **Rule 1 fix**: postgres_container scope=module → TRUNCATE users/refresh_tokens/user_hubs RESTART IDENTITY CASCADE per-test. 5/5 PASS.
+- Task 04 (`41b8d5c`): tests/integration/test_auth_refresh_race.py — 5 critical test AC5/AUTH-02: happy refresh new pair; concurrent 5 asyncio.gather → exactly 1 PASS + 4 fail-401 (P16 SETNX); revoked replay → 401; garbage JWT → 401 INVALID_REFRESH_TOKEN; access vs refresh type → 401. **Rule 1 fix**: alembic_cfg fixture set REDIS_URL=localhost (Phase 2 placeholder), pytest fixture resolution order không guarantee auth_env chạy sau → lifespan đọc localhost. Chuyển env override (DATABASE_URL+REDIS_URL+JWT+CORS) trực tiếp vào app_with_auth fixture với postgres+redis containers làm depend → set CUỐI CÙNG + cache_clear trước create_app. 5/5 PASS.
+- Task 05 (`0f1fdc6`): tests/integration/test_rbac_dependency.py — 6 critical test AC3: anonymous → 401 MISSING_AUTHORIZATION; viewer require_role('admin') → 403 FORBIDDEN; editor require_role('admin') → 403; admin require_role('admin') → 200; admin require_role('admin','editor') → 200 (multi-role pass); viewer require_role('admin','editor') → 403 (multi-role reject). Test-only route /test/role-check mount qua `_spawn_rbac_app()` helper — KHÔNG sửa production app/main.py. AC3 reformulation: production endpoint defer Phase 5 HUB-02. 6/6 PASS.
+- Task 06 (`6e178e4`): tests/integration/test_jwt_compat.py — 5 critical test AC2/AUTH-06: login token decode bằng keys/public.pem RS256 PyJWT raw → 10 claim spec; /me Bearer → UserPublic; logout blacklist access JTI → /me cũ 401 TOKEN_REVOKED; scripts/verify_jwt_format.sh exit 0 "PKCS#8 OK"; PII regression (caplog scan password + JWT eyJ pattern KHÔNG match). **Rule 1 fix**: verify_jwt_format.sh trên Windows git bash `head -1` trả trailing \\r (CRLF) → case match fail → strip với `tr -d '\\r'`. 5/5 PASS.
+- Verification suite 17/17 PASS: pytest tests/ → 62/62 PASS (27 mới Plan 03-05 + 25 unit cũ + 11 integration Phase 2 + others); pytest -m critical → 29/29 PASS (HARD-03 CI gate); ruff app + tests clean; mypy strict 29 source clean; require_role + get_current_user + auth_router exports OK; verify_jwt_format.sh exit 0.
+- SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-05-SUMMARY.md` tạo với 6 commit hash + threat model 9 entry (5 mitigated + 1 accepted + 3 regression-mitigated) + Phase 5 Carry-Over (AC3 production endpoint integration + audit_log trigger) + DOC-BUG cleanup follow-up note.
+- **5/5 ROADMAP success criteria VERIFIED end-to-end**: AC1 (login envelope) + AC2 (JWT decode + PKCS#8) + AC3 (RBAC 403/200) + AC4 (Argon2 cross-compat regression) + AC5 (concurrent refresh race). **6/6 AUTH requirements complete**. Phase 3 hoàn tất.
+
+**Previous session (2026-05-14 — Plan 03-04 execute):** `/gsd-execute-phase 3 plan 03-04` → executor agent thực thi 5 task atomic:
 - Task 01 (`c165c4d`): tạo `app/auth/schemas.py` — 5 Pydantic v2 model (LoginRequest, LoginResponse, UserPublic, RefreshRequest, LogoutRequest). LoginRequest.email: EmailStr + password min/max length. UserPublic.hub_assignments: list[str] (USER-03). role Literal["admin","editor","viewer"] match Go enum. Rule 3 deviation: pyproject `pydantic>=2.7.0,<3` → `pydantic[email]>=2.7.0,<3` + uv sync install email-validator 2.3.0 + dnspython 2.8.0 cho EmailStr (plan đã anticipate trong task 01 lưu ý).
 - Task 02 (`6b7d8a6`): tạo `app/auth/service.py` — AuthService class với 4 async method (login/refresh/logout/get_current_user_info). AuthError(code, message) exception class. _hash_refresh_token SHA-256 64-char (T-02-03). Constructor injection: db, redis, jwt_manager, dummy_password_hash. Anti-timing oracle: login luôn gọi verify_password kể cả user None với dummy hash. P16 SETNX: refresh dùng redis.set(lock:refresh:<jti>, nx=True, ex=30) → fail → AuthError REFRESH_RACE. Blacklist old jti + UPDATE refresh_tokens.revoked_at + INSERT new hash. 5 error code Go-compat (INVALID_CREDENTIALS, INVALID_REFRESH_TOKEN, REFRESH_RACE, TOKEN_REVOKED, USER_DISABLED).
 - Task 03 (`31d54fd`): tạo `app/auth/dependencies.py` — 5 FastAPI dependency + oauth2_scheme + require_role stub. OAuth2PasswordBearer(tokenUrl=/api/auth/login, auto_error=False). get_current_user reject 5 case 401: MISSING_AUTHORIZATION (rỗng) / INVALID_TOKEN (decode fail) / TOKEN_REVOKED (Redis blacklist exists) / USER_DISABLED (user None hoặc is_active False). require_role raise NotImplementedError — Plan 03-05 implement. Rule 3 deviation: noqa B008 cho 4 Depends() default (FastAPI pattern, false positive).
@@ -166,7 +177,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **DOC-BUG DISCOVERED + DOCUMENTED:** REQUIREMENTS.md AUTH-05 + PITFALLS.md P6 + CLAUDE.md section 3 ghi `t=1, p=2` SAI — Go source `backend/internal/pkg/hash/argon2.go` line 13-19 ghi `t=3, p=4`. Production seed hash prefix `$argon2id$v=19$m=65536,t=3,p=4$...` confirm Go source là single source of truth. SUMMARY.md document doc-bug explicit + suggest follow-up sed fix 3 doc (out of Plan 03-03 scope, defer Plan 03-04/03-05 cleanup commit).
 - SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-03-SUMMARY.md` tạo với 3 commit hash + threat model 5 entry (1 partial T-03-pw-timing chờ Plan 03-04 dummy compare + 2 accepted + 2 mitigated) + forward links cho Plan 03-04/03-05.
 
-**Next action:** Chạy `/gsd-execute-phase 3 plan 03-05` để tiếp tục Wave 4 (RBAC `require_role(*roles)` implement đầy đủ + 5-AC integration test suite với testcontainers Postgres+Redis: login envelope shape + JWT compat / RBAC 403 viewer-editor / refresh race concurrent / PKCS#8 cross-process Go→Python verify / logout blacklist). Plan 03-05 sẽ extend `app/auth/dependencies.py::require_role` từ stub NotImplementedError → check `user.role in roles raise resp.forbidden()`. Sẽ wire FastAPI exception_handler render envelope cho HTTPException pass-through từ get_current_user. Sau 03-05 → Phase 3 COMPLETE → Phase 4 (CocoIndex Flow MVP).
+**Next action:** **Phase 3 COMPLETE.** Chạy `/gsd-execute-phase 4` để bắt đầu Phase 4 (CocoIndex Flow MVP + Document Ingest — INGEST-01..08). Phase 4 sẽ implement: cocoindex flow LISTEN/NOTIFY với extract/chunk/embed/pgvector pipeline, format whitelist `{.docx, .txt, .md, .pdf text-only}` (D4 — scanned PDF → `failed_unsupported`), heartbeat watchdog cron (P8 mitigation), Vietnamese chunking boundary (P13 custom regex `Mục N.`/`Chương N.`), char-based tokenizer (P14 cross-provider). Phase 4 mở `M2a EXIT GATE` 🚦 cuối phase: demo upload DOCX → chunks pgvector → SELECT verify (R3 mitigation, user accept condition). Research flag HIGH (3 open question: cocoindex augmenter parity / PDF table VN / chunking boundary empirical resolve).
 
 **Files cần đọc khi resume:**
 
@@ -179,4 +190,4 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ---
 
-*Last updated: 2026-05-14 (Phase 3 Plan 03-03 thực thi xong — 3/5 plans complete, R6 mitigation verified, DOC-BUG documented. Next: `/gsd-execute-phase 3 plan 03-04`)*
+*Last updated: 2026-05-14 (**Phase 3 COMPLETE** — Plan 03-05 thực thi xong, 5/5 plans done, 5/5 ROADMAP AC verified end-to-end, 6/6 AUTH requirements done. Next: `/gsd-execute-phase 4` CocoIndex Flow MVP).*

@@ -29,7 +29,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 
 - [x] **Phase 1: Infra Skeleton + Demolition + EXIT Criteria** — FastAPI skeleton + Docker Compose 3-service + xóa code M1 + CONVENTIONS.md ✓ (2026-05-13, 6 plans / 4 waves / 28 commits)
 - [x] **Phase 2: Database Schema + Alembic Baseline** — schema migrations cho users/hubs/documents/chunks/audit_logs/usage_events/refresh_tokens/api_keys/user_hubs/settings + HNSW vector_cosine_ops 1536-dim verified runtime ✓ (2026-05-13, 5 plans / 5 waves / 28 commits, 7/7 pytest PASS)
-- [ ] **Phase 3: Auth Port + RBAC + Response Envelope** — JWT RS256 + Argon2 cross-compat + RBAC + envelope `{success, data, error, meta}`
+- [x] **Phase 3: Auth Port + RBAC + Response Envelope** — JWT RS256 + Argon2 cross-compat + RBAC + envelope `{success, data, error, meta}` ✓ (2026-05-14, 5 plans / 4 waves / 22 commits, 62/62 pytest no regress, 29/29 critical PASS, 5/5 ROADMAP AC verified)
 - [ ] **Phase 4: CocoIndex Flow MVP + Document Ingest** — cocoindex flow LISTEN/NOTIFY + extract/chunk/embed/pgvector + status tracking
 
 🚦 **M2a EXIT GATE** — Demo upload DOCX → chunks pgvector → SELECT verify. User accept? Reject → STOP, không pivot 3.
@@ -128,12 +128,12 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
   4. Argon2 cross-compat test PASS: 5 sample hash do Go `alexedwards/argon2id` sinh được pwdlib `verify_password()` PASS; ngược lại Python-sinh hash được Go verify PASS (CI fail-fast nếu mismatch)
   5. Concurrent refresh integration test PASS: 5 tab giả lập đồng thời `POST /api/auth/refresh` → chỉ 1 succeed với token mới, 4 còn lại nhận token cũ (Redis SETNX atomic) — KHÔNG infinite loop logout
 
-**Plans:** 5 plans (4/5 executed)
+**Plans:** 5 plans (5/5 executed — Phase 3 COMPLETE)
 - [x] 03-01-PLAN.md — Middleware infra + envelope error helpers (UPPER_SNAKE_CASE Go-compat) + CORS production validator (P11 + P12) — Wave 1 ✓ (2026-05-14, 5 commits, 9/9 pytest PASS)
 - [x] 03-02-PLAN.md — JWT keypair format detection (PKCS#8 verify AUTH-06) + PyJWT RS256 wrapper (JWTManager + JWTClaims + TokenPair) — Wave 1 ✓ (2026-05-14, 3 commits, 8/8 pytest PASS, 5 attack vector reject verified)
 - [x] 03-03-PLAN.md — Argon2 password module (params Go-source m=65536/t=3/p=4) + cross-compat test (R6 / AUTH-05) — Wave 2 ✓ (2026-05-14, 3 commits, 10/10 pytest PASS, R6 cross-compat OK: pwdlib verify Go seed hash production, DOC-BUG discovered: REQUIREMENTS/PITFALLS/CLAUDE ghi t=1,p=2 sai → Go source t=3,p=4 đúng, fix trong commit này)
 - [x] 03-04-PLAN.md — Auth schemas + service (Redis SETNX P16) + router 4 endpoint (login/refresh/logout/me) + lifespan wire (AUTH-01..03) — Wave 3 ✓ (2026-05-14, 5 commits, 36/36 pytest no-regress, 4 endpoint /api/auth mounted, P16 SETNX + anti-timing dummy_password_hash + Redis blacklist verified, pydantic[email] bump for EmailStr)
-- [ ] 03-05-PLAN.md — RBAC require_role + 5-AC integration test suite (Postgres+Redis testcontainers): login envelope / JWT compat / RBAC 403 / refresh race / PKCS#8 (AUTH-04) — Wave 4
+- [x] 03-05-PLAN.md — RBAC require_role + 5-AC integration test suite (Postgres+Redis testcontainers): login envelope / JWT compat / RBAC 403 / refresh race / PKCS#8 (AUTH-04) — Wave 4 ✓ (2026-05-14, 6 commits, 62/62 pytest no regress, 29/29 critical PASS, 5/5 ROADMAP AC verified end-to-end. AUTH-04 done, require_role(*roles) factory + HTTPException envelope handler. 27 test mới: 5 unit require_role + 22 integration auth_login/refresh_race/rbac/jwt_compat. 4 Rule fixes: alembic asyncio.to_thread + TRUNCATE CASCADE per-test + REDIS_URL override in app_with_auth + verify_jwt_format.sh CRLF strip)
 
 ---
 
