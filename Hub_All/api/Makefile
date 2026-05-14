@@ -1,5 +1,5 @@
 # Medinet Wiki API — dev tasks
-.PHONY: install keys keys-verify keys-verify-jwt lint test test-cov clean migrate-up migrate-down migrate-check migrate-history
+.PHONY: install keys keys-verify keys-verify-jwt lint test test-cov clean migrate-up migrate-down migrate-check migrate-history cocoindex-setup
 
 UV ?= uv
 
@@ -42,3 +42,10 @@ migrate-check:
 
 migrate-history:
 	uv run alembic history --verbose
+
+# === Cocoindex setup (Phase 4 Plan 04-01) ===
+# Chạy MỘT LẦN sau `make migrate-up`. Idempotent — chạy lại OK sau Plan 04-02 (flow.py).
+# Tạo internal state tables trong schema `cocoindex` (P7 mitigation).
+
+cocoindex-setup:
+	$(UV) run python scripts/cocoindex_setup.py
