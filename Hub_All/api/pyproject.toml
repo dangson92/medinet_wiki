@@ -7,7 +7,7 @@ dependencies = [
     # Web framework
     "fastapi==0.136.1",
     "uvicorn[standard]==0.46.0",
-    "pydantic>=2.7.0,<3",
+    "pydantic[email]>=2.7.0,<3",
     "pydantic-settings>=2.6,<3",
     "python-multipart>=0.0.12",
 
