@@ -12,7 +12,7 @@ PARAMS — LẤY TỪ GO SOURCE (KHÔNG từ REQUIREMENTS.md doc):
     hash_len     = 32      (Go argonKeyLen     = 32)
 
 ⚠ DOC-BUG: REQUIREMENTS.md AUTH-05 + PITFALLS.md P6 ghi `t=1, p=2`. Source code
-Go (backend/internal/pkg/hash/argon2.go line 13-19) là single source of truth.
+Go (git tag `m1-go-archived` · `backend/internal/pkg/hash/argon2.go` line 13-19) là single source of truth khi port — Go source đã xoá khỏi working tree 2026-05-14 (TEARDOWN-01 pull-in).
 Seed hash production `$argon2id$v=19$m=65536,t=3,p=4$...` confirm Go source
 đúng. Sẽ tạo follow-up commit để fix REQUIREMENTS.md + PITFALLS.md sau Plan 03-03
 ship.

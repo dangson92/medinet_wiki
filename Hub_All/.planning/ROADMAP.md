@@ -39,7 +39,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [ ] **Phase 5: Hub + User + Audit + APIKey + Settings CRUD** — port toàn bộ CRUD endpoint từ Go, isolation theo `hub_id`, rate limit
 - [ ] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache
 - [ ] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging
-- [ ] **Phase 8: Frontend E2E Smoke + Tear-down Go Backend** — verify React 19 hoạt động end-to-end + xóa `Hub_All/backend/`
+- [ ] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới (TEARDOWN-01 đã thực hiện sớm 2026-05-14, ngoài lịch — git tag `m1-go-archived` backup)
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
 
@@ -67,7 +67,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
   1. `Hub_All/api/` directory tồn tại với `pyproject.toml` + `Dockerfile` + uv lockfile; `uv run python -c "import cocoindex, fastapi, pgvector"` không lỗi trên máy dev
   2. `docker compose up` khởi động 3 service healthy (`pgvector/pgvector:pg16`, `redis:7-alpine`, `python-api`) trong <30s; `curl http://localhost:8080/healthz` trả 200 với envelope `{success:true, data:{status:"ok"}}`
   3. `psql medinet_central -c "CREATE EXTENSION vector; CREATE TABLE _t(v vector(1536)); CREATE INDEX ON _t USING hnsw (v vector_cosine_ops);"` PASS — confirm R1 mitigation cho dim 1536 trên pgvector pg16
-  4. `Hub_All/docling-pipeline/`, `Hub_All/eval/`, `Hub_All/chroma_data/` đã xóa khỏi working tree (`git status` clean sau cleanup); `Hub_All/backend/` Go vẫn còn (giữ đến Phase 8)
+  4. `Hub_All/docling-pipeline/`, `Hub_All/eval/`, `Hub_All/chroma_data/` đã xóa khỏi working tree (`git status` clean sau cleanup); `Hub_All/backend/` Go đã xóa 2026-05-14 (TEARDOWN-01 pull-in sớm hơn Phase 8 theo user decision — git tag `m1-go-archived` backup)
   5. `.planning/CONVENTIONS.md` mới tồn tại với 5 section bắt buộc (test strategy critical-path mandatory, naming snake_case cho cocoindex flow/target, `APP_NAMESPACE=medinet_prod` cố định, middleware order REVERSED từ Go pattern, logging fields match Go `log/slog`)
 
 **Plans:** TBD
@@ -251,26 +251,26 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 ---
 
-### Phase 8: Frontend E2E Smoke + Tear-down Go Backend
+### Phase 8: Frontend E2E Smoke (TEARDOWN-01 đã pull-in 2026-05-14)
 
-**Goal:** React 19 frontend hoạt động end-to-end với FastAPI backend mới (KHÔNG sửa frontend), 12 trang admin/viewer golden path PASS; sau khi smoke pass, xóa toàn bộ `Hub_All/backend/` Go.
+**Goal:** React 19 frontend hoạt động end-to-end với FastAPI backend mới (KHÔNG sửa frontend), 12 trang admin/viewer golden path PASS. **TEARDOWN-01 đã thực hiện sớm 2026-05-14** theo user decision — `Hub_All/backend/` đã xóa, git tag `m1-go-archived` backup (commit `72f18ef`).
 
 **Depends on:** Phase 3 (auth), Phase 4 (ingest), Phase 5 (CRUD), Phase 6 (search), Phase 7 (ask) — tất cả endpoint frontend cần phải work
 **Parallel-able with:** Phase 9 (eval) — Phase 8 chạy trước, Phase 9 chạy sau Phase 8 PASS để có baseline ổn định
-**Requirements:** COMPAT-01, TEARDOWN-01
+**Requirements:** COMPAT-01, ~~TEARDOWN-01~~ (đã thực hiện 2026-05-14)
 **Research flag:** LOW
 
 **Risks addressed:**
 - Pitfall 15 (UploadFile streaming VN filename): Integration test Vietnamese filename UTF-8 intact "Khám bệnh đa khoa.docx"
 - D6 constraint (Frontend KHÔNG sửa): Verify response envelope shape identical qua replay test cURL snapshot Go cũ vs FastAPI mới
-- Backup before delete: Git tag `m1-go-archived` trước khi xóa `Hub_All/backend/`
+- ⚠️ **R3 escalation**: TEARDOWN sớm = không còn Go runtime để A/B replay test. SC3 đổi sang dùng cURL snapshot capture trước 2026-05-14 (nếu có) hoặc compare schema từ git tag `m1-go-archived` thay vì replay live.
 
 **Success Criteria** (what must be TRUE):
   1. Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`) → 12 trang React render OK: Dashboard, HubRegistry, DocumentIngestion, SyncQueue, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile — không error 500/CORS/401 sai
   2. Golden path mỗi trang PASS bằng manual smoke: login admin → upload DOCX hub_y_te → search "khám bệnh" cross-hub → ask "quy trình là gì" có citation render `[1]` clickable trong CitationText.tsx → audit log thấy 4 entry tương ứng
-  3. Replay test PASS: cURL snapshot 20 request từ Go backend cũ (login, hubs CRUD, documents upload, search, ask, audit, users, settings, rag-config) replay vs FastAPI mới → response envelope shape `{success, data, error, meta}` byte-identical; HTTP status code identical
+  3. ~~Replay test live Go cũ vs FastAPI mới~~ → REVISED do TEARDOWN pull-in: compare response shape FastAPI vs **router signature** trong `git show m1-go-archived:Hub_All/backend/internal/router/router.go` + frontend types `frontend/src/services/api.ts` làm contract reference.
   4. Vietnamese filename test PASS: upload "Khám bệnh đa khoa.docx" → response trả `filename` chính xác UTF-8 (không mojibake); GET document detail hiển thị tên file đúng
-  5. Sau khi 4 criteria trên PASS: `git tag m1-go-archived` → xóa `Hub_All/backend/` toàn bộ + update `Hub_All/docker-compose.yml` + `Hub_All/Makefile` root remove Go references + update `Hub_All/CLAUDE.md` reflect stack Python; `docker compose up` vẫn lên healthy
+  5. ~~Xóa backend/ + tag m1-go-archived~~ ĐÃ THỰC HIỆN 2026-05-14 (commit `72f18ef` parent). Còn lại: verify `docker compose up` lên healthy 3-service (postgres + redis + python-api) không reference Go.
 
 **Plans:** TBD
 **UI hint:** yes
@@ -339,7 +339,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 5. Hub + User + Audit + APIKey + Settings CRUD | 0/? | Not started | - |
 | 6. Search API Single + Cross-Hub | 0/? | Not started | - |
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 0/? | Not started | - |
-| 8. Frontend E2E Smoke + Tear-down Go Backend | 0/? | Not started | - |
+| 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 0/? | Not started · TEARDOWN-01 ✓ pull-in | - |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 

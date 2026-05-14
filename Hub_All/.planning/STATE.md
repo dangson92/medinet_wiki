@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_planned
-last_updated: "2026-05-14T11:45:00Z"
+last_updated: "2026-05-14T12:30:00Z"
 progress:
   total_phases: 10
   completed_phases: 3
@@ -177,6 +177,13 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - 0 deviation — toàn bộ paste-ready code apply nguyên xi (chỉ bỏ unused `import pytest` để pass ruff F401).
 - **DOC-BUG DISCOVERED + DOCUMENTED:** REQUIREMENTS.md AUTH-05 + PITFALLS.md P6 + CLAUDE.md section 3 ghi `t=1, p=2` SAI — Go source `backend/internal/pkg/hash/argon2.go` line 13-19 ghi `t=3, p=4`. Production seed hash prefix `$argon2id$v=19$m=65536,t=3,p=4$...` confirm Go source là single source of truth. SUMMARY.md document doc-bug explicit + suggest follow-up sed fix 3 doc (out of Plan 03-03 scope, defer Plan 03-04/03-05 cleanup commit).
 - SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-03-SUMMARY.md` tạo với 3 commit hash + threat model 5 entry (1 partial T-03-pw-timing chờ Plan 03-04 dummy compare + 2 accepted + 2 mitigated) + forward links cho Plan 03-04/03-05.
+
+**2026-05-14 (TEARDOWN-01 PULL-IN — ngoài lịch):** User quyết định xoá `Hub_All/backend/` Go toàn bộ NGAY (sớm hơn Phase 8) để chuyển 100% sang Python + cocoindex. Backup: `git tag m1-go-archived` (commit `72f18ef`). 147 file Go xoá khỏi working tree. Hệ luỵ:
+- D6 vẫn giữ — frontend KHÔNG sửa, Python `api/` phải mimic surface Go khi port Phase 5/6/7. Reference Go: `git show m1-go-archived:Hub_All/backend/internal/router/<file>.go`.
+- Phase 8 SC3 (replay test live Go vs FastAPI) → REVISED: dùng router signature từ git tag + frontend types làm contract reference (không còn Go runtime A/B test).
+- ⚠️ R3 / E1 safety net giảm: nếu cocoindex critical fail thì không còn rollback Go runtime, chỉ pivot lần 3. User accept risk.
+- Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
+- TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
 **Next action:** **Phase 3 COMPLETE.** Chạy `/gsd-execute-phase 4` để bắt đầu Phase 4 (CocoIndex Flow MVP + Document Ingest — INGEST-01..08). Phase 4 sẽ implement: cocoindex flow LISTEN/NOTIFY với extract/chunk/embed/pgvector pipeline, format whitelist `{.docx, .txt, .md, .pdf text-only}` (D4 — scanned PDF → `failed_unsupported`), heartbeat watchdog cron (P8 mitigation), Vietnamese chunking boundary (P13 custom regex `Mục N.`/`Chương N.`), char-based tokenizer (P14 cross-provider). Phase 4 mở `M2a EXIT GATE` 🚦 cuối phase: demo upload DOCX → chunks pgvector → SELECT verify (R3 mitigation, user accept condition). Research flag HIGH (3 open question: cocoindex augmenter parity / PDF table VN / chunking boundary empirical resolve).
 

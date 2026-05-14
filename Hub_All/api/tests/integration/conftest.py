@@ -96,6 +96,7 @@ def alembic_cfg(
 
 # Go production seed hash từ backend/scripts/seed.sql line 13 — Argon2id
 # params m=65536, t=3, p=4 (R6 cross-compat verified Plan 03-03).
+# Reference Go source: git tag `m1-go-archived` (xoá khỏi tree 2026-05-14 TEARDOWN-01 pull-in).
 # Tất cả test user dùng cùng plaintext "Admin@123" để convenience seed.
 GO_SEED_HASH_PLAINTEXT = "Admin@123"
 GO_SEED_HASH = (

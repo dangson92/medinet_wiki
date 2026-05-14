@@ -8,9 +8,9 @@
 
 **Medinet Wiki** là hệ thống quản lý tri thức nội bộ đa-Hub cho Medinet — wiki + RAG + MCP. Codebase này (`Hub_All/`) chứa:
 
-- `api/` — **Python 3.12 · FastAPI 0.136.1 · CocoIndex 1.0.3 · pgvector (pg16) · asyncpg · SQLAlchemy 2.0 async · Alembic · Redis 7 · LiteLLM · PyJWT RS256 · pwdlib Argon2.** Stack mới M2 (in-process cocoindex, LISTEN/NOTIFY trigger). Skeleton vừa tạo ở Phase 1.
-- `backend/` — Go 1.25 · Gin · pgx/v5. **DEPRECATED, giữ đến Phase 8** (smoke test frontend xong → xoá ở TEARDOWN-01). CHỈ maintain runtime cho frontend smoke — KHÔNG thêm feature mới.
-- `frontend/` — React 19 · Vite 6 · TypeScript 5.8 · Tailwind v4. **KHÔNG sửa trong M2** (D6 — URL `/api/*` giữ nguyên, response envelope `{success, data, error, meta}` shape-identical với Go cũ).
+- `api/` — **Python 3.12 · FastAPI 0.136.1 · CocoIndex 1.0.3 · pgvector (pg16) · asyncpg · SQLAlchemy 2.0 async · Alembic · Redis 7 · LiteLLM · PyJWT RS256 · pwdlib Argon2.** Stack duy nhất M2 (in-process cocoindex, LISTEN/NOTIFY trigger).
+- `backend/` — **ĐÃ XOÁ 2026-05-14** (TEARDOWN-01 pull-in sớm hơn Phase 8 theo quyết định user). Backup: git tag `m1-go-archived` (commit `72f18ef`). Recover Go source khi cần reference: `git show m1-go-archived:Hub_All/backend/<path>` hoặc `git checkout m1-go-archived -- Hub_All/backend/`.
+- `frontend/` — React 19 · Vite 6 · TypeScript 5.8 · Tailwind v4. **KHÔNG sửa trong M2** (D6 — URL `/api/*` giữ nguyên, response envelope `{success, data, error, meta}` shape-identical với Go cũ — Python `api/` phải mimic surface Go cho đến khi frontend rewrite ở milestone tương lai).
 - `documents/` — PRD v1.3, RAG Pipeline v3, BACKEND_DEVELOPMENT_PLAN, các prompt design.
 - `.planning/` — GSD planning docs (PROJECT, REQUIREMENTS, ROADMAP, STATE, research, codebase map, CONVENTIONS sẽ tạo ở Plan 06).
 
@@ -40,7 +40,7 @@
 | 5 | Hub + User + Audit + APIKey + Settings CRUD | port CRUD endpoint Go → Python + hub isolation enforce + rate limit |
 | 6 | Search API Single + Cross-Hub | direct pgvector + `iterative_scan=relaxed_order` + Redis cache |
 | 7 | Ask API + LiteLLM + Citation + Hot-Swap + Usage | LLM answerer citation `[N]` + provider hot-swap OpenAI/Gemini |
-| 8 | Frontend E2E Smoke + Tear-down Go Backend | React 19 smoke + delete `backend/` Go |
+| 8 | Frontend E2E Smoke (Go đã xoá sớm 2026-05-14) | React 19 smoke với Python `api/` — `backend/` Go ĐÃ xoá ở TEARDOWN-01 pull-in |
 | 9 | Eval Framework + Quality Gate ≥75% top-3 | pytest-based eval + 10 file VN medical thật + gate enforce |
 | 10 | Hardening + Observability + Docs | structlog JSON + Prometheus + integration test coverage ≥50% |
 
@@ -58,7 +58,7 @@
 - Không sửa REQ-ID đã commit; thay đổi requirement phải qua `/gsd-discuss-phase` hoặc commit có lý do rõ trong message.
 
 ### Constraint M2 (Full RAG Rewrite)
-- **Stack đồng nhất Python:** KHÔNG mix Go cho code mới. `backend/` Go còn → xoá sạch ở Phase 8 sau khi frontend smoke pass + git tag `m1-go-archived` backup.
+- **Stack đồng nhất Python:** KHÔNG mix Go cho code mới. `backend/` Go ĐÃ xoá 2026-05-14 (TEARDOWN-01 pull-in sớm hơn Phase 8 theo user decision); backup git tag `m1-go-archived` — recover qua `git checkout m1-go-archived -- Hub_All/backend/` nếu cần reference khi port CRUD Phase 5/6/7.
 - **Stack pin (chống pitfall P19):** `python>=3.11,<3.13` (khuyến nghị 3.12), `fastapi==0.136.1`, `cocoindex==1.0.3`, `pgvector==0.4.2`, `asyncpg==0.30.0`. KHÔNG bump version giữa phase.
 - **Postgres image:** `pgvector/pgvector:pg16` (KHÔNG `postgres:16-alpine` — sẽ FAIL `CREATE EXTENSION vector`).
 - **Vector store:** pgvector trong Postgres (D3 — bớt 1 service so với ChromaDB/Qdrant, dùng Postgres sẵn có).
@@ -73,8 +73,8 @@
 - **EXIT criteria E1-E5:** Bake trong `.planning/PROJECT.md`. M2a EXIT GATE giữa Phase 4-5: demo upload DOCX → chunks pgvector → user accept? Reject → STOP, KHÔNG pivot lần 3.
 
 ### Code conventions (chi tiết: `.planning/CONVENTIONS.md` — Plan 06)
-- **Backend Python `api/` (mới M2):** FastAPI factory + lifespan + pydantic-settings + asyncpg/SQLAlchemy 2 async + structlog JSON. Layered architecture (router → service → repository → model). Linting: `ruff` (replaces black+isort+flake8). Type-check: `mypy --strict`. Test: `pytest + httpx AsyncClient + asgi-lifespan + testcontainers`. Package manager: `uv` (Astral, Rust-based). Lệnh: `make install`, `make keys`, `make lint`, `make test`.
-- **Backend Go `backend/` (DEPRECATED):** ĐỌC làm tham chiếu khi port (Argon2 params, JWT keypair format, response envelope shape, audit log fields, RBAC role enum). KHÔNG thêm feature mới. KHÔNG sửa code Go trong M2 (trừ trường hợp giữ runtime cho frontend smoke Phase 8).
+- **Backend Python `api/` (stack duy nhất M2):** FastAPI factory + lifespan + pydantic-settings + asyncpg/SQLAlchemy 2 async + structlog JSON. Layered architecture (router → service → repository → model). Linting: `ruff` (replaces black+isort+flake8). Type-check: `mypy --strict`. Test: `pytest + httpx AsyncClient + asgi-lifespan + testcontainers`. Package manager: `uv` (Astral, Rust-based). Lệnh: `make install`, `make keys`, `make lint`, `make test`.
+- **Backend Go (ARCHIVED):** Source code đã xoá khỏi working tree 2026-05-14. Khi port endpoint Phase 5/6/7 cần check shape Go cũ: `git show m1-go-archived:Hub_All/backend/internal/router/<file>.go` hoặc `git checkout m1-go-archived -- Hub_All/backend/internal/router/` (vào branch tạm rồi discard). KHÔNG khôi phục vào main.
 - **Frontend React (UNCHANGED M2):** Context API (`AuthContext`, `ThemeContext`), API client tập trung `frontend/src/services/api.ts`. `npm run dev/build/lint`. Toàn bộ trang quản trị React 19 phải tương thích qua URL `/api/*` + envelope.
 
 ### Testing

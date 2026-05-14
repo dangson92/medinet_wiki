@@ -19,7 +19,8 @@ from app.auth import hash_password, verify_password
 
 # Hash thật từ Go seed.sql (admin@medinet.vn) — KHÔNG sửa, KHÔNG paraphrase.
 # Plaintext: "Admin@123" (xem comment line 3-7 của seed.sql).
-# Sinh bởi: backend/internal/pkg/hash/argon2.go::HashPassword qua Go alexedwards.
+# Sinh bởi: backend/internal/pkg/hash/argon2.go::HashPassword qua Go alexedwards
+# (Go source đã xoá 2026-05-14 — recover qua git tag `m1-go-archived`).
 GO_SEED_HASH = (
     "$argon2id$v=19$m=65536,t=3,p=4"
     "$gpKFndFoG6bcXrx7R60sag"
@@ -35,7 +36,8 @@ def test_pwdlib_verify_go_seed_admin_hash() -> None:
     assert verify_password(GO_SEED_PLAINTEXT, GO_SEED_HASH) is True, (
         "Cross-compat FAIL — pwdlib KHÔNG verify được hash do Go sinh. "
         "Kiểm tra lại ARGON2_* params trong app/auth/password.py có match "
-        "backend/internal/pkg/hash/argon2.go line 13-19 không."
+        "backend/internal/pkg/hash/argon2.go line 13-19 không "
+        "(reference Go source: git tag m1-go-archived)."
     )
 
 
