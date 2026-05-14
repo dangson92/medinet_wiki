@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document as DocxDocument
-from pypdf import PageObject, PdfWriter
+from pypdf import PdfWriter
 
 from app.services.file_extract import (
     ALLOWED_EXTENSIONS,
@@ -26,7 +26,6 @@ from app.services.file_extract import (
     detect_scanned_pdf,
     extract_text,
 )
-
 
 # ---------- Fixtures ----------
 
