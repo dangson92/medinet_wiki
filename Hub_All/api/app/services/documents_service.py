@@ -40,7 +40,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_engine
-from app.schemas.documents import DocumentResponse, DocumentUploadResponse
+from app.schemas.documents import (
+    DocumentListItem,
+    DocumentResponse,
+    DocumentUploadResponse,
+)
 from app.services.file_extract import (
     ALLOWED_EXTENSIONS,
     UnsupportedFormatError,
@@ -213,6 +217,151 @@ class DocumentService:
             created_at=row[12],
             updated_at=row[13],
         )
+
+    async def list(
+        self,
+        *,
+        hub_id: UUID | None = None,
+        status_filter: str | None = None,
+        uploaded_by: UUID | None = None,
+        search: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list[DocumentListItem], int]:
+        """List documents với filter + pagination — Plan 04-05 INGEST-08.
+
+        Args:
+            hub_id: filter theo hub_id (UUID).
+            status_filter: filter status enum (pending|processing|completed|failed|failed_unsupported).
+            uploaded_by: filter user upload (UUID).
+            search: ILIKE search trên filename ('%search%').
+            page: 1-based page index.
+            per_page: cap min(per_page, 100) by router (KHÔNG cap ở service layer).
+
+        Returns:
+            Tuple (items, total) — items DocumentListItem list, total số rows match.
+        """
+        # Build WHERE clauses + bind params (asyncpg parametrize an toàn — no SQL injection).
+        where_clauses: list[str] = []
+        params: dict[str, Any] = {}
+        if hub_id is not None:
+            where_clauses.append("hub_id = :hub_id")
+            params["hub_id"] = str(hub_id)
+        if status_filter is not None:
+            where_clauses.append("status = :status")
+            params["status"] = status_filter
+        if uploaded_by is not None:
+            where_clauses.append("uploaded_by = :uploaded_by")
+            params["uploaded_by"] = str(uploaded_by)
+        if search:
+            where_clauses.append("filename ILIKE :search")
+            params["search"] = f"%{search}%"
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        # Count tổng số rows match.
+        total_row = (
+            await self.db.execute(
+                text(f"SELECT COUNT(*) FROM documents {where_sql}"),
+                params,
+            )
+        ).fetchone()
+        total = int(total_row[0]) if total_row else 0
+
+        # Page rows (LIMIT + OFFSET, ORDER BY created_at DESC stable).
+        offset = max(0, (page - 1) * per_page)
+        params_with_pg = {**params, "limit": per_page, "offset": offset}
+        rows = (
+            await self.db.execute(
+                text(
+                    f"SELECT id, hub_id, filename, status, chunk_count, created_at, updated_at "
+                    f"FROM documents {where_sql} "
+                    f"ORDER BY created_at DESC "
+                    f"LIMIT :limit OFFSET :offset"
+                ),
+                params_with_pg,
+            )
+        ).fetchall()
+        items = [
+            DocumentListItem(
+                id=str(r[0]),
+                hub_id=str(r[1]),
+                filename=r[2],
+                status=r[3],
+                chunk_count=r[4],
+                created_at=r[5],
+                updated_at=r[6],
+            )
+            for r in rows
+        ]
+        return items, total
+
+    async def delete(
+        self,
+        document_id: UUID,
+        *,
+        deleted_by: UUID,
+        request_id: str | None = None,
+    ) -> bool:
+        """Delete document + cascade chunks (FK Phase 2) + audit log entry — Plan 04-05 INGEST-07.
+
+        Sequence:
+            1. SELECT hub_id + file_path (cho audit log + filesystem cleanup).
+            2. DELETE FROM documents (chunks CASCADE qua FK Phase 2 migration 0001 line 332-336).
+            3. INSERT audit_logs (action='document_delete', target_type='document', target_id, hub_id, request_id).
+            4. Try-delete file vật lý (best-effort — KHÔNG raise nếu fail; T-04-05-05 accept).
+
+        Returns:
+            True nếu xoá thành công, False nếu document không tồn tại.
+        """
+        # 1) Verify exists + lấy hub_id + file_path trước khi delete.
+        row = (
+            await self.db.execute(
+                text("SELECT hub_id, file_path FROM documents WHERE id = :id"),
+                {"id": str(document_id)},
+            )
+        ).fetchone()
+        if row is None:
+            return False
+        hub_id, file_path = row[0], row[1]
+
+        # 2) DELETE documents — chunks CASCADE qua FK (Phase 2 migration 0001 line 332-336).
+        await self.db.execute(
+            text("DELETE FROM documents WHERE id = :id"),
+            {"id": str(document_id)},
+        )
+
+        # 3) Audit log entry (AUX-01 Phase 5 sẽ định nghĩa async batch flush;
+        #    Plan 04-05 INSERT synchronous đơn giản — defer batch tới Phase 5).
+        await self.db.execute(
+            text(
+                "INSERT INTO audit_logs "
+                "(id, user_id, action, target_type, target_id, hub_id, request_id, created_at) "
+                "VALUES (gen_random_uuid(), :user_id, 'document_delete', 'document', "
+                ":target_id, :hub_id, :request_id, NOW())"
+            ),
+            {
+                "user_id": str(deleted_by),
+                "target_id": str(document_id),
+                "hub_id": str(hub_id) if hub_id else None,
+                "request_id": request_id,
+            },
+        )
+
+        # 4) Best-effort xoá file vật lý (T-04-05-05 accept — orphaned file_store
+        #    cleanup defer Phase 10 HARD-04 cron). KHÔNG raise nếu fail.
+        try:
+            FileStore().delete(Path(file_path))
+        except Exception as e:  # noqa: BLE001 — cleanup defensive
+            logger.warning("document_delete_file_unlink_failed: %s", e)
+
+        logger.info(
+            "document_deleted: id=%s by=%s hub_id=%s",
+            document_id,
+            deleted_by,
+            hub_id,
+        )
+        return True
 
 
 # === A4 helper module-level — router gọi qua FastAPI BackgroundTasks add_task ===
