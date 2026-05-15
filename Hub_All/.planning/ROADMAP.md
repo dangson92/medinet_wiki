@@ -197,7 +197,13 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Audit logger async hoạt động: 100 concurrent action (login/upload/delete) → asyncio.Queue batch flush 2s/128 → `audit_logs` table đủ 100 row với `request_id` unique mỗi entry; KHÔNG block main request thread (latency p95 KHÔNG tăng so với endpoint không log audit)
   5. Rate limit middleware (slowapi) hoạt động: client gửi 110 request/min vào `/api/search` → request 101+ trả 429 Too Many Requests; `/api/auth/me` KHÔNG bị limit; API key auth qua header `X-API-Key:` hoạt động ngoài JWT
 
-**Plans:** TBD
+**Plans:** 6 plans (4 waves)
+- [ ] 05-01-PLAN.md — Migration 0003 reconcile schema (hub/user/api_keys cot) + audit_service asyncio.Queue + lifespan wire (Wave 1, HUB-01/AUX-01)
+- [ ] 05-02-PLAN.md — Hub isolation repository layer (hub_filter_clause + verify_hub_access + get_current_user_with_hubs) + slowapi rate-limit middleware (Wave 2, HUB-02/AUX-03)
+- [ ] 05-03-PLAN.md — Hub CRUD router/service/schema + stats; D-05 drop field Go, D-06 KHONG test-connection (Wave 3, HUB-01/HUB-03)
+- [ ] 05-04-PLAN.md — User CRUD (3 update endpoint tach D-07) + reset-password log-only + Profile self-scoped (Wave 3, USER-01/02/03)
+- [ ] 05-05-PLAN.md — API Key CRUD + AES-GCM crypto + soft revoke + X-API-Key dependency + audit-logs query (Wave 3, AUX-01/AUX-02)
+- [ ] 05-06-PLAN.md — Wiring 5 router + slowapi + integration test suite: hub isolation E4 + audit logger + rate limit (Wave 4, all 9 REQ-ID)
 
 ---
 
@@ -336,7 +342,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 3. Auth Port + RBAC + Response Envelope | 0/? | Not started | - |
 | 4. CocoIndex Flow MVP + Document Ingest | 0/? | Not started | - |
 | 🚦 M2a EXIT GATE | — | Pending Phase 4 | - |
-| 5. Hub + User + Audit + APIKey + Settings CRUD | 0/? | Not started | - |
+| 5. Hub + User + Audit + APIKey + Settings CRUD | 0/6 | Planned (6 plans / 4 waves) | - |
 | 6. Search API Single + Cross-Hub | 0/? | Not started | - |
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 0/? | Not started | - |
 | 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 0/? | Not started · TEARDOWN-01 ✓ pull-in | - |
