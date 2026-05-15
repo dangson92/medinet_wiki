@@ -1,5 +1,7 @@
 # Testing Patterns
 
+> ⚠️ **STALE — KHÔNG DÙNG LÀM REFERENCE.** Snapshot này phân tích codebase Go cũ (`backend/`) đã xóa khỏi working tree 2026-05-14 (TEARDOWN-01 pull-in). Chỉ giữ làm tư liệu lịch sử. Test strategy M2 hiện hành: `.planning/CONVENTIONS.md` (pytest + testcontainers). Reference cho Phase 5/6/7: `frontend/src/services/api.ts` + git tag `m1-go-archived`.
+
 **Ngày phân tích:** 2026-04-28
 
 ## Tóm tắt

@@ -36,7 +36,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 
 ### M2b — RAG Completion
 
-- [ ] **Phase 5: Hub + User + Audit + APIKey + Settings CRUD** — port toàn bộ CRUD endpoint từ Go, isolation theo `hub_id`, rate limit
+- [ ] **Phase 5: Hub + User + Audit + APIKey + Settings CRUD** — CRUD endpoint FastAPI (contract = `frontend/src/services/api.ts` + envelope), isolation theo `hub_id`, rate limit
 - [ ] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache
 - [ ] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging
 - [ ] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới (TEARDOWN-01 đã thực hiện sớm 2026-05-14, ngoài lịch — git tag `m1-go-archived` backup)

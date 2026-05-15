@@ -1,5 +1,7 @@
 # Codebase Concerns
 
+> ⚠️ **STALE — KHÔNG DÙNG LÀM REFERENCE.** Snapshot này phân tích codebase Go cũ (`backend/`) đã xóa khỏi working tree 2026-05-14 (TEARDOWN-01 pull-in). Chỉ giữ làm tư liệu lịch sử. Stack hiện tại: Python `api/` (FastAPI + cocoindex + pgvector). Reference cho Phase 5/6/7: `frontend/src/services/api.ts` + git tag `m1-go-archived`.
+
 **Analysis Date:** 2026-04-28
 
 Tài liệu này tổng hợp các vấn đề về tech debt, bug đã biết, rủi ro bảo mật, hiệu năng, vùng code dễ vỡ và các tệp đang dở dang trong repo `Hub_All` (backend Go + frontend React/Vite/TS + ChromaDB).

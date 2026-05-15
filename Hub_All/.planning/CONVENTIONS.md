@@ -190,16 +190,16 @@ COCOINDEX_DATABASE_URL=postgresql://...medinet_cocoindex
 
 ### Rule
 
-**FastAPI middleware execute theo "onion model": middleware ADD CUỐI thực thi ĐẦU TIÊN cho incoming request.** Đây là ngược chiều với Go Gin (Gin: add đầu = thực thi đầu).
+**FastAPI middleware execute theo "onion model": middleware ADD CUỐI thực thi ĐẦU TIÊN cho incoming request.**
 
-Khi port middleware từ Go sang Python, ĐẢO order add:
+Order add trong `create_app()` (từ trong ra ngoài):
 
-| Go Gin order (add đầu = ngoài cùng) | FastAPI order (add CUỐI = ngoài cùng) |
-|---|---|
-| 1. Recovery | 4. add LAST → wraps tất cả |
-| 2. SecurityHeaders | 3. add thứ 3 |
-| 3. CORS | 2. add thứ 2 |
-| 4. RateLimit | 1. add FIRST |
+| Thứ tự add | Middleware | Vị trí onion |
+|---|---|---|
+| 1. add FIRST | RateLimit | trong cùng |
+| 2. add thứ 2 | CORS | |
+| 3. add thứ 3 | SecurityHeaders | |
+| 4. add LAST | Recovery / error_handler | ngoài cùng → wraps tất cả |
 
 **Outermost (FastAPI) = error_handler / RecoveryMiddleware** — phải catch mọi exception kể cả từ CORS/security middleware bên trong.
 
@@ -343,7 +343,7 @@ log.info("login", email=email, password=password)  # password leak!
 - `.planning/research/ARCHITECTURE.md` — in-process cocoindex, LISTEN/NOTIFY pattern, module layout
 - `.planning/research/PITFALLS.md` — 20 pitfalls với prevention + phase mapping
 - `.planning/research/FEATURES.md` — feature reconciliation từ M1 → M2
-- `.planning/codebase/CONVENTIONS.md` — convention Go cũ (tham chiếu khi port, KHÔNG sửa)
+- `.planning/codebase/*.md` — ⚠️ STALE snapshot codebase Go cũ (Go đã xóa 2026-05-14). Chỉ là tư liệu lịch sử — KHÔNG dùng làm reference cho Phase 5/6/7. Contract reference dùng `frontend/src/services/api.ts` + git tag `m1-go-archived`.
 
 ### EXIT Criteria reference (R3 mitigation, KHÔNG bake lại — link đến PROJECT.md)
 

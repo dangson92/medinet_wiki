@@ -1,5 +1,7 @@
 # External Integrations
 
+> ⚠️ **STALE — KHÔNG DÙNG LÀM REFERENCE.** Snapshot này phân tích codebase Go cũ (`backend/`) đã xóa khỏi working tree 2026-05-14 (TEARDOWN-01 pull-in). Chỉ giữ làm tư liệu lịch sử. Stack hiện tại: Python `api/` (FastAPI + cocoindex + pgvector — ChromaDB đã bỏ). Reference cho Phase 5/6/7: `frontend/src/services/api.ts` + git tag `m1-go-archived`.
+
 **Analysis Date:** 2026-04-28
 
 Hub_All là central hub điều phối nhiều "Hub" (mỗi hub là một wiki nội bộ) và xử lý pipeline RAG. Các tích hợp ngoài chia thành ba nhóm: nhà cung cấp LLM/Embedding (Gemini, OpenAI), hạ tầng dữ liệu (PostgreSQL, Redis, ChromaDB), lưu trữ file (Local, Google Drive).

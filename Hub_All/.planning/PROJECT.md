@@ -40,15 +40,15 @@ Core value không đổi qua các milestone — chỉ cách triển khai thay đ
 
 ### Validated (đã có trong codebase brownfield — sẽ thay thế hoàn toàn ở M2)
 
-> ⚠️ Các capability dưới đây đang HOẠT ĐỘNG bằng Go nhưng sẽ bị **xóa và viết lại bằng Python** trong M2. Liệt kê ở đây để xác định scope rewrite, KHÔNG phải để giữ.
+> ⚠️ Các capability dưới đây là scope cần xây trong M2. Go backend đã xóa 2026-05-14 (TEARDOWN-01 pull-in) — **KHÔNG còn "port từ Go source"**. Contract của mỗi capability lấy từ: (1) `frontend/src/services/api.ts` (URL path + request/response types — D6 ràng buộc), (2) response envelope `{success, data, error, meta}`, (3) git tag `m1-go-archived` nếu cần tra cứu shape Go cũ. Thiết kế fresh bằng Python, KHÔNG dịch 1-1 logic Go.
 
-- **JWT RS256 + Argon2 + refresh token** — port sang `python-jose` + `passlib[argon2]`
-- **Multi-Hub theo `hub_id`** — schema Postgres giữ, port repo sang `asyncpg`/SQLAlchemy
-- **Provider hot-swap embedding & LLM** runtime qua `PUT /api/rag-config` — port sang FastAPI + LiteLLM
-- **Async ingestion qua worker pool** — thay bằng cocoindex's built-in scheduler (Rust core)
-- **Async usage logging non-blocking** — port sang asyncio/background task
+- **JWT RS256 + Argon2 + refresh token** — `python-jose` + `passlib[argon2]` (đã xong Phase 3)
+- **Multi-Hub theo `hub_id`** — schema Postgres mới (Phase 2) + repo `asyncpg`/SQLAlchemy
+- **Provider hot-swap embedding & LLM** runtime qua `PUT /api/rag-config` — FastAPI + LiteLLM
+- **Async ingestion** — cocoindex's built-in scheduler (Rust core), đã xong Phase 4
+- **Async usage logging non-blocking** — asyncio/background task
 - **React SPA đầy đủ** (Dashboard, HubRegistry, DocumentIngestion, SyncQueue, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — **KHÔNG đổi frontend** (chỉ giữ tương thích URL)
-- **Cross-hub search API** — port sang FastAPI
+- **Cross-hub search API** — FastAPI
 
 ### Active (M2 — Full RAG Rewrite)
 
@@ -83,10 +83,10 @@ Sẽ liệt kê chi tiết trong `REQUIREMENTS.md`. Tóm tắt 8 nhóm:
 - Frontend: **React 19 · Vite 6 · TypeScript 5.8 · Tailwind v4** (KHÔNG đổi)
 - Infra: Docker Compose — `postgres+pgvector` + `redis` + `python-api` (3 service, giảm từ 4)
 
-**Codebase hiện tại sẽ bị xóa toàn phần trong M2 Phase 1:**
-- `Hub_All/backend/` (toàn bộ Go) sau khi port logic
-- `Hub_All/docling-pipeline/` (Python sidecar Docling cũ)
-- `Hub_All/eval/` (eval scripts cũ — viết lại từ đầu)
+**Codebase cũ đã xóa khỏi working tree:**
+- `Hub_All/backend/` (toàn bộ Go) — xóa 2026-05-14 (TEARDOWN-01 pull-in sớm hơn Phase 8); backup git tag `m1-go-archived`
+- `Hub_All/docling-pipeline/` (Python sidecar Docling cũ) — xóa Phase 1
+- `Hub_All/eval/` (eval scripts cũ) — xóa Phase 1, viết lại từ đầu ở Phase 9
 
 **Stakeholder:** Nội bộ Medinet — Admin/Editor (vận hành), Viewer (nhân viên Hub), AI Agent (Claude/ChatGPT qua MCP — sau v4.0). User cuối là nhân viên y tế / dược / HCNS — không kỹ thuật.
 

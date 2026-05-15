@@ -1,5 +1,7 @@
 # Technology Stack
 
+> ⚠️ **STALE — KHÔNG DÙNG LÀM REFERENCE.** Snapshot này phân tích codebase Go cũ (`backend/`) đã xóa khỏi working tree 2026-05-14 (TEARDOWN-01 pull-in). Chỉ giữ làm tư liệu lịch sử. Stack M2 hiện hành: `.planning/research/STACK.md` + `.planning/CONVENTIONS.md` (Python `api/`). Reference cho Phase 5/6/7: `frontend/src/services/api.ts` + git tag `m1-go-archived`.
+
 **Analysis Date:** 2026-04-28
 
 Repository `Hub_All` là hệ thống RAG (Retrieval-Augmented Generation) trung tâm của Medinet, gồm hai thành phần chính:

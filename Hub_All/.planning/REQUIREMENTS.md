@@ -72,7 +72,7 @@
 ### AUDIT + APIKEY + AUX (3 REQ)
 
 - [ ] **AUX-01**: Audit logger asyncio.Queue + batch flush 2s/128 → `audit_logs(user_id, action, target_type, target_id, hub_id, payload JSONB, request_id, created_at)`. Action enum: `auth.login`, `auth.refresh`, `document.upload`, `document.delete`, `rag-config.update`, `hub.create`, `hub.update`, `user.create`. `GET /api/audit-logs` admin-only.
-- [ ] **AUX-02**: API key management `GET/POST/DELETE /api/api-keys` — admin sinh API key cho external integration. Encrypt at rest (AES-GCM với `AES_KEY` env, reuse từ Go cũ). Auth middleware accept header `X-API-Key:` ngoài JWT.
+- [ ] **AUX-02**: API key management `GET/POST/DELETE /api/api-keys` — admin sinh API key cho external integration. Encrypt at rest (AES-GCM với `AES_KEY` env — schema M2 mới, không có data mã hóa cũ cần tương thích). Auth middleware accept header `X-API-Key:` ngoài JWT.
 - [ ] **AUX-03**: Rate limit middleware (slowapi) — 100 req/min/user trên search/ask, 30 req/min/user trên upload, KHÔNG limit trên auth/me.
 
 ### EVAL — Quality Gate ≥75% top-3 (4 REQ)
@@ -122,7 +122,7 @@
 - **HARD-V4-05**: Email send cho password reset (defer M2)
 - **HARD-V4-06**: Avatar upload + S3/GCS file storage
 - **HARD-V4-07**: GDrive file storage backend port
-- **HARD-V4-08**: Cocoindex augmenter (Q&A pair generation) port từ Go
+- **HARD-V4-08**: Cocoindex augmenter (Q&A pair generation) — thiết kế mới (Go source đã archive ở tag `m1-go-archived`)
 - **HARD-V4-09**: Postgres pg16 → pg17 upgrade
 - **HARD-V4-10**: Comprehensive test coverage >80% (M2 chỉ 50%+ critical path)
 - **HARD-V4-11**: Khắc phục CONCERNS bảo mật cũ (`.gitignore` root, GCP key audit, AES_KEY rotation, XSS token storage migration httpOnly cookie)
