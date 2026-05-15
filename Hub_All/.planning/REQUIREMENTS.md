@@ -84,7 +84,7 @@
 
 ### FRONTEND-COMPAT — Verify React 19 Vẫn Hoạt Động (1 REQ)
 
-- [ ] **COMPAT-01**: Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`), smoke từng trang React (Dashboard, HubRegistry, DocumentIngestion, SyncQueue, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — golden path mỗi trang PASS. Replay test: cURL request snapshot từ Go cũ replay vs FastAPI mới — response envelope shape identical. Vietnamese filename UTF-8 test ("Khám bệnh đa khoa.docx") upload + display preserve.
+- [ ] **COMPAT-01**: Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`), smoke từng trang React (Dashboard, HubRegistry, DocumentIngestion, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — golden path mỗi trang PASS. **Ngoại lệ: trang `SyncQueue`** — feature sync queue đã loại khỏi M2 (Phase 5 CONTEXT D-01), `/api/sync/*` KHÔNG implement; trang này dự kiến lỗi API, KHÔNG tính vào golden-path PASS, dọn ở frontend rewrite v3.0. Replay test: so response envelope shape FastAPI mới vs router signature `git show m1-go-archived` + frontend types (Go runtime đã teardown). Vietnamese filename UTF-8 test ("Khám bệnh đa khoa.docx") upload + display preserve.
 
 ### TEARDOWN — Xóa Go Backend (1 REQ)
 

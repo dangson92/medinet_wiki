@@ -266,7 +266,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - ⚠️ **R3 escalation**: TEARDOWN sớm = không còn Go runtime để A/B replay test. SC3 đổi sang dùng cURL snapshot capture trước 2026-05-14 (nếu có) hoặc compare schema từ git tag `m1-go-archived` thay vì replay live.
 
 **Success Criteria** (what must be TRUE):
-  1. Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`) → 12 trang React render OK: Dashboard, HubRegistry, DocumentIngestion, SyncQueue, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile — không error 500/CORS/401 sai
+  1. Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`) → 11 trang React render OK: Dashboard, HubRegistry, DocumentIngestion, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile — không error 500/CORS/401 sai. **Ngoại lệ: `SyncQueue`** — sync queue loại khỏi M2 (Phase 5 CONTEXT D-01), trang này dự kiến lỗi API gọi `/api/sync/*`, KHÔNG tính vào smoke PASS
   2. Golden path mỗi trang PASS bằng manual smoke: login admin → upload DOCX hub_y_te → search "khám bệnh" cross-hub → ask "quy trình là gì" có citation render `[1]` clickable trong CitationText.tsx → audit log thấy 4 entry tương ứng
   3. ~~Replay test live Go cũ vs FastAPI mới~~ → REVISED do TEARDOWN pull-in: compare response shape FastAPI vs **router signature** trong `git show m1-go-archived:Hub_All/backend/internal/router/router.go` + frontend types `frontend/src/services/api.ts` làm contract reference.
   4. Vietnamese filename test PASS: upload "Khám bệnh đa khoa.docx" → response trả `filename` chính xác UTF-8 (không mojibake); GET document detail hiển thị tên file đúng
