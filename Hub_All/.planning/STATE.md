@@ -3,23 +3,23 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_planned
-last_updated: "2026-05-14T12:30:00Z"
+last_updated: "2026-05-15T00:00:00Z"
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 22
+  total_plans: 28
   completed_plans: 16
   percent: 50
 current_phase:
-  number: 4
-  name: CocoIndex Flow MVP + Document Ingest
+  number: 5
+  name: Hub + User + Audit + APIKey + Settings CRUD
   plans_total: 6
   plans_complete: 0
   status: planned
   waves: 4
 next_phase:
-  number: 5
-  name: Hub + User + Audit + APIKey + Settings CRUD
+  number: 6
+  name: Search API Single + Cross-Hub
 ---
 
 # State — MEDWIKI
