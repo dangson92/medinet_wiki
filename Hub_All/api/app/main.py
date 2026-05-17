@@ -313,6 +313,38 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
 
     app.include_router(documents_router)
 
+    # Mount Phase 5 router (HUB-01..03, USER-01..03, AUX-01..02) — Plan 05-06 wiring.
+    from app.routers import (
+        api_keys_router,
+        audit_logs_router,
+        hubs_router,
+        profile_router,
+        users_router,
+    )
+
+    app.include_router(hubs_router)
+    app.include_router(users_router)
+    app.include_router(profile_router)
+    app.include_router(api_keys_router)
+    app.include_router(audit_logs_router)
+
+    # Rate limiter (Phase 5 AUX-03 — slowapi). Plan 05-02 tạo module; wiring tại đây.
+    # Endpoint Phase 5 decorate @limiter.limit = GET /api/audit-logs (Plan 05-05 W4).
+    # search/ask 100/min Phase 6, upload 30/min Phase 4 — decoration defer.
+    # KHÔNG cần add_middleware — handler đủ render 429 envelope.
+    from slowapi.errors import RateLimitExceeded
+
+    from app.middleware import limiter, rate_limit_exceeded_handler
+
+    app.state.limiter = limiter
+    # mypy --strict: Starlette add_exception_handler ký kiểu handler nhận
+    # `Exception` chung; rate_limit_exceeded_handler hẹp hơn (RateLimitExceeded).
+    # An toàn runtime — Starlette chỉ dispatch handler cho đúng loại exc.
+    app.add_exception_handler(
+        RateLimitExceeded,
+        rate_limit_exceeded_handler,  # type: ignore[arg-type]
+    )
+
     # HTTPException → envelope handler (Plan 03-05 AUTH-04).
     # CRITICAL: Plan 03-01 ErrorHandlerMiddleware đã pass-through StarletteHTTPException
     # (isinstance check + raise). Mọi HTTPException từ dependency/route — bao gồm
@@ -346,6 +378,26 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         return StarletteJSONResponse(
             content=body, status_code=exc.status_code, headers=headers
         )
+
+    # HubIsolationError → 403 envelope handler (HUB-02 / E4).
+    from app.repositories.hub_isolation import HubIsolationError
+
+    @app.exception_handler(HubIsolationError)
+    async def hub_isolation_handler(
+        request: FastAPIRequest, exc: HubIsolationError
+    ) -> StarletteJSONResponse:
+        """HubIsolationError → 403 envelope (HUB-02 / E4).
+
+        Handler CHỈ render envelope 403. Audit 'security.hub_isolation_violation'
+        do documents_service.delete() enqueue tại điểm reject (Task 2).
+        """
+        body = {
+            "success": False,
+            "data": None,
+            "error": {"code": "FORBIDDEN", "message": str(exc)},
+            "meta": None,
+        }
+        return StarletteJSONResponse(content=body, status_code=403)
 
     @app.get("/healthz")
     async def healthz() -> Any:

@@ -22,6 +22,7 @@ login/refresh/logout/me).
 """
 from __future__ import annotations
 
+from app.auth.api_key import require_api_key
 from app.auth.dependencies import (
     UserWithHubs,
     get_api_key_or_jwt,
@@ -75,6 +76,7 @@ __all__ = [
     "get_jwt_manager",
     "hash_password",
     "oauth2_scheme",
+    "require_api_key",
     "require_role",
     "verify_password",
 ]
