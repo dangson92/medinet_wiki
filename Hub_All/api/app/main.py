@@ -178,6 +178,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     except Exception as e:  # noqa: BLE001
         logger.warning("watchdog_task_start_failed: %s", e)
 
+    # 8) Audit flush task (Phase 5 AUX-01 — asyncio.Queue batch flush 2s/128).
+    app.state.audit_task = None
+    try:
+        from app.services.audit_service import audit_flush_loop
+
+        app.state.audit_task = asyncio.create_task(audit_flush_loop())
+        logger.info("audit_flush_task_started")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("audit_flush_task_start_failed: %s", e)
+
     try:
         yield
     finally:
@@ -193,6 +203,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             except Exception as e:  # noqa: BLE001
                 logger.warning("watchdog_task_stop_failed: %s", e)
             app.state.watchdog_task = None
+        # Audit flush task (Phase 5 AUX-01) — flush_pending + cancel TRƯỚC
+        # dispose_engine vì flush_pending dùng engine để batch INSERT audit_logs.
+        if getattr(app.state, "audit_task", None) is not None:
+            try:
+                from app.services.audit_service import flush_pending
+
+                await flush_pending()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("audit_flush_pending_failed: %s", e)
+            app.state.audit_task.cancel()
+            try:
+                await app.state.audit_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("audit_task_stop_failed: %s", e)
+            app.state.audit_task = None
         try:
             from app.db.session import dispose_engine
 
