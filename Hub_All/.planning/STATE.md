@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_in_progress
-last_updated: "2026-05-17T06:13:50Z"
+status: phase_complete
+last_updated: "2026-05-17T12:00:00Z"
 progress:
   total_phases: 10
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 28
-  completed_plans: 21
-  percent: 60
+  completed_plans: 27
+  percent: 65
 current_phase:
-  number: 5
-  name: Hub + User + Audit + APIKey + Settings CRUD
-  plans_total: 6
-  plans_complete: 6
-  status: plans_complete
-  waves: 4
-next_phase:
   number: 6
   name: Search API Single + Cross-Hub
+  plans_total: 0
+  plans_complete: 0
+  status: not_started
+  waves: 0
+next_phase:
+  number: 7
+  name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
 ---
 
 # State — MEDWIKI
@@ -53,7 +53,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** ✅ PLANS COMPLETE (6 plans / 4 waves / 6/6 executed) |
+| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** ✅ COMPLETE (6/6 plans, verify PASSED 5/5, E4 verified) · Next: **Phase 6 — Search API Single + Cross-Hub** |
 | Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01). 05-02 ✅ (Wave 2: hub isolation helper + get_current_user_with_hubs + slowapi rate-limit module; HUB-02/AUX-03). 05-03 ✅ (Wave 3: Hub CRUD; HUB-01/HUB-03). 05-04 ✅ (Wave 3: User CRUD + reset-password + Profile; USER-01/02/03). 05-05 ✅ (Wave 3: APIKey CRUD + AES-GCM + X-API-Key + audit-logs query; AUX-01/02/03). 05-06 ✅ (Wave 4: wiring 5 router main.py + slowapi limiter + HubIsolationError handler + X-API-Key require_api_key + hub-isolation enforce document DELETE + E4 critical test suite — DONE 2026-05-17). |
 | Status | **Phase 5 PLANS COMPLETE — 6/6 plans executed.** 05-06 thực thi 3 task atomic: Task 1 (`d9e59e2`) routers/__init__.py export 6 router + main.py mount 5 router Phase 5 + wire slowapi (app.state.limiter + RateLimitExceeded → 429 envelope) + HubIsolationError → 403 handler + auth/api_key.py require_api_key (gọi verify_key — BLOCKER 1). Task 2 (`e32af03`) documents_service.delete enforce verify_hub_access (hub_id load từ DB, KHÔNG payload) + enqueue_audit security.hub_isolation_violation tại điểm reject; documents.py DELETE endpoint editor-eligible + viewer reject + HubIsolationError → 403. Task 3 (`5f5bfea`) conftest fixtures (_insert_hub/_assign_user_hub + TRUNCATE mở rộng + AES_KEY test) + test_hub_isolation.py 6 critical test E4 + test_rate_limit.py 4 test. **E4 EXIT criteria VERIFIED — hub isolation genuinely PASS against real DB; Phase 5 đủ điều kiện ship M2.** Tiếp theo: `/gsd-verify-work 5` UAT rồi `/gsd-execute-phase 6`. |
 | Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-06`: executor agent (sequential) thực thi 3 task atomic (d9e59e2 wiring + e32af03 hub-isolation enforce + 5f5bfea E4 test suite). ruff app+tests clean; mypy --strict app 62 source clean. E4 verify: test_hub_isolation.py 6 critical test PASS — editor cross-hub DELETE 403 + document vẫn tồn tại + audit security.hub_isolation_violation logged. pytest -m critical chạy per-file (DEF-05-01 cocoindex Environment singleton): 4 unit + 44 integration critical PASS; ngoại lệ DUY NHẤT test_ingest_e2e::test_e2e_upload_docx_to_chunks_completed (DEF-05-03 pre-existing). 4 auto-fix deviation (Rule 3 mypy type-ignore add_exception_handler, Rule 3 Sequence[str] tránh shadow class method list, Rule 1 _create_hub DEF-05-02 leftover 2 file, Rule 3 _spawn_rbac_app DEF-05-01 leftover). SUMMARY.md tạo + self-check PASSED. |
@@ -62,7 +62,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
 
-**Progress bar:** `[██████░░░░] 60% (3/10 phase complete · Phase 5 ✅ plans complete 6/6 executed) · Next: /gsd-verify-work 5 (UAT) rồi /gsd-execute-phase 6 (Search API)`
+**Progress bar:** `[███████░░░] 65% (Phase 5 ✅ COMPLETE — verify PASSED 5/5, 9/9 REQ-ID, E4 hub-isolation verified) · Next: /gsd-plan-phase 6 (Search API Single + Cross-Hub)`
 
 ---
 
