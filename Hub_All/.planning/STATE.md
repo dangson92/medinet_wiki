@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_planned
-last_updated: "2026-05-15T00:00:00Z"
+status: phase_in_progress
+last_updated: "2026-05-17T10:35:00Z"
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 28
-  completed_plans: 16
-  percent: 50
+  completed_plans: 17
+  percent: 52
 current_phase:
   number: 5
   name: Hub + User + Audit + APIKey + Settings CRUD
   plans_total: 6
-  plans_complete: 0
-  status: planned
+  plans_complete: 1
+  status: in_progress
   waves: 4
 next_phase:
   number: 6
@@ -53,8 +53,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 📋 PLANNED (6 plans / 4 waves / 0/6 executed) — Ready to execute |
-| Plan | 05-01 📋 (Wave 1: Migration 0003 additive cột hubs `code`/`subdomain`/`status` + users `phone`/`department`/`avatar_url`/`status` + api_keys cols; audit_service asyncio.Queue batch logger; test_audit_logger 100-concurrent; HUB-01/AUX-01). 05-02 📋 (Wave 2: hub isolation helper `hub_isolation.py` + slowapi rate-limit module; HUB-02/AUX-03). 05-03 📋 (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03). 05-04 📋 (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03). 05-05 📋 (Wave 3: APIKey CRUD + AES-GCM + soft revoke + X-API-Key + GET /api/audit-logs; AUX-01/AUX-02). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
+| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 🔄 IN PROGRESS (6 plans / 4 waves / 1/6 executed) |
+| Plan | 05-01 ✅ (Wave 1: Migration 0003 additive cột hubs `code`/`subdomain`/`status` + users `phone`/`department`/`avatar_url`/`status` + api_keys cols; audit_service asyncio.Queue batch logger; test_audit_logger 100-concurrent; HUB-01/AUX-01 — DONE 2026-05-17). 05-02 📋 (Wave 2: hub isolation helper `hub_isolation.py` + slowapi rate-limit module; HUB-02/AUX-03). 05-03 📋 (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03). 05-04 📋 (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03). 05-05 📋 (Wave 3: APIKey CRUD + AES-GCM + soft revoke + X-API-Key + GET /api/audit-logs; AUX-01/AUX-02). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
 | Status | **Phase 5 PLANNED** — `/gsd-plan-phase 5` ship 6 PLAN.md. Discuss inline → 05-CONTEXT.md (7 quyết định D-01..D-07: gỡ sync queue, rag-config riêng, token usage fresh, HubAPI bỏ field Go, frontend api.ts thắng). Pattern-mapper → 05-PATTERNS.md (22 file mapped). Plan checker iter 1: 2 BLOCKER (verify_key/verify_plaintext mismatch; Settings CRUD chưa resolve) + 5 WARNING. Revision → iter 2: 0 BLOCKER + 1 WARNING (HubStats `queries` count). Patch trực tiếp Plan 05-03 (document defer `queries` count) → 0/0. Coverage: 9/9 REQ-ID. Wave: W1 (05-01) → W2 (05-02) → W3 (05-03+04+05 parallel, zero file overlap) → W4 (05-06). Ready for `/gsd-execute-phase 5`. |
 | Last activity | 2026-05-16 — `/gsd-plan-phase 5`: discuss-phase inline (3 user decision sync/rag-config/token-usage + 2 AskUserQuestion sync-D6/hub-legacy-fields) → 05-CONTEXT.md. Spawn gsd-pattern-mapper (1) + gsd-planner (1 draft + 1 revision) + gsd-plan-checker (2 verify). Manual patch Plan 05-03 document `queries` count defer. KHÔNG run research (config research:false + user chọn skip); KHÔNG run UI gate (Phase 5 backend-only, "per_page" false-positive); Nyquist N/A (research disabled). |
 | Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** · **Phase 5 planned** |
@@ -62,7 +62,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 📋 → 8 |
 
-**Progress bar:** `[██████░░░░] 50% (3/10 phase complete · Phase 5 📋 planned 6/6 plans + 0/6 executed) · Next: /gsd-execute-phase 5 (HUB/USER/AUX 9 REQ-ID)`
+**Progress bar:** `[██████░░░░] 52% (3/10 phase complete · Phase 5 🔄 in progress 1/6 plans executed) · Next: /gsd-execute-phase 5 plan 05-02 (hub isolation + rate-limit)`
 
 ---
 
@@ -134,6 +134,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 ### Blockers
 
 - Không có blocker khởi đầu. Codebase Go hiện hữu chạy được — Phase 1 (skeleton FastAPI + tear-down) chạy được ngay sau khi user approve roadmap.
+- **DEF-05-01 (deferred, không block 05-01):** cocoindex 1.0.3 `Environment` KHÔNG re-open được trong cùng process → mọi test file dùng fixture `app_with_auth` cho >1 test FAIL từ test thứ 2 (`RuntimeError: environment already open`). Pre-existing limitation Phase 4 — `test_documents_list_delete.py` cũng fail giống. Plan 05-01 Task 4 né bằng fixture `audit_db` tự cấp. Wave 3-4 Phase 5 (hub/user/apikey CRUD integration test) sẽ cần giải pháp chung — đề xuất Plan 05-06/Phase 10 thêm fixture mock cocoindex. Chi tiết: `.planning/phases/05-hub-user-audit-apikey-settings-crud/deferred-items.md`.
 
 ### Notes
 
@@ -149,7 +150,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-14 — Plan 03-05 execute — PHASE 3 COMPLETE):** `/gsd-execute-phase 3 plan 03-05` → executor agent thực thi 6 task atomic:
+**Last session (2026-05-17 — Plan 05-01 execute):** `/gsd-execute-phase 5 plan 05-01` → executor agent thực thi 4 task atomic:
+- Task 01 (`769e0d4`): Migration 0003 `0003_phase5_schema_reconcile.py` — additive 10 cột: hubs (code/subdomain/status), users (phone/department/avatar_url/status), api_keys (permissions/allowed_hub_ids/rate_limit). server_default backfill existing rows → alter_column drop default cho code/subdomain. CheckConstraint hub_status_enum + user_status_enum + uq_hubs_code. downgrade đảo ngược clean. Cập nhật model Hub/User/ApiKey khớp. D-05 KHÔNG thêm field di sản Go. W1: hubs giữ cả slug (legacy NOT NULL mirror) + code (contract frontend). Alembic round-trip upgrade→downgrade→upgrade PASS clean trên DB `medinet_mig0003_test` sạch, chỉ 1 head.
+- Task 02 (`4e3de9b`): `audit_service.py` — AuditEntry dataclass, enqueue_audit non-blocking (drop+warning khi QueueFull, KHÔNG raise — T-05-01-03), audit_flush_loop batch INSERT 2s/128 qua get_engine() executemany, flush_pending drain shutdown, AUDIT_ACTIONS frozenset gồm security.hub_isolation_violation, reset_queue test helper. config.py thêm audit knobs + rate_limit_*_per_minute.
+- Task 03 (`f122b74`): wire audit_flush_loop vào main.py lifespan — startup step 8 create_task; shutdown flush_pending + cancel TRƯỚC dispose_engine.
+- Task 04 (`a7a3311`): `test_audit_logger.py` — 3 test (1 @critical). test_audit_logger_100_concurrent: 100 concurrent enqueue → COUNT(*)==100 + COUNT(DISTINCT request_id)==100 (AUX-01 SC4). test_enqueue_non_blocking_when_queue_full + test_audit_flush_loop_batches (130 entry > batch_size). Deviation Rule 3: fixture `audit_db` tự cấp thay `app_with_auth` — né cocoindex Environment re-open bug (DEF-05-01).
+- Verification: ruff app + mypy --strict app clean (44 source); create_app() OK; pytest test_audit_logger 3 passed; pytest -m critical -k audit_logger 1 passed.
+- SUMMARY.md `.planning/phases/05-hub-user-audit-apikey-settings-crud/05-01-SUMMARY.md` tạo với 4 commit hash + threat model T-05-01-01..04 mitigated + Settings CRUD omission có chủ đích (BLOCKER 2) + DEF-05-01 deferred note.
+- **HUB-01 + AUX-01 requirements partial — schema + audit infra hoàn tất (CRUD endpoint Wave 3).**
+
+**Previous session (2026-05-14 — Plan 03-05 execute — PHASE 3 COMPLETE):** `/gsd-execute-phase 3 plan 03-05` → executor agent thực thi 6 task atomic:
 - Task 01 (`010c8a1`): replace `app/auth/dependencies.py::require_role` stub NotImplementedError → implementation đầy đủ. ValueError gate empty roles (security gate — tránh route mở cho mọi role). `allowed = set(roles)` + `user.role in allowed` check → raise HTTPException 403 `{code:FORBIDDEN, message:...}`. Thêm `@app.exception_handler(HTTPException)` trong `app/main.py::create_app()` map `exc.detail` dict {code, message} → envelope `{success:false, data:null, error:{code, message}, meta:null}`. Plan 03-01 ErrorHandlerMiddleware pass-through StarletteHTTPException → handler này render envelope đúng cho mọi 401/403 từ get_current_user + require_role. 5 unit test test_require_role.py PASS.
 - Task 02 (`29d4edf`): extend `tests/integration/conftest.py` với 10 fixture Plan 03-05: `redis_container` (scope=module, redis:7-alpine), `auth_env` (legacy backward-compat), `app_with_auth` (alembic upgrade + lifespan), `auth_client` (httpx ASGITransport), `admin_user/editor_user/viewer_user` (INSERT users qua engine với Go seed hash), `admin_token/editor_token/viewer_token` (POST /login), `admin_token_pair` (cả access+refresh cho AC5). pyproject.toml bump `testcontainers[postgres]` → `testcontainers[postgres,redis]`. uv sync install redis extra. docker pull redis:7-alpine prerequisite.
 - Task 03 (`a01b7d1`): tests/integration/test_auth_login.py — 5 critical test AC1: happy admin Go-seed hash → 200 envelope; wrong password → 401 INVALID_CREDENTIALS; unknown email → 401 same shape (anti-timing oracle); bad email → 422; envelope keys EXACTLY {success, data, error, meta}. **Rule 3 fix**: alembic.command.upgrade trong async fixture → asyncio.to_thread. **Rule 1 fix**: postgres_container scope=module → TRUNCATE users/refresh_tokens/user_hubs RESTART IDENTITY CASCADE per-test. 5/5 PASS.
@@ -185,7 +195,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
-**Next action:** **Phase 3 COMPLETE.** Chạy `/gsd-execute-phase 4` để bắt đầu Phase 4 (CocoIndex Flow MVP + Document Ingest — INGEST-01..08). Phase 4 sẽ implement: cocoindex flow LISTEN/NOTIFY với extract/chunk/embed/pgvector pipeline, format whitelist `{.docx, .txt, .md, .pdf text-only}` (D4 — scanned PDF → `failed_unsupported`), heartbeat watchdog cron (P8 mitigation), Vietnamese chunking boundary (P13 custom regex `Mục N.`/`Chương N.`), char-based tokenizer (P14 cross-provider). Phase 4 mở `M2a EXIT GATE` 🚦 cuối phase: demo upload DOCX → chunks pgvector → SELECT verify (R3 mitigation, user accept condition). Research flag HIGH (3 open question: cocoindex augmenter parity / PDF table VN / chunking boundary empirical resolve).
+**Next action:** **Phase 5 Plan 05-01 DONE (Wave 1).** Chạy `/gsd-execute-phase 5 plan 05-02` để tiếp Wave 2 — hub isolation repository layer (`hub_filter_clause` + `verify_hub_access` + `get_current_user_with_hubs`) + slowapi rate-limit middleware (HUB-02/AUX-03). Wave 2 phụ thuộc schema migration 0003 + audit_service đã sẵn sàng. Sau 05-02 → Wave 3 (05-03/04/05 parallel — Hub/User/APIKey CRUD) → Wave 4 (05-06 wiring + E4 hub isolation critical test). Lưu ý DEF-05-01: integration test Wave 3-4 dùng `app_with_auth` sẽ cần giải pháp fixture mock cocoindex (cocoindex Environment re-open bug).
 
 **Files cần đọc khi resume:**
 

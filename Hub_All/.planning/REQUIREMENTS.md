@@ -190,13 +190,13 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | INGEST-06 | Phase 4 (heartbeat + watchdog) | Pending |
 | INGEST-07 | Phase 4 (DELETE /api/documents/:id) | Pending |
 | INGEST-08 | Phase 4 (GET /api/documents list + filter) | Pending |
-| HUB-01 | Phase 5 (hubs CRUD) | Pending |
+| HUB-01 | Phase 5 (hubs CRUD) | In Progress (05-01: migration 0003 schema; CRUD endpoint Wave 3) |
 | HUB-02 | Phase 5 (hub isolation repo layer) | Pending |
 | HUB-03 | Phase 5 (hubs/:id/stats) | Pending |
 | USER-01 | Phase 5 (users CRUD) | Pending |
 | USER-02 | Phase 5 (reset password) | Pending |
 | USER-03 | Phase 5 (profile) | Pending |
-| AUX-01 | Phase 5 (audit logger + GET audit-logs) | Pending |
+| AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; GET /api/audit-logs Wave 3) |
 | AUX-02 | Phase 5 (API key management) | Pending |
 | AUX-03 | Phase 5 (rate limit middleware slowapi) | Pending |
 | SEARCH-01 | Phase 6 (GET /api/search single-hub) | Pending |
