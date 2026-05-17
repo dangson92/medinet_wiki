@@ -191,14 +191,14 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | INGEST-07 | Phase 4 (DELETE /api/documents/:id) | Pending |
 | INGEST-08 | Phase 4 (GET /api/documents list + filter) | Pending |
 | HUB-01 | Phase 5 (hubs CRUD) | In Progress (05-01: migration 0003 schema; CRUD endpoint Wave 3) |
-| HUB-02 | Phase 5 (hub isolation repo layer) | Pending |
+| HUB-02 | Phase 5 (hub isolation repo layer) | In Progress (05-02: hub_filter_clause + verify_hub_access + get_current_user_with_hubs repository helper; enforce ở service Wave 3 + E4 critical test Plan 05-06) |
 | HUB-03 | Phase 5 (hubs/:id/stats) | Pending |
 | USER-01 | Phase 5 (users CRUD) | Pending |
 | USER-02 | Phase 5 (reset password) | Pending |
 | USER-03 | Phase 5 (profile) | Pending |
 | AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; GET /api/audit-logs Wave 3) |
 | AUX-02 | Phase 5 (API key management) | Pending |
-| AUX-03 | Phase 5 (rate limit middleware slowapi) | Pending |
+| AUX-03 | Phase 5 (rate limit middleware slowapi) | In Progress (05-02: slowapi Limiter + envelope 429 handler + SEARCH/UPLOAD limit constant module; wiring main.py + decorator router Plan 05-06) |
 | SEARCH-01 | Phase 6 (GET /api/search single-hub) | Pending |
 | SEARCH-02 | Phase 6 (per-query session config HNSW) | Pending |
 | SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Pending |

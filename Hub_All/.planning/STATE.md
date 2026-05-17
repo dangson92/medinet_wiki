@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_in_progress
-last_updated: "2026-05-17T10:35:00Z"
+last_updated: "2026-05-17T11:20:00Z"
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 28
-  completed_plans: 17
-  percent: 52
+  completed_plans: 18
+  percent: 54
 current_phase:
   number: 5
   name: Hub + User + Audit + APIKey + Settings CRUD
   plans_total: 6
-  plans_complete: 1
+  plans_complete: 2
   status: in_progress
   waves: 4
 next_phase:
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 🔄 IN PROGRESS (6 plans / 4 waves / 1/6 executed) |
-| Plan | 05-01 ✅ (Wave 1: Migration 0003 additive cột hubs `code`/`subdomain`/`status` + users `phone`/`department`/`avatar_url`/`status` + api_keys cols; audit_service asyncio.Queue batch logger; test_audit_logger 100-concurrent; HUB-01/AUX-01 — DONE 2026-05-17). 05-02 📋 (Wave 2: hub isolation helper `hub_isolation.py` + slowapi rate-limit module; HUB-02/AUX-03). 05-03 📋 (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03). 05-04 📋 (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03). 05-05 📋 (Wave 3: APIKey CRUD + AES-GCM + soft revoke + X-API-Key + GET /api/audit-logs; AUX-01/AUX-02). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
-| Status | **Phase 5 PLANNED** — `/gsd-plan-phase 5` ship 6 PLAN.md. Discuss inline → 05-CONTEXT.md (7 quyết định D-01..D-07: gỡ sync queue, rag-config riêng, token usage fresh, HubAPI bỏ field Go, frontend api.ts thắng). Pattern-mapper → 05-PATTERNS.md (22 file mapped). Plan checker iter 1: 2 BLOCKER (verify_key/verify_plaintext mismatch; Settings CRUD chưa resolve) + 5 WARNING. Revision → iter 2: 0 BLOCKER + 1 WARNING (HubStats `queries` count). Patch trực tiếp Plan 05-03 (document defer `queries` count) → 0/0. Coverage: 9/9 REQ-ID. Wave: W1 (05-01) → W2 (05-02) → W3 (05-03+04+05 parallel, zero file overlap) → W4 (05-06). Ready for `/gsd-execute-phase 5`. |
-| Last activity | 2026-05-16 — `/gsd-plan-phase 5`: discuss-phase inline (3 user decision sync/rag-config/token-usage + 2 AskUserQuestion sync-D6/hub-legacy-fields) → 05-CONTEXT.md. Spawn gsd-pattern-mapper (1) + gsd-planner (1 draft + 1 revision) + gsd-plan-checker (2 verify). Manual patch Plan 05-03 document `queries` count defer. KHÔNG run research (config research:false + user chọn skip); KHÔNG run UI gate (Phase 5 backend-only, "per_page" false-positive); Nyquist N/A (research disabled). |
+| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 🔄 IN PROGRESS (6 plans / 4 waves / 2/6 executed) |
+| Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01 — DONE 2026-05-17). 05-02 ✅ (Wave 2: hub isolation helper `repositories/hub_isolation.py` `hub_filter_clause`+`verify_hub_access`+`HubIsolationError` + `get_current_user_with_hubs` dependency + slowapi rate-limit module `middleware/rate_limit.py`; HUB-02/AUX-03 — DONE 2026-05-17). 05-03 📋 (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03). 05-04 📋 (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03). 05-05 📋 (Wave 3: APIKey CRUD + AES-GCM + soft revoke + X-API-Key + GET /api/audit-logs; AUX-01/AUX-02). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
+| Status | **Phase 5 IN PROGRESS — Wave 2 DONE.** 05-02 thực thi 2 task atomic: hub-isolation repository helper (defense in depth 3 lớp — `hub_filter_clause` admin bypass/empty→IN(NULL), `verify_hub_access` raise `HubIsolationError`) + slowapi rate-limit module (Limiter key=user_id fallback IP, envelope 429 `RATE_LIMIT_EXCEEDED`, Redis storage). 14 unit test pure-Python phủ E4. slowapi==0.1.9 added. Wiring main.py defer Plan 05-06. Tiếp theo: Wave 3 (05-03/04/05 parallel — Hub/User/APIKey CRUD). |
+| Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-02`: executor agent thực thi 2 task atomic (3710b00 hub isolation helper TDD + a42e3d4 slowapi rate-limit). ruff app + mypy --strict clean. Logged DEF-05-02 (test_watchdog.py fixture thiếu `hubs.code` — pre-existing do 05-01 migration, ngoài scope). SUMMARY.md tạo + self-check PASSED. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** · **Phase 5 planned** |
 | Total requirements | 38 v1 REQ-ID · 6 satisfied Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · **9 planned Phase 5** (HUB-01/02/03 hub registry CRUD + isolation + stats; USER-01/02/03 user CRUD + reset-password + profile; AUX-01/02/03 audit logger + apikey AES-GCM + rate limit) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 📋 → 8 |
 
-**Progress bar:** `[██████░░░░] 52% (3/10 phase complete · Phase 5 🔄 in progress 1/6 plans executed) · Next: /gsd-execute-phase 5 plan 05-02 (hub isolation + rate-limit)`
+**Progress bar:** `[█████░░░░░] 54% (3/10 phase complete · Phase 5 🔄 in progress 2/6 plans executed) · Next: /gsd-execute-phase 5 plan 05-03 (Hub CRUD — Wave 3)`
 
 ---
 
@@ -135,6 +135,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 - Không có blocker khởi đầu. Codebase Go hiện hữu chạy được — Phase 1 (skeleton FastAPI + tear-down) chạy được ngay sau khi user approve roadmap.
 - **DEF-05-01 (deferred, không block 05-01):** cocoindex 1.0.3 `Environment` KHÔNG re-open được trong cùng process → mọi test file dùng fixture `app_with_auth` cho >1 test FAIL từ test thứ 2 (`RuntimeError: environment already open`). Pre-existing limitation Phase 4 — `test_documents_list_delete.py` cũng fail giống. Plan 05-01 Task 4 né bằng fixture `audit_db` tự cấp. Wave 3-4 Phase 5 (hub/user/apikey CRUD integration test) sẽ cần giải pháp chung — đề xuất Plan 05-06/Phase 10 thêm fixture mock cocoindex. Chi tiết: `.planning/phases/05-hub-user-audit-apikey-settings-crud/deferred-items.md`.
+- **DEF-05-02 (deferred, không block 05-02):** 5 test `tests/unit/test_watchdog.py` (Phase 4) FAIL `NotNullViolationError` cột `hubs.code` — migration 0003 (05-01) thêm `hubs.code` NOT NULL nhưng helper insert hub trong test chưa truyền `code`. Pre-existing do 05-01, KHÔNG do 05-02. Đề xuất: Wave 3 (05-03 Hub CRUD) hoặc Phase 10 cập nhật helper. Chi tiết: `deferred-items.md`.
 
 ### Notes
 
@@ -150,7 +151,15 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-17 — Plan 05-01 execute):** `/gsd-execute-phase 5 plan 05-01` → executor agent thực thi 4 task atomic:
+**Last session (2026-05-17 — Plan 05-02 execute):** `/gsd-execute-phase 5 plan 05-02` → executor agent (sequential) thực thi 2 task atomic:
+- Task 01 (`3710b00`): `repositories/hub_isolation.py` — `HubIsolationError` (lưu `resource_hub_id` cho audit), `hub_filter_clause(role, hub_ids, param_prefix)` sinh SQL fragment `WHERE hub_id IN (...)` (admin → `("", {})` bypass; hub_ids rỗng → `"hub_id IN (NULL)"` luôn-false; editor/viewer có hub → placeholders + params), `verify_hub_access(role, user_hub_ids, resource_hub_id)` raise `HubIsolationError` khi cross-hub. `repositories/__init__.py` package docstring. `auth/dependencies.py` thêm `UserWithHubs` class + `get_current_user_with_hubs` dependency (hub_ids từ `user_hubs` DB — KHÔNG payload). `auth/__init__.py` re-export 2 symbol. `tests/unit/test_hub_isolation.py` — 14 unit test pure-Python phủ E4 (TDD RED→GREEN: ModuleNotFoundError → 14 passed). Defense in depth 3 lớp documented.
+- Task 02 (`a42e3d4`): `middleware/rate_limit.py` — slowapi `Limiter` key_func `_rate_limit_key` (user_id từ JWT `sub`, fallback `get_remote_address`, bọc try/except KHÔNG raise), Redis storage `settings.redis_url`; `rate_limit_exceeded_handler` map `RateLimitExceeded` → `resp.too_many_requests` envelope 429 `RATE_LIMIT_EXCEEDED`; constant `SEARCH_LIMIT`/`UPLOAD_LIMIT`/`AUDIT_LOGS_LIMIT` cho router decorator. `middleware/__init__.py` re-export `limiter` + handler + 3 constant. `pyproject.toml` thêm `slowapi==0.1.9` (uv add). Wiring main.py defer Plan 05-06.
+- Verification: `ruff check app` exit 0 (toàn bộ app); `mypy --strict app/repositories app/middleware/rate_limit.py app/auth/dependencies.py` exit 0 (4 source); `pytest tests/unit/test_hub_isolation.py` 14 passed; smoke test logic + import OK; `grep RATE_LIMIT_EXCEEDED` match.
+- Deviation: 0 auto-fix. Out-of-scope: DEF-05-02 logged (test_watchdog.py fixture thiếu `hubs.code` — pre-existing do 05-01 migration, KHÔNG fix).
+- SUMMARY.md `.planning/phases/05-hub-user-audit-apikey-settings-crud/05-02-SUMMARY.md` tạo với 2 commit hash + threat model T-05-02-01..05 (3 mitigate + 2 accept) + self-check PASSED.
+- **HUB-02 + AUX-03 requirements — hạ tầng isolation helper + rate-limit module hoàn tất (enforce + wiring ở Wave 3-4).**
+
+**Previous session (2026-05-17 — Plan 05-01 execute):** `/gsd-execute-phase 5 plan 05-01` → executor agent thực thi 4 task atomic:
 - Task 01 (`769e0d4`): Migration 0003 `0003_phase5_schema_reconcile.py` — additive 10 cột: hubs (code/subdomain/status), users (phone/department/avatar_url/status), api_keys (permissions/allowed_hub_ids/rate_limit). server_default backfill existing rows → alter_column drop default cho code/subdomain. CheckConstraint hub_status_enum + user_status_enum + uq_hubs_code. downgrade đảo ngược clean. Cập nhật model Hub/User/ApiKey khớp. D-05 KHÔNG thêm field di sản Go. W1: hubs giữ cả slug (legacy NOT NULL mirror) + code (contract frontend). Alembic round-trip upgrade→downgrade→upgrade PASS clean trên DB `medinet_mig0003_test` sạch, chỉ 1 head.
 - Task 02 (`4e3de9b`): `audit_service.py` — AuditEntry dataclass, enqueue_audit non-blocking (drop+warning khi QueueFull, KHÔNG raise — T-05-01-03), audit_flush_loop batch INSERT 2s/128 qua get_engine() executemany, flush_pending drain shutdown, AUDIT_ACTIONS frozenset gồm security.hub_isolation_violation, reset_queue test helper. config.py thêm audit knobs + rate_limit_*_per_minute.
 - Task 03 (`f122b74`): wire audit_flush_loop vào main.py lifespan — startup step 8 create_task; shutdown flush_pending + cancel TRƯỚC dispose_engine.
@@ -195,7 +204,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
-**Next action:** **Phase 5 Plan 05-01 DONE (Wave 1).** Chạy `/gsd-execute-phase 5 plan 05-02` để tiếp Wave 2 — hub isolation repository layer (`hub_filter_clause` + `verify_hub_access` + `get_current_user_with_hubs`) + slowapi rate-limit middleware (HUB-02/AUX-03). Wave 2 phụ thuộc schema migration 0003 + audit_service đã sẵn sàng. Sau 05-02 → Wave 3 (05-03/04/05 parallel — Hub/User/APIKey CRUD) → Wave 4 (05-06 wiring + E4 hub isolation critical test). Lưu ý DEF-05-01: integration test Wave 3-4 dùng `app_with_auth` sẽ cần giải pháp fixture mock cocoindex (cocoindex Environment re-open bug).
+**Next action:** **Phase 5 Plan 05-02 DONE (Wave 2).** Chạy `/gsd-execute-phase 5 plan 05-03` (hoặc 05-04/05-05 parallel) để tiếp Wave 3 — Hub/User/APIKey CRUD router/service/schema. Wave 3 import `hub_filter_clause`/`verify_hub_access` từ `repositories/hub_isolation.py` + dùng `@limiter.limit(...)` decorator từ `middleware/rate_limit.py`. Sau Wave 3 → Wave 4 (05-06 wiring main.py: `app.state.limiter` + `add_exception_handler(RateLimitExceeded, ...)` + hub-isolation enforce + E4 hub isolation critical test). Lưu ý DEF-05-01 (cocoindex Environment re-open) + DEF-05-02 (test_watchdog.py fixture `hubs.code`).
 
 **Files cần đọc khi resume:**
 
