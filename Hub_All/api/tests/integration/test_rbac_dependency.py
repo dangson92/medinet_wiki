@@ -77,6 +77,11 @@ async def _spawn_rbac_app(
     monkeypatch.setenv("JWT_ACCESS_TOKEN_TTL", "900")
     monkeypatch.setenv("JWT_REFRESH_TOKEN_TTL", "604800")
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
+    # DEF-05-01: cocoindex 1.0.3 `core.Environment` là process-global singleton —
+    # KHÔNG re-open được. _spawn_rbac_app gọi nhiều lần trong cùng process (6 test)
+    # → test thứ 2 crash `environment already open`. RBAC test KHÔNG cần cocoindex
+    # → skip setup (mirror app_with_auth fixture conftest). Plan 05-06 DEF-05-01 fix.
+    monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
 
     from app.config import get_settings
     get_settings.cache_clear()
@@ -103,6 +108,13 @@ async def _spawn_rbac_app(
     # Reset engine state.
     from app.db.session import dispose_engine
     await dispose_engine()
+
+    # DEF-05-01: reset audit queue (module-global asyncio.Queue) — _spawn_rbac_app
+    # gọi nhiều lần, mỗi lần event loop riêng. Queue cũ bound vào loop trước →
+    # audit_flush_loop shutdown await queue.get() treo vĩnh viễn (mirror
+    # app_with_auth fixture conftest). Plan 05-06 DEF-05-01 fix.
+    from app.services.audit_service import reset_queue
+    reset_queue()
 
     # Create app + add test router.
     from app.main import create_app

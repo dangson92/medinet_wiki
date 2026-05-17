@@ -182,6 +182,11 @@ async def app_with_auth(
     monkeypatch.setenv("JWT_ACCESS_TOKEN_TTL", "900")
     monkeypatch.setenv("JWT_REFRESH_TOKEN_TTL", "604800")
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
+    # Plan 05-06: deterministic test AES_KEY (32-byte base64url) cho AES-GCM
+    # round-trip reproducible — API key encrypt/decrypt (Plan 05-05 crypto).
+    monkeypatch.setenv(
+        "AES_KEY", "bWVkaW5ldC10ZXN0LWFlcy1rZXktMzJieXRlcyEhMDA="
+    )
 
     # DEF-05-01: cocoindex 1.0.3 `core.Environment` là process-global singleton —
     # KHÔNG re-open được sau open + close. Fixture này dùng cho >1 test cùng
@@ -226,9 +231,13 @@ async def app_with_auth(
     sync_eng = create_engine(sync_dsn)
     with sync_eng.begin() as conn:
         # CASCADE truncate — refresh_tokens.user_id + user_hubs.user_id FK reference users.
+        # Plan 05-06: thêm bảng Phase 5 (hubs/audit_logs/api_keys/documents/chunks)
+        # để CRUD + hub-isolation integration test có fresh state mỗi test.
         conn.execute(
             text(
-                "TRUNCATE TABLE users, refresh_tokens, user_hubs RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE users, refresh_tokens, user_hubs, hubs, "
+                "audit_logs, api_keys, documents, chunks "
+                "RESTART IDENTITY CASCADE"
             )
         )
     sync_eng.dispose()
@@ -276,6 +285,50 @@ async def _insert_user(
             },
         )
     return user_id
+
+
+async def _insert_hub(*, name: str, code: str, subdomain: str) -> str:
+    """INSERT 1 hub row trực tiếp qua SQL, return hub_id string.
+
+    Cột theo migration 0003 (Plan 05-01): hubs có cả `slug` (legacy NOT NULL
+    mirror) + `code` (contract frontend) + `subdomain` + `status`. `slug=code`.
+    Dùng cho Plan 05-06 hub-isolation integration test (test_hub_isolation.py).
+    """
+    from app.db.session import get_engine
+    engine = get_engine()
+    hub_id = str(uuid.uuid4())
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO hubs "
+                "(id, slug, code, name, subdomain, description, status, "
+                "is_active, created_at, updated_at) "
+                "VALUES (:id, :slug, :code, :name, :subdomain, NULL, 'active', "
+                "TRUE, NOW(), NOW())"
+            ),
+            {
+                "id": hub_id,
+                "slug": code,
+                "code": code,
+                "name": name,
+                "subdomain": subdomain,
+            },
+        )
+    return hub_id
+
+
+async def _assign_user_hub(*, user_id: str, hub_id: str) -> None:
+    """INSERT 1 row user_hubs — gán user vào hub (HUB-02 isolation source)."""
+    from app.db.session import get_engine
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO user_hubs (user_id, hub_id, assigned_at) "
+                "VALUES (:uid, :hid, NOW())"
+            ),
+            {"uid": user_id, "hid": hub_id},
+        )
 
 
 @pytest.fixture

@@ -80,3 +80,34 @@ Dùng giá trị unique `hub-{hex}` cho `code` vì có constraint `uq_hubs_code`
 `hubs.status` NOT NULL giữ `server_default 'active'` nên không cần truyền.
 
 **Verify:** `pytest tests/unit/test_watchdog.py` → 6 passed, 0 errors.
+
+---
+
+## DEF-05-03 — test_ingest_e2e::test_e2e_upload_docx_to_chunks_completed cần cocoindex thật
+
+**TRẠNG THÁI: OPEN** — pre-existing, KHÔNG do Plan 05-06.
+
+**Phát hiện:** Plan 05-06 (chạy `pytest -m critical` per-file).
+
+**Mô tả:** `test_e2e_upload_docx_to_chunks_completed` (Phase 4 Plan 04-06) assert
+`app.state.cocoindex_app is not None` rồi chờ chunks tạo qua cocoindex flow thật.
+Fixture `app_with_auth` (conftest) set `COCOINDEX_SKIP_SETUP=1` (DEF-05-01 fix) →
+lifespan bỏ qua `setup_cocoindex()` → `app.state.cocoindex_app=None` → test fail
+`AssertionError: Plan 04-07 architectural regression`.
+
+**Bằng chứng:** `pytest -m critical tests/integration/test_ingest_e2e.py` →
+1 passed, 1 failed. Lỗi: `assert None is not None`. `COCOINDEX_SKIP_SETUP` env
+có TRƯỚC Plan 05-06 (đã trong conftest từ DEF-05-01 fix) — test này đã không
+tương thích với shared fixture từ trước Plan 05-06.
+
+**Tác động:** 1 critical test fail trong `pytest -m critical` (HARD-03 gate).
+KHÔNG ảnh hưởng E4 hub-isolation hay wiring của Plan 05-06. Mâu thuẫn cấu trúc:
+test E2E cocoindex thật vs shared fixture skip cocoindex (DEF-05-01).
+
+**Đề xuất:** Phase 10 hardening — hoặc (a) cấp fixture riêng `app_with_cocoindex`
+chạy module-scope đơn lẻ cho test_ingest_e2e, hoặc (b) đánh dấu test này chạy
+tách process (pytest-forked) khỏi suite chung, hoặc (c) di chuyển ra eval suite
+Phase 9. Là quyết định cấu trúc test-infra — KHÔNG fix tại Plan 05-06 (Rule 4).
+
+**KHÔNG fix tại Plan 05-06** — ngoài scope (file test Phase 4, pre-existing
+incompatibility với DEF-05-01 fixture; fix cần thay đổi kiến trúc test-infra).
