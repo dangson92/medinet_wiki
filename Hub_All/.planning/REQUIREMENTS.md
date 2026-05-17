@@ -196,9 +196,9 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | USER-01 | Phase 5 (users CRUD) | Done (Plan 05-04) |
 | USER-02 | Phase 5 (reset password) | Done (Plan 05-04) |
 | USER-03 | Phase 5 (profile) | Done (Plan 05-04) |
-| AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; GET /api/audit-logs Wave 3) |
-| AUX-02 | Phase 5 (API key management) | Pending |
-| AUX-03 | Phase 5 (rate limit middleware slowapi) | In Progress (05-02: slowapi Limiter + envelope 429 handler + SEARCH/UPLOAD limit constant module; wiring main.py + decorator router Plan 05-06) |
+| AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; 05-05: AuditQueryService + GET /api/audit-logs router; router mount + integration test Plan 05-06) |
+| AUX-02 | Phase 5 (API key management) | In Progress (05-05: ApiKeyService CRUD + AES-GCM encrypt-at-rest + soft revoke + verify_key + get_api_key_or_jwt X-API-Key dependency; router mount + integration test Plan 05-06) |
+| AUX-03 | Phase 5 (rate limit middleware slowapi) | In Progress (05-02: slowapi Limiter + envelope 429 handler + constant module; 05-05: @limiter.limit decorate GET /api/audit-logs; app.state.limiter wire main.py + 429 test Plan 05-06) |
 | SEARCH-01 | Phase 6 (GET /api/search single-hub) | Pending |
 | SEARCH-02 | Phase 6 (per-query session config HNSW) | Pending |
 | SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Pending |

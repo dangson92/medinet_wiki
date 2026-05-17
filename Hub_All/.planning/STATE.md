@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_in_progress
-last_updated: "2026-05-17T03:29:44Z"
+last_updated: "2026-05-17T03:40:11Z"
 progress:
   total_phases: 10
   completed_phases: 3
@@ -14,7 +14,7 @@ current_phase:
   number: 5
   name: Hub + User + Audit + APIKey + Settings CRUD
   plans_total: 6
-  plans_complete: 4
+  plans_complete: 5
   status: in_progress
   waves: 4
 next_phase:
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 🔄 IN PROGRESS (6 plans / 4 waves / 4/6 executed) |
-| Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01 — DONE 2026-05-17). 05-02 ✅ (Wave 2: hub isolation helper `repositories/hub_isolation.py` + `get_current_user_with_hubs` dependency + slowapi rate-limit module; HUB-02/AUX-03 — DONE 2026-05-17). 05-03 ✅ (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03 — DONE 2026-05-17). 05-04 ✅ (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03 — DONE 2026-05-17). 05-05 📋 (Wave 3: APIKey CRUD + AES-GCM + soft revoke + X-API-Key + GET /api/audit-logs; AUX-01/AUX-02). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
-| Status | **Phase 5 IN PROGRESS — Wave 3 đang chạy (05-03 + 05-04 DONE).** 05-04 thực thi 3 task atomic: `schemas/users.py` (10 Pydantic schema user + profile — UserResponse KHÔNG password_hash), `services/user_service.py` (`UserService` 9 method CRUD + hub_assignments join + reset token log-only + self password change + `UserConflictError`), `routers/users.py` (7 endpoint admin-only — update tách 3 endpoint PUT/PATCH-role/PATCH-status D-07; reset-password KHÔNG trả token) + `routers/profile.py` (3 endpoint self-scoped KHÔNG :id). Router mount main.py defer Plan 05-06. Tiếp theo: 05-05 (APIKey CRUD — cùng Wave 3) → Wave 4 (05-06 wiring + E4 test). |
-| Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-04`: executor agent thực thi 3 task atomic (00ff3b4 schema + 31b6ea5 service + 4192f22 routers). ruff + mypy --strict 4 file clean; route smoke test users 7 path + profile 3 path KHÔNG :id param. 0 deviation. SUMMARY.md tạo + self-check PASSED. |
+| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 🔄 IN PROGRESS (6 plans / 4 waves / 5/6 executed) |
+| Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01 — DONE 2026-05-17). 05-02 ✅ (Wave 2: hub isolation helper `repositories/hub_isolation.py` + `get_current_user_with_hubs` dependency + slowapi rate-limit module; HUB-02/AUX-03 — DONE 2026-05-17). 05-03 ✅ (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03 — DONE 2026-05-17). 05-04 ✅ (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03 — DONE 2026-05-17). 05-05 ✅ (Wave 3: APIKey CRUD + AES-GCM encrypt-at-rest + soft revoke + X-API-Key dependency + GET /api/audit-logs query + @limiter.limit; AUX-01/AUX-02/AUX-03 — DONE 2026-05-17). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
+| Status | **Phase 5 IN PROGRESS — Wave 3 HOÀN TẤT (05-03 + 05-04 + 05-05 DONE).** 05-05 thực thi 3 task atomic: `pkg/crypto.py` (AES-256-GCM encrypt_secret/decrypt_secret — API key encryption-at-rest) + `schemas/api_keys.py` (4 schema — ApiKeyWithPlaintext kế thừa ApiKeyResponse + plain_key) + `schemas/audit.py` (AuditLogResponse), `services/api_key_service.py` (`ApiKeyService` create/get/list/update/revoke soft + verify_key canonical BLOCKER 1) + `services/audit_query_service.py` (filter + LEFT JOIN), `routers/api_keys.py` (5 endpoint admin-only — POST revoke soft D-07) + `routers/audit_logs.py` (GET admin-only + @limiter.limit AUX-03 W4), `auth/dependencies.py` (get_api_key_or_jwt X-API-Key HOẶC JWT). Router mount main.py defer Plan 05-06. Tiếp theo: Wave 4 (05-06 wiring 5 router + slowapi + E4 hub-isolation test). |
+| Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-05`: executor agent (sequential) thực thi 3 task atomic (b3d97f8 crypto+schemas + 06c3a8f services + a7a3571 routers+dependency). ruff + mypy --strict 8 file clean; crypto round-trip smoke OK; route smoke test api-keys 5 endpoint + audit-logs 1 endpoint. 3 auto-fix deviation (mypy generic dict, ruff UP017, dead stmt). AES_KEY dev key sinh + set vào .env gitignored + .env.example placeholder. SUMMARY.md tạo + self-check PASSED. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** · **Phase 5 in progress (4/6 plans)** |
-| Total requirements | 38 v1 REQ-ID · 6 satisfied Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · **9 Phase 5** — HUB-01/03 + USER-01/02/03 done (CRUD endpoint); HUB-02/AUX-01/02/03 infra done, enforce/wiring Wave 4 |
+| Total requirements | 38 v1 REQ-ID · 6 satisfied Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · **9 Phase 5** — HUB-01/03 + USER-01/02/03 done (CRUD endpoint); AUX-01/02/03 done (API key CRUD + audit query + rate-limit endpoint); HUB-02 infra done, enforce/wiring Wave 4 |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 🔄 → 8 |
 
-**Progress bar:** `[██████░░░░] 58% (3/10 phase complete · Phase 5 🔄 in progress 4/6 plans executed) · Next: /gsd-execute-phase 5 plan 05-05 (APIKey CRUD — Wave 3)`
+**Progress bar:** `[██████░░░░] 58% (3/10 phase complete · Phase 5 🔄 in progress 5/6 plans executed) · Next: /gsd-execute-phase 5 plan 05-06 (Wiring + E4 hub-isolation test — Wave 4)`
 
 ---
 
@@ -151,7 +151,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Session Continuity
 
-**Last session (2026-05-17 — Plan 05-04 execute):** `/gsd-execute-phase 5 plan 05-04` → executor agent (sequential) thực thi 3 task atomic:
+**Last session (2026-05-17 — Plan 05-05 execute):** `/gsd-execute-phase 5 plan 05-05` → executor agent (sequential) thực thi 3 task atomic:
+- Task 01 (`b3d97f8`): `pkg/crypto.py` — AES-256-GCM helper: `_load_key` (đọc `settings.aes_key`, base64url-decode, validate 32-byte → ValueError), `encrypt_secret` (nonce 12B random prepend ciphertext → base64url token), `decrypt_secret` (tách nonce decrypt). `schemas/api_keys.py` — 4 Pydantic v2 schema: `CreateApiKeyRequest`/`UpdateApiKeyRequest`/`ApiKeyResponse` (= APIKeyAPI — status derive is_active; requests_today/7d/bandwidth_used=0, allowed_rag_configs=[] hằng)/`ApiKeyWithPlaintext(ApiKeyResponse)` (+plain_key — POST create only). `schemas/audit.py` — `AuditLogResponse` (= AuditLogAPI; is_ai=False, ip/user_agent/duration_ms=None hằng). `pyproject.toml` thêm `cryptography`. `.env.example` AES_KEY documented placeholder.
+- Task 02 (`06c3a8f`): `services/api_key_service.py` — `ApiKeyService` 6 method: `create` (plaintext `mdk_<token_urlsafe(32)>`, key_prefix 8 ký tự, key_hash=encrypt_secret, INSERT JSONB cast → ApiKeyWithPlaintext), `get`/`list` (KHÔNG plaintext), `update` (SET động JSONB cast), `revoke` (soft `is_active=FALSE` + RETURNING id — D-07, KHÔNG DELETE), `verify_key` (BLOCKER 1 canonical name — SELECT WHERE key_prefix + is_active=TRUE, decrypt loop so khớp exact, UPDATE last_used_at, return principal dict). `services/audit_query_service.py` — `AuditQueryService.list` WHERE-builder filter date/action/hub_id + LEFT JOIN users/hubs; actor_type bỏ qua (không có cột).
+- Task 03 (`a7a3571`): `routers/api_keys.py` 5 endpoint admin-only — GET list (cap≤100), POST create→201 (data có plain_key), GET/:id, PUT/:id update, POST/:id/revoke soft; UUID validate→400 INVALID_API_KEY_ID. `routers/audit_logs.py` GET /api/audit-logs admin-only + `@limiter.limit(AUDIT_LOGS_LIMIT)` (W4 AUX-03 — endpoint function có `request: Request` param). `auth/dependencies.py` thêm `get_api_key_or_jwt` (X-API-Key Header alias HOẶC Bearer JWT — gọi `ApiKeyService.verify_key`, Phase 6/7 scaffolding). `auth/__init__.py` re-export.
+- Verification: `ruff check` + `mypy --strict` 8 file clean; crypto round-trip smoke OK; route smoke api-keys 5 endpoint + audit-logs 1. 3 auto-fix deviation (Rule 1: mypy generic `dict`→`dict[str,Any]`; Rule 1: ruff UP017 `timezone.utc`→`UTC`; Rule 3: dead `stmt` + thiếu `text` import). `git diff --diff-filter=D HEAD~3 HEAD` rỗng.
+- AES_KEY: dev key 32-byte base64 sinh local → set vào `Hub_All/api/.env` (gitignored — confirm `git check-ignore`), `.env.example` placeholder rỗng documented. Test fixture AES_KEY defer Plan 05-06 conftest update.
+- SUMMARY.md `.planning/phases/05-hub-user-audit-apikey-settings-crud/05-05-SUMMARY.md` tạo với 3 commit hash + threat model T-05-05-01..08 (7 mitigate + 1 accept) + AUX-03 SC5 partial defer (WARNING 1) + Settings CRUD omission (BLOCKER 2) + self-check PASSED.
+- **AUX-01 + AUX-02 + AUX-03 requirements — API key CRUD + AES-GCM encrypt-at-rest + soft revoke + X-API-Key dependency + audit-logs query + @limiter.limit hoàn tất (router mount + integration test E4 defer Wave 4 Plan 05-06).**
+
+**Previous session (2026-05-17 — Plan 05-04 execute):** `/gsd-execute-phase 5 plan 05-04` → executor agent (sequential) thực thi 3 task atomic:
 - Task 01 (`00ff3b4`): `schemas/users.py` — 10 Pydantic v2 schema: `CreateUserRequest` (email EmailStr + name/password min_length + hub_id + role), `UpdateUserRequest`/`UpdateProfileRequest` (name/phone/department optional — D-07 tách khỏi role/status), `ChangeUserRoleRequest`/`ChangeUserStatusRequest`, `ChangePasswordRequest` (old min_length=1 + new min_length=8), `UserResponse` (= UserAPI — KHÔNG `password_hash` T-05-04-03, `name` map `full_name`, `failed_login_count` hằng 0), `RoleAssignment`, `UserWithRolesResponse`. `UserRole`/`UserStatus` Literal khớp CHECK constraint.
 - Task 02 (`31b6ea5`): `services/user_service.py` — `UserService` 9 method: `create` (hash argon2 + INSERT users + INSERT user_hubs + enqueue audit `user.create` payload chỉ email+role, IntegrityError→`UserConflictError`), `_build_user_with_roles`/`get` (SELECT user + user_hubs join), `list` (WHERE-builder filter role/status/search ILIKE + hub_id subquery + COUNT + LIMIT/OFFSET), `update`/`update_profile`/`_update_fields` (SET clause động — D-07), `change_role` (UPDATE role + upsert user_hubs ON CONFLICT DO NOTHING), `change_status`, `reset_password` (`secrets.token_urlsafe(32)` + Redis ex=3600 + log-only USER-02 — KHÔNG trả token), `change_password_self` (verify_password old → 3-state None/False/True). Raw SQL parametrized, timestamp NOW().
 - Task 03 (`4192f22`): `routers/users.py` 7 endpoint admin-only (`require_role("admin")` mọi endpoint) — list cap per_page≤100 + filter, create→201 conflict→409 EMAIL_CONFLICT, get, PUT update profile (D-07), PATCH role + PATCH status riêng (D-07), POST reset-password (message generic KHÔNG token T-05-04-04). UUID validate→400 INVALID_USER_ID. `routers/profile.py` 3 endpoint self-scoped `get_current_user` (KHÔNG `require_role`, KHÔNG `:id` param — T-05-04-02 viewer chỉ truy cập profile chính mình); change_password 3-state → 404/400 INVALID_PASSWORD/200.
@@ -212,7 +221,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
-**Next action:** **Phase 5 Plan 05-04 DONE (Wave 3 — User CRUD + Profile).** Chạy `/gsd-execute-phase 5 plan 05-05` để hoàn tất Wave 3 — APIKey CRUD + AES-GCM + soft revoke + X-API-Key dependency + GET /api/audit-logs query. Sau Wave 3 → Wave 4 (05-06 wiring main.py: `include_router(hubs_router/users_router/profile_router/...)` + `app.state.limiter` + `add_exception_handler(RateLimitExceeded, ...)` + hub-isolation enforce + E4 hub isolation critical test). Lưu ý DEF-05-01 (cocoindex Environment re-open) + DEF-05-02 (test_watchdog.py fixture `hubs.code`).
+**Next action:** **Phase 5 Wave 3 HOÀN TẤT (05-03 Hub CRUD + 05-04 User CRUD/Profile + 05-05 APIKey CRUD/audit-logs/rate-limit).** Chạy `/gsd-execute-phase 5 plan 05-06` để thực thi Wave 4 — wiring main.py: `include_router(hubs_router/users_router/profile_router/api_keys_router/audit_logs_router)` + `app.state.limiter = limiter` + `add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)` + hub-isolation enforce + E4 hub-isolation critical test + integration test suite (api key + audit logger + rate limit 429). 05-06 cũng tạo `auth/api_key.py` (`require_api_key` external — gọi cùng `verify_key`). Lưu ý: DEF-05-01 (cocoindex Environment re-open — cần fixture mock chung cho integration test Wave 4) + DEF-05-02 (test_watchdog.py fixture `hubs.code`). AES_KEY test fixture cần set deterministic trong conftest cho AES-GCM round-trip reproducible.
 
 **Files cần đọc khi resume:**
 
