@@ -30,9 +30,9 @@
 
 ### HUB — Hub Registry CRUD + Isolation (3 REQ)
 
-- [ ] **HUB-01**: `GET/POST /api/hubs` + `GET/PATCH/DELETE /api/hubs/:id` — CRUD hub registry. Schema Postgres: drop col `chroma_collection`, drop col legacy M1 (`extractor_used` ở documents). Pagination `page` + `per_page` (cap `min(per_page, 100)`).
+- [x] **HUB-01**: `GET/POST /api/hubs` + `GET/PUT /api/hubs/:id` + `PATCH /api/hubs/:id/status` — CRUD hub registry (D-07: PUT update KHÔNG PATCH; status endpoint riêng; D-06: KHÔNG test-connection). Schema Postgres: drop col `chroma_collection`/`db_*` (D-05). Pagination `page` + `per_page` (cap `min(per_page, 100)`). ✓ Plan 05-03 (router/service/schema).
 - [ ] **HUB-02**: Hub isolation enforce ở repository layer — mọi query có `WHERE hub_id = $1` từ user's hub assignment. Editor of Hub A KHÔNG thể `PATCH/DELETE` document của Hub B kể cả khi explicit `hub_id` trong payload. Test integration mandatory.
-- [ ] **HUB-03**: `GET /api/hubs/:id/stats` — counts documents/chunks/queries/users trong hub. Field counts từ Postgres aggregate (KHÔNG từ ChromaDB).
+- [x] **HUB-03**: `GET /api/hubs/:id/stats` — counts documents/chunks/users trong hub từ Postgres aggregate (KHÔNG từ ChromaDB). `query_count` defer Phase 6/7 (chưa có nguồn data — partial-coverage có chủ đích). ✓ Plan 05-03.
 
 ### USER — User Management + RBAC (3 REQ)
 
@@ -190,9 +190,9 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | INGEST-06 | Phase 4 (heartbeat + watchdog) | Pending |
 | INGEST-07 | Phase 4 (DELETE /api/documents/:id) | Pending |
 | INGEST-08 | Phase 4 (GET /api/documents list + filter) | Pending |
-| HUB-01 | Phase 5 (hubs CRUD) | In Progress (05-01: migration 0003 schema; CRUD endpoint Wave 3) |
+| HUB-01 | Phase 5 (hubs CRUD) | Done (05-01: migration 0003 schema; 05-03: router/service/schema 6 endpoint) |
 | HUB-02 | Phase 5 (hub isolation repo layer) | In Progress (05-02: hub_filter_clause + verify_hub_access + get_current_user_with_hubs repository helper; enforce ở service Wave 3 + E4 critical test Plan 05-06) |
-| HUB-03 | Phase 5 (hubs/:id/stats) | Pending |
+| HUB-03 | Phase 5 (hubs/:id/stats) | Done (05-03: stats Postgres aggregate 3 count; query_count defer Phase 6/7) |
 | USER-01 | Phase 5 (users CRUD) | Pending |
 | USER-02 | Phase 5 (reset password) | Pending |
 | USER-03 | Phase 5 (profile) | Pending |
