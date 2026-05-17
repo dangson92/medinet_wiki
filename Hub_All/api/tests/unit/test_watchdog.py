@@ -73,12 +73,21 @@ async def _seed_hub_document(
     hub_id = uuid.uuid4()
     doc_id = uuid.uuid4()
     async with engine.begin() as conn:
+        # Migration 0003 (Plan 05-01) thêm hubs.code / hubs.subdomain NOT NULL
+        # (server_default đã drop — row mới phải set tường minh). hubs.status
+        # NOT NULL giữ server_default 'active' nên không cần truyền.
         await conn.execute(
             text(
-                "INSERT INTO hubs (id, slug, name, is_active, created_at) "
-                "VALUES (:id, :slug, 'h', TRUE, NOW())"
+                "INSERT INTO hubs "
+                "(id, slug, code, subdomain, name, is_active, created_at) "
+                "VALUES (:id, :slug, :code, :subdomain, 'h', TRUE, NOW())"
             ),
-            {"id": str(hub_id), "slug": f"hub-{hub_id.hex[:8]}"},
+            {
+                "id": str(hub_id),
+                "slug": f"hub-{hub_id.hex[:8]}",
+                "code": f"hub-{hub_id.hex[:8]}",
+                "subdomain": f"hub-{hub_id.hex[:8]}",
+            },
         )
         hb_clause = (
             f"NOW() - INTERVAL '{last_heartbeat_offset_minutes} minutes'"
