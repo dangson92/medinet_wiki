@@ -10,34 +10,30 @@ dependencies = [
     "pydantic[email]>=2.7.0,<3",
     "pydantic-settings>=2.6,<3",
     "python-multipart>=0.0.12",
-
     # RAG core
     "cocoindex==1.0.3",
     "litellm>=1.82,<2",
     "pgvector==0.4.2",
-
     # Database
     "asyncpg==0.30.0",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
     "alembic==1.18.4",
     "redis>=7.1.1,<8",
-
     # Auth
     "pyjwt[crypto]>=2.12,<3",
     "pwdlib[argon2]==0.3.0",
     "argon2-cffi>=25.1.0",
-
     # Document parsing (no OCR — D4)
     "pypdf>=5.0,<6",
     "python-docx==1.2.0",
     "markdown-it-py>=3,<4",
     "chardet>=5,<6",
-
     # Observability + util
     "structlog>=25.0,<26",
     "tenacity>=9,<10",
     "typer>=0.12,<1",
     "httpx>=0.27,<1",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

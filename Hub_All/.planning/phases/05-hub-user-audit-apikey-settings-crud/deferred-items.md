@@ -26,3 +26,29 @@ sẽ cần giải pháp chung — ví dụ: fixture cocoindex mock, hoặc tách
 xử lý — thêm fixture `app_no_cocoindex` hoặc mock `setup_cocoindex` ở conftest.
 
 **KHÔNG fix tại Plan 05-01** — ngoài scope (pre-existing, không do task này tạo).
+
+---
+
+## DEF-05-02 — test_watchdog.py fixture chưa cập nhật cột `hubs.code` NOT NULL (pre-existing post-05-01)
+
+**Phát hiện:** Plan 05-02 (regression check `uv run pytest tests/unit`).
+
+**Mô tả:** 5 test trong `tests/unit/test_watchdog.py` FAIL với
+`asyncpg.exceptions.NotNullViolationError: null value in column "code" of
+relation "hubs"`. Migration 0003 (Plan 05-01 Task 1) thêm cột `hubs.code`
+NOT NULL nhưng helper insert hub trong `test_watchdog.py` (Phase 4) chưa
+truyền `code` → vi phạm NOT NULL constraint.
+
+**Bằng chứng:** `uv run pytest tests/unit/test_watchdog.py::test_watchdog_skips_pending`
+→ NotNullViolationError trên `hubs.code`. Plan 05-02 KHÔNG touch bảng `hubs`,
+watchdog, hay file test này.
+
+**Tác động:** 5 watchdog unit test fail. KHÔNG ảnh hưởng hub isolation /
+rate-limit của Plan 05-02. Pre-existing — do migration 0003 (05-01), KHÔNG do
+Plan 05-02 gây ra; chỉ lộ ra khi 05-02 chạy full unit suite làm regression check.
+
+**Đề xuất:** Plan cập nhật helper insert hub trong `test_watchdog.py` truyền
+`code` (+ `subdomain`/`status` nếu cần). Wave 3 (05-03 Hub CRUD) hoặc Phase 10
+hardening xử lý — cùng lúc rà các test fixture insert `hubs` khác.
+
+**KHÔNG fix tại Plan 05-02** — ngoài scope (file test Phase 4, pre-existing do 05-01).
