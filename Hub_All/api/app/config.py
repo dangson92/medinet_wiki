@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     # Settings encryption (Phase 5)
     aes_key: str = "replace-with-32-byte-base64-key"
 
+    # Audit logger (Phase 5 AUX-01 — asyncio.Queue batch flush)
+    audit_batch_size: int = 128
+    audit_flush_interval_seconds: float = 2.0
+    audit_queue_max_size: int = 10000
+    # Rate limit (Phase 5 AUX-03 — slowapi; Plan 05-02 consume)
+    rate_limit_search_per_minute: int = 100
+    rate_limit_upload_per_minute: int = 30
+    rate_limit_audit_logs_per_minute: int = 60
+    rate_limit_enabled: bool = True
+
     # CORS (Phase 3 wire vào middleware — Phase 1 đã load + expose)
     # NoDecode: pydantic-settings v2 mặc định JSON-decode complex type → CSV
     # `http://a:5173,http://b:5173` raise SettingsError. NoDecode để raw string
