@@ -36,9 +36,9 @@
 
 ### USER — User Management + RBAC (3 REQ)
 
-- [ ] **USER-01**: `GET/POST /api/users` + `GET/PATCH/DELETE /api/users/:id` — admin-only CRUD user. Field: email, full_name, role, hub_assignments[].
-- [ ] **USER-02**: `POST /api/users/:id/reset-password` — admin trigger reset, sinh token 1-time TTL 1h gửi qua email/log (defer email send v4.0, log only M2).
-- [ ] **USER-03**: `GET /api/users/:id/profile` (self hoặc admin) + `PATCH /api/users/me/profile` (self only) — full_name, avatar (defer upload v4.0).
+- [x] **USER-01**: `GET/POST /api/users` + `GET/PATCH/DELETE /api/users/:id` — admin-only CRUD user. Field: email, full_name, role, hub_assignments[]. (Plan 05-04 — D-07: update tách `PUT /:id` + `PATCH /:id/role` + `PATCH /:id/status`; router mount Wave 4.)
+- [x] **USER-02**: `POST /api/users/:id/reset-password` — admin trigger reset, sinh token 1-time TTL 1h gửi qua email/log (defer email send v4.0, log only M2). (Plan 05-04 — token Redis ex=3600 + log console; KHÔNG trả qua API.)
+- [x] **USER-03**: `GET /api/users/:id/profile` (self hoặc admin) + `PATCH /api/users/me/profile` (self only) — full_name, avatar (defer upload v4.0). (Plan 05-04 — D-07: dùng `/api/profile` self-scoped GET/PUT + POST /password; router KHÔNG :id param.)
 
 ### INGEST — CocoIndex Flow + Document Upload (8 REQ)
 
@@ -193,9 +193,9 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | HUB-01 | Phase 5 (hubs CRUD) | Done (05-01: migration 0003 schema; 05-03: router/service/schema 6 endpoint) |
 | HUB-02 | Phase 5 (hub isolation repo layer) | In Progress (05-02: hub_filter_clause + verify_hub_access + get_current_user_with_hubs repository helper; enforce ở service Wave 3 + E4 critical test Plan 05-06) |
 | HUB-03 | Phase 5 (hubs/:id/stats) | Done (05-03: stats Postgres aggregate 3 count; query_count defer Phase 6/7) |
-| USER-01 | Phase 5 (users CRUD) | Pending |
-| USER-02 | Phase 5 (reset password) | Pending |
-| USER-03 | Phase 5 (profile) | Pending |
+| USER-01 | Phase 5 (users CRUD) | Done (Plan 05-04) |
+| USER-02 | Phase 5 (reset password) | Done (Plan 05-04) |
+| USER-03 | Phase 5 (profile) | Done (Plan 05-04) |
 | AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; GET /api/audit-logs Wave 3) |
 | AUX-02 | Phase 5 (API key management) | Pending |
 | AUX-03 | Phase 5 (rate limit middleware slowapi) | In Progress (05-02: slowapi Limiter + envelope 429 handler + SEARCH/UPLOAD limit constant module; wiring main.py + decorator router Plan 05-06) |
