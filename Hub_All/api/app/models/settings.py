@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Integer,
     PrimaryKeyConstraint,
     Text,
     text,
@@ -77,4 +78,14 @@ class ApiKey(UUIDMixin, TimestampMixin, Base):
     )
     expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # Phase 5 (migration 0003) — contract frontend APIKeyAPI.
+    permissions: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    allowed_hub_ids: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    rate_limit: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("100")
     )

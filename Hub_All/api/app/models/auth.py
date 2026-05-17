@@ -40,11 +40,22 @@ class User(UUIDMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("TRUE")
     )
+    # Phase 5 (migration 0003) — contract frontend UserAPI.
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
+    department: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'active'")
+    )
 
     __table_args__ = (
         CheckConstraint(
             "role IN ('admin', 'editor', 'viewer')",
             name="role_enum",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'disabled')",
+            name="user_status_enum",
         ),
     )
 
