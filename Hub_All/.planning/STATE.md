@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: phase_in_progress
-last_updated: "2026-05-17T03:40:11Z"
+last_updated: "2026-05-17T06:13:50Z"
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 28
-  completed_plans: 20
-  percent: 58
+  completed_plans: 21
+  percent: 60
 current_phase:
   number: 5
   name: Hub + User + Audit + APIKey + Settings CRUD
   plans_total: 6
-  plans_complete: 5
-  status: in_progress
+  plans_complete: 6
+  status: plans_complete
   waves: 4
 next_phase:
   number: 6
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** 🔄 IN PROGRESS (6 plans / 4 waves / 5/6 executed) |
-| Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01 — DONE 2026-05-17). 05-02 ✅ (Wave 2: hub isolation helper `repositories/hub_isolation.py` + `get_current_user_with_hubs` dependency + slowapi rate-limit module; HUB-02/AUX-03 — DONE 2026-05-17). 05-03 ✅ (Wave 3: Hub CRUD router/service/schema + stats; HUB-01/HUB-03 — DONE 2026-05-17). 05-04 ✅ (Wave 3: User CRUD 3 update endpoint tách + reset-password log-only + Profile `/api/profile`; USER-01/02/03 — DONE 2026-05-17). 05-05 ✅ (Wave 3: APIKey CRUD + AES-GCM encrypt-at-rest + soft revoke + X-API-Key dependency + GET /api/audit-logs query + @limiter.limit; AUX-01/AUX-02/AUX-03 — DONE 2026-05-17). 05-06 📋 (Wave 4: wiring main.py + hub-isolation enforce + E4 critical test; HUB-02/AUX-02/AUX-03). |
-| Status | **Phase 5 IN PROGRESS — Wave 3 HOÀN TẤT (05-03 + 05-04 + 05-05 DONE).** 05-05 thực thi 3 task atomic: `pkg/crypto.py` (AES-256-GCM encrypt_secret/decrypt_secret — API key encryption-at-rest) + `schemas/api_keys.py` (4 schema — ApiKeyWithPlaintext kế thừa ApiKeyResponse + plain_key) + `schemas/audit.py` (AuditLogResponse), `services/api_key_service.py` (`ApiKeyService` create/get/list/update/revoke soft + verify_key canonical BLOCKER 1) + `services/audit_query_service.py` (filter + LEFT JOIN), `routers/api_keys.py` (5 endpoint admin-only — POST revoke soft D-07) + `routers/audit_logs.py` (GET admin-only + @limiter.limit AUX-03 W4), `auth/dependencies.py` (get_api_key_or_jwt X-API-Key HOẶC JWT). Router mount main.py defer Plan 05-06. Tiếp theo: Wave 4 (05-06 wiring 5 router + slowapi + E4 hub-isolation test). |
-| Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-05`: executor agent (sequential) thực thi 3 task atomic (b3d97f8 crypto+schemas + 06c3a8f services + a7a3571 routers+dependency). ruff + mypy --strict 8 file clean; crypto round-trip smoke OK; route smoke test api-keys 5 endpoint + audit-logs 1 endpoint. 3 auto-fix deviation (mypy generic dict, ruff UP017, dead stmt). AES_KEY dev key sinh + set vào .env gitignored + .env.example placeholder. SUMMARY.md tạo + self-check PASSED. |
+| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** ✅ PLANS COMPLETE (6 plans / 4 waves / 6/6 executed) |
+| Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01). 05-02 ✅ (Wave 2: hub isolation helper + get_current_user_with_hubs + slowapi rate-limit module; HUB-02/AUX-03). 05-03 ✅ (Wave 3: Hub CRUD; HUB-01/HUB-03). 05-04 ✅ (Wave 3: User CRUD + reset-password + Profile; USER-01/02/03). 05-05 ✅ (Wave 3: APIKey CRUD + AES-GCM + X-API-Key + audit-logs query; AUX-01/02/03). 05-06 ✅ (Wave 4: wiring 5 router main.py + slowapi limiter + HubIsolationError handler + X-API-Key require_api_key + hub-isolation enforce document DELETE + E4 critical test suite — DONE 2026-05-17). |
+| Status | **Phase 5 PLANS COMPLETE — 6/6 plans executed.** 05-06 thực thi 3 task atomic: Task 1 (`d9e59e2`) routers/__init__.py export 6 router + main.py mount 5 router Phase 5 + wire slowapi (app.state.limiter + RateLimitExceeded → 429 envelope) + HubIsolationError → 403 handler + auth/api_key.py require_api_key (gọi verify_key — BLOCKER 1). Task 2 (`e32af03`) documents_service.delete enforce verify_hub_access (hub_id load từ DB, KHÔNG payload) + enqueue_audit security.hub_isolation_violation tại điểm reject; documents.py DELETE endpoint editor-eligible + viewer reject + HubIsolationError → 403. Task 3 (`5f5bfea`) conftest fixtures (_insert_hub/_assign_user_hub + TRUNCATE mở rộng + AES_KEY test) + test_hub_isolation.py 6 critical test E4 + test_rate_limit.py 4 test. **E4 EXIT criteria VERIFIED — hub isolation genuinely PASS against real DB; Phase 5 đủ điều kiện ship M2.** Tiếp theo: `/gsd-verify-work 5` UAT rồi `/gsd-execute-phase 6`. |
+| Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-06`: executor agent (sequential) thực thi 3 task atomic (d9e59e2 wiring + e32af03 hub-isolation enforce + 5f5bfea E4 test suite). ruff app+tests clean; mypy --strict app 62 source clean. E4 verify: test_hub_isolation.py 6 critical test PASS — editor cross-hub DELETE 403 + document vẫn tồn tại + audit security.hub_isolation_violation logged. pytest -m critical chạy per-file (DEF-05-01 cocoindex Environment singleton): 4 unit + 44 integration critical PASS; ngoại lệ DUY NHẤT test_ingest_e2e::test_e2e_upload_docx_to_chunks_completed (DEF-05-03 pre-existing). 4 auto-fix deviation (Rule 3 mypy type-ignore add_exception_handler, Rule 3 Sequence[str] tránh shadow class method list, Rule 1 _create_hub DEF-05-02 leftover 2 file, Rule 3 _spawn_rbac_app DEF-05-01 leftover). SUMMARY.md tạo + self-check PASSED. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** · **Phase 5 in progress (4/6 plans)** |
-| Total requirements | 38 v1 REQ-ID · 6 satisfied Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · **9 Phase 5** — HUB-01/03 + USER-01/02/03 done (CRUD endpoint); AUX-01/02/03 done (API key CRUD + audit query + rate-limit endpoint); HUB-02 infra done, enforce/wiring Wave 4 |
+| Total requirements | 38 v1 REQ-ID · 6 satisfied Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · **9 Phase 5 DONE** — HUB-01/02/03 + USER-01/02/03 + AUX-01/02/03 (CRUD endpoint mounted + hub isolation enforce E4 verified + rate-limit + X-API-Key) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
-| Auth branch | 3 ✓ (5/5 plans done) → 5 🔄 → 8 |
+| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
 
-**Progress bar:** `[██████░░░░] 58% (3/10 phase complete · Phase 5 🔄 in progress 5/6 plans executed) · Next: /gsd-execute-phase 5 plan 05-06 (Wiring + E4 hub-isolation test — Wave 4)`
+**Progress bar:** `[██████░░░░] 60% (3/10 phase complete · Phase 5 ✅ plans complete 6/6 executed) · Next: /gsd-verify-work 5 (UAT) rồi /gsd-execute-phase 6 (Search API)`
 
 ---
 
@@ -221,7 +221,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
-**Next action:** **Phase 5 Wave 3 HOÀN TẤT (05-03 Hub CRUD + 05-04 User CRUD/Profile + 05-05 APIKey CRUD/audit-logs/rate-limit).** Chạy `/gsd-execute-phase 5 plan 05-06` để thực thi Wave 4 — wiring main.py: `include_router(hubs_router/users_router/profile_router/api_keys_router/audit_logs_router)` + `app.state.limiter = limiter` + `add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)` + hub-isolation enforce + E4 hub-isolation critical test + integration test suite (api key + audit logger + rate limit 429). 05-06 cũng tạo `auth/api_key.py` (`require_api_key` external — gọi cùng `verify_key`). Lưu ý: DEF-05-01 (cocoindex Environment re-open — cần fixture mock chung cho integration test Wave 4) + DEF-05-02 (test_watchdog.py fixture `hubs.code`). AES_KEY test fixture cần set deterministic trong conftest cho AES-GCM round-trip reproducible.
+**Last session (2026-05-17 — Plan 05-06 execute — PHASE 5 PLANS COMPLETE):** `/gsd-execute-phase 5 plan 05-06` → executor agent (sequential) thực thi 3 task atomic:
+- Task 01 (`d9e59e2`): `routers/__init__.py` export 6 router. `main.py` `create_app()` mount 5 router Phase 5 (hubs/users/profile/api_keys/audit_logs — tổng 7 router) + wire slowapi (`app.state.limiter = limiter` + `add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)` → 429 envelope) + `@app.exception_handler(HubIsolationError)` → 403 envelope. `auth/api_key.py` mới — `require_api_key` X-API-Key dependency (thiếu header → 401 API_KEY_MISSING; key sai → 401 API_KEY_INVALID; gọi `ApiKeyService.verify_key` — BLOCKER 1). `auth/__init__.py` re-export.
+- Task 02 (`e32af03`): `documents_service.delete()` retrofit hub isolation — signature `deleted_by:UUID` → `actor:User` + `actor_hub_ids:Sequence[str]`; gọi `verify_hub_access` (hub_id load TỪ DB row — T-05-06-02 KHÔNG payload); cross-hub reject → `enqueue_audit(security.hub_isolation_violation)` TẠI điểm reject TRƯỚC raise (T-05-06-03); admin bypass. `documents.py` DELETE endpoint auth `require_role("admin")` → `get_current_user_with_hubs` (editor-eligible); viewer reject 403 trước service; `HubIsolationError` → 403 envelope.
+- Task 03 (`5f5bfea`): `conftest.py` TRUNCATE mở rộng (hubs/audit_logs/api_keys/documents/chunks) + helper `_insert_hub`/`_assign_user_hub` + AES_KEY test deterministic. `test_hub_isolation.py` 6 critical test E4 (editor cross-hub 403 + document tồn tại, audit logged, admin bypass 204, editor own-hub 204, viewer 403, verify_hub_access unit). `test_rate_limit.py` 4 test (429 envelope shape, under-limit pass, X-API-Key 401, auth/me không limit). Fix DEF-05-02 leftover (`_create_hub` test_documents_upload + test_ingest_e2e) + DEF-05-01 leftover (`_spawn_rbac_app` COCOINDEX_SKIP_SETUP + reset_queue).
+- Verification: `ruff check app tests` clean; `mypy --strict app` 62 source clean. **E4 EXIT criteria VERIFIED — test_hub_isolation.py 6 critical test genuinely PASS against real DB testcontainer.** `pytest -m critical` per-file (DEF-05-01 — cocoindex Environment singleton KHÔNG chạy nhiều file boot cocoindex 1 process): 4 unit + 44 integration critical PASS; ngoại lệ DUY NHẤT `test_ingest_e2e::test_e2e_upload_docx_to_chunks_completed` (DEF-05-03 pre-existing — test cần cocoindex thật, mâu thuẫn shared fixture).
+- 4 auto-fix deviation: Rule 3 (mypy type-ignore add_exception_handler), Rule 3 (Sequence[str] tránh shadow class method `list`), Rule 1 (_create_hub DEF-05-02 leftover 2 file), Rule 3 (_spawn_rbac_app DEF-05-01 leftover). DEF-05-03 logged deferred-items.md.
+- SUMMARY.md `.planning/phases/05-hub-user-audit-apikey-settings-crud/05-06-SUMMARY.md` tạo với 3 commit hash + threat model T-05-06-01..07 (6 mitigate + 1 accept) + E4 verified + self-check PASSED.
+- **HUB-02 + AUX-02 + AUX-03 requirements — router wiring + hub isolation enforce + E4 critical test + rate-limit + X-API-Key hoàn tất. Phase 5 PLANS COMPLETE (6/6).**
+
+**Next action:** **Phase 5 PLANS COMPLETE (6/6 — tất cả 9 REQ-ID HUB/USER/AUX done; E4 EXIT criteria VERIFIED).** Chạy `/gsd-verify-work 5` để UAT Phase 5 (5 ROADMAP success criteria) rồi `/gsd-execute-phase 6` (Search API Single + Cross-Hub). Lưu ý carry-over: DEF-05-03 (test_ingest_e2e cần cocoindex thật — Phase 10 hardening giải bằng fixture riêng / pytest-forked). `pytest -m critical` phải chạy per-file do DEF-05-01 cocoindex Environment singleton (1 lệnh full sẽ treo) — Phase 10 cân nhắc pytest-forked cho integration suite.
 
 **Files cần đọc khi resume:**
 

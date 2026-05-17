@@ -31,7 +31,7 @@
 ### HUB — Hub Registry CRUD + Isolation (3 REQ)
 
 - [x] **HUB-01**: `GET/POST /api/hubs` + `GET/PUT /api/hubs/:id` + `PATCH /api/hubs/:id/status` — CRUD hub registry (D-07: PUT update KHÔNG PATCH; status endpoint riêng; D-06: KHÔNG test-connection). Schema Postgres: drop col `chroma_collection`/`db_*` (D-05). Pagination `page` + `per_page` (cap `min(per_page, 100)`). ✓ Plan 05-03 (router/service/schema).
-- [ ] **HUB-02**: Hub isolation enforce ở repository layer — mọi query có `WHERE hub_id = $1` từ user's hub assignment. Editor of Hub A KHÔNG thể `PATCH/DELETE` document của Hub B kể cả khi explicit `hub_id` trong payload. Test integration mandatory.
+- [x] **HUB-02**: Hub isolation enforce ở repository layer — mọi query có `WHERE hub_id = $1` từ user's hub assignment. Editor of Hub A KHÔNG thể `PATCH/DELETE` document của Hub B kể cả khi explicit `hub_id` trong payload. Test integration mandatory. ✓ (Plan 05-02 hub_isolation.py helper; Plan 05-06 enforce — documents_service.delete() gọi verify_hub_access (hub_id load từ DB row, KHÔNG payload) + enqueue_audit security.hub_isolation_violation tại điểm reject; DELETE /api/documents/:id editor-eligible; test_hub_isolation.py 6 critical test E4 PASS against real DB — editor cross-hub 403 + document tồn tại + audit logged. 2026-05-17)
 - [x] **HUB-03**: `GET /api/hubs/:id/stats` — counts documents/chunks/users trong hub từ Postgres aggregate (KHÔNG từ ChromaDB). `query_count` defer Phase 6/7 (chưa có nguồn data — partial-coverage có chủ đích). ✓ Plan 05-03.
 
 ### USER — User Management + RBAC (3 REQ)
@@ -72,8 +72,8 @@
 ### AUDIT + APIKEY + AUX (3 REQ)
 
 - [ ] **AUX-01**: Audit logger asyncio.Queue + batch flush 2s/128 → `audit_logs(user_id, action, target_type, target_id, hub_id, payload JSONB, request_id, created_at)`. Action enum: `auth.login`, `auth.refresh`, `document.upload`, `document.delete`, `rag-config.update`, `hub.create`, `hub.update`, `user.create`. `GET /api/audit-logs` admin-only.
-- [ ] **AUX-02**: API key management `GET/POST/DELETE /api/api-keys` — admin sinh API key cho external integration. Encrypt at rest (AES-GCM với `AES_KEY` env — schema M2 mới, không có data mã hóa cũ cần tương thích). Auth middleware accept header `X-API-Key:` ngoài JWT.
-- [ ] **AUX-03**: Rate limit middleware (slowapi) — 100 req/min/user trên search/ask, 30 req/min/user trên upload, KHÔNG limit trên auth/me.
+- [x] **AUX-02**: API key management `GET/POST/DELETE /api/api-keys` — admin sinh API key cho external integration. Encrypt at rest (AES-GCM với `AES_KEY` env — schema M2 mới, không có data mã hóa cũ cần tương thích). Auth middleware accept header `X-API-Key:` ngoài JWT. ✓ (Plan 05-05 ApiKeyService CRUD + AES-GCM encrypt-at-rest + soft revoke + verify_key; Plan 05-06 router api_keys mounted main.py + auth/api_key.py require_api_key X-API-Key dependency; test_x_api_key_invalid_rejected critical PASS. 2026-05-17)
+- [x] **AUX-03**: Rate limit middleware (slowapi) — 100 req/min/user trên search/ask, 30 req/min/user trên upload, KHÔNG limit trên auth/me. ✓ (Plan 05-02 slowapi Limiter + 429 envelope handler; Plan 05-05 @limiter.limit GET /api/audit-logs; Plan 05-06 app.state.limiter wired main.py + add_exception_handler(RateLimitExceeded); test_rate_limit.py 429 envelope shape + auth/me không limit PASS. /api/search + /api/ask decoration defer Phase 6/7 — endpoint chưa tồn tại. 2026-05-17)
 
 ### EVAL — Quality Gate ≥75% top-3 (4 REQ)
 
@@ -191,14 +191,14 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | INGEST-07 | Phase 4 (DELETE /api/documents/:id) | Pending |
 | INGEST-08 | Phase 4 (GET /api/documents list + filter) | Pending |
 | HUB-01 | Phase 5 (hubs CRUD) | Done (05-01: migration 0003 schema; 05-03: router/service/schema 6 endpoint) |
-| HUB-02 | Phase 5 (hub isolation repo layer) | In Progress (05-02: hub_filter_clause + verify_hub_access + get_current_user_with_hubs repository helper; enforce ở service Wave 3 + E4 critical test Plan 05-06) |
+| HUB-02 | Phase 5 (hub isolation repo layer) | Done (05-02 helper; 05-06 enforce documents_service.delete + audit emit; test_hub_isolation.py 6 critical test E4 PASS) |
 | HUB-03 | Phase 5 (hubs/:id/stats) | Done (05-03: stats Postgres aggregate 3 count; query_count defer Phase 6/7) |
 | USER-01 | Phase 5 (users CRUD) | Done (Plan 05-04) |
 | USER-02 | Phase 5 (reset password) | Done (Plan 05-04) |
 | USER-03 | Phase 5 (profile) | Done (Plan 05-04) |
 | AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; 05-05: AuditQueryService + GET /api/audit-logs router; router mount + integration test Plan 05-06) |
-| AUX-02 | Phase 5 (API key management) | In Progress (05-05: ApiKeyService CRUD + AES-GCM encrypt-at-rest + soft revoke + verify_key + get_api_key_or_jwt X-API-Key dependency; router mount + integration test Plan 05-06) |
-| AUX-03 | Phase 5 (rate limit middleware slowapi) | In Progress (05-02: slowapi Limiter + envelope 429 handler + constant module; 05-05: @limiter.limit decorate GET /api/audit-logs; app.state.limiter wire main.py + 429 test Plan 05-06) |
+| AUX-02 | Phase 5 (API key management) | Done (05-05 ApiKeyService CRUD + AES-GCM + verify_key; 05-06 router mounted + auth/api_key.py require_api_key X-API-Key; test_x_api_key_invalid_rejected critical PASS) |
+| AUX-03 | Phase 5 (rate limit middleware slowapi) | Done (05-02 Limiter + 429 handler; 05-05 @limiter.limit audit-logs; 05-06 app.state.limiter wired main.py + test_rate_limit.py 429 envelope PASS) |
 | SEARCH-01 | Phase 6 (GET /api/search single-hub) | Pending |
 | SEARCH-02 | Phase 6 (per-query session config HNSW) | Pending |
 | SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Pending |
