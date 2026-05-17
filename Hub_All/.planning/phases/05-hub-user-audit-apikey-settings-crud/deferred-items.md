@@ -4,6 +4,8 @@ Mục out-of-scope phát hiện trong lúc execute Phase 5, KHÔNG fix tại pla
 
 ## DEF-05-01 — cocoindex Environment không re-open được trong cùng process (pre-existing Phase 4)
 
+**TRẠNG THÁI: RESOLVED** (2026-05-17, commit `2796c13`) — fix-task test-infra Wave 3-4.
+
 **Phát hiện:** Plan 05-01 Task 4 (test_audit_logger.py).
 
 **Mô tả:** Fixture `app_with_auth` (tests/integration/conftest.py) chạy full
@@ -27,9 +29,27 @@ xử lý — thêm fixture `app_no_cocoindex` hoặc mock `setup_cocoindex` ở 
 
 **KHÔNG fix tại Plan 05-01** — ngoài scope (pre-existing, không do task này tạo).
 
+**Giải pháp (commit `2796c13`):** Escape-hatch env-flag (option ít xâm lấn nhất).
+- `app/main.py` lifespan: khi env `COCOINDEX_SKIP_SETUP=1`, bỏ qua
+  `setup_cocoindex()` hoàn toàn → singleton `core.Environment` không bao giờ
+  được open trong test process. Production không set flag → fail-fast giữ nguyên.
+- `tests/integration/conftest.py` fixture `app_with_auth`: set
+  `COCOINDEX_SKIP_SETUP=1`. Test cần `cocoindex_app` (A4 BackgroundTask) cấp
+  mock vào `app.state.cocoindex_app` sau lifespan (xem `mock_cocoindex_app`).
+- Cùng commit sửa 2 lỗi cùng class "process-global state leak giữa test" lộ ra
+  khi fixture dùng được nhiều test: (1) `audit_service._queue` asyncio.Queue
+  module-global treo `queue.get()` trên event loop test sau — fixture gọi
+  `reset_queue()`; (2) helper `_create_hub` thiếu cột NOT NULL migration 0003.
+
+**Verify:** `pytest tests/integration/test_documents_list_delete.py` → 7 passed,
+0 errors (trước đó 1 passed, 6 errors). Full check: `test_watchdog.py` +
+`test_documents_list_delete.py` → 13 passed, 0 errors.
+
 ---
 
 ## DEF-05-02 — test_watchdog.py fixture chưa cập nhật cột `hubs.code` NOT NULL (pre-existing post-05-01)
+
+**TRẠNG THÁI: RESOLVED** (2026-05-17, commit `a36fde9`) — fix-task test-infra Wave 3-4.
 
 **Phát hiện:** Plan 05-02 (regression check `uv run pytest tests/unit`).
 
@@ -52,3 +72,11 @@ Plan 05-02 gây ra; chỉ lộ ra khi 05-02 chạy full unit suite làm regressi
 hardening xử lý — cùng lúc rà các test fixture insert `hubs` khác.
 
 **KHÔNG fix tại Plan 05-02** — ngoài scope (file test Phase 4, pre-existing do 05-01).
+
+**Giải pháp (commit `a36fde9`):** Helper `_seed_hub_document` trong
+`tests/unit/test_watchdog.py` cập nhật INSERT `hubs` truyền `code` + `subdomain`
+(migration 0003 drop server_default 2 cột này → row mới phải set tường minh).
+Dùng giá trị unique `hub-{hex}` cho `code` vì có constraint `uq_hubs_code`.
+`hubs.status` NOT NULL giữ `server_default 'active'` nên không cần truyền.
+
+**Verify:** `pytest tests/unit/test_watchdog.py` → 6 passed, 0 errors.
