@@ -106,18 +106,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     #    KHÔNG mask architectural blocker bằng silent warning + cocoindex_app=None.
     app.state.cocoindex_app = None
     import asyncio
+    import os
 
-    from app.rag.setup import get_cocoindex_app, setup_cocoindex
+    # Test-mode escape hatch (DEF-05-01): cocoindex 1.0.3 `core.Environment` là
+    # process-global singleton — KHÔNG re-open được sau khi đã open + close.
+    # Integration test dùng fixture `app_with_auth` cho >1 test sẽ FAIL từ test
+    # thứ 2 với `environment already open`. CRUD test (hub/user/apikey) KHÔNG
+    # cần cocoindex ingestion flow — chỉ cần app + DB + auth. Khi env var
+    # `COCOINDEX_SKIP_SETUP=1` set, bỏ qua setup_cocoindex() hoàn toàn; test cấp
+    # mock `app.state.cocoindex_app` sau lifespan nếu cần (test_documents_list_delete).
+    # Production KHÔNG bao giờ set flag này → behavior fail-fast giữ nguyên.
+    if os.environ.get("COCOINDEX_SKIP_SETUP") == "1":
+        logger.warning(
+            "cocoindex_setup_skipped: COCOINDEX_SKIP_SETUP=1 (test mode — "
+            "cocoindex Environment singleton không re-open được)"
+        )
+    else:
+        from app.rag.setup import get_cocoindex_app, setup_cocoindex
 
-    try:
-        await asyncio.to_thread(setup_cocoindex, settings)
-    except Exception as exc:
-        logger.error("cocoindex_init_failed_fail_fast: %s", exc, exc_info=True)
-        raise  # ← Plan 04-07: fail-fast — KHÔNG mask blocker
-    logger.info("cocoindex_setup_ok")
-    app.state.cocoindex_app = get_cocoindex_app()
-    app.state.cocoindex_ready = True
-    logger.info("cocoindex_app_attached_to_app_state")
+        try:
+            await asyncio.to_thread(setup_cocoindex, settings)
+        except Exception as exc:
+            logger.error(
+                "cocoindex_init_failed_fail_fast: %s", exc, exc_info=True
+            )
+            raise  # ← Plan 04-07: fail-fast — KHÔNG mask blocker
+        logger.info("cocoindex_setup_ok")
+        app.state.cocoindex_app = get_cocoindex_app()
+        app.state.cocoindex_ready = True
+        logger.info("cocoindex_app_attached_to_app_state")
 
     # 4) JWTManager — init khoá RS256 từ keys/private.pem + public.pem (Phase 3).
     try:

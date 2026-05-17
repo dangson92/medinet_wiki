@@ -183,6 +183,15 @@ async def app_with_auth(
     monkeypatch.setenv("JWT_REFRESH_TOKEN_TTL", "604800")
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 
+    # DEF-05-01: cocoindex 1.0.3 `core.Environment` là process-global singleton —
+    # KHÔNG re-open được sau open + close. Fixture này dùng cho >1 test cùng
+    # process (CRUD test hub/user/apikey + test_documents_list_delete) sẽ FAIL
+    # từ test thứ 2 với `environment already open`. CRUD test KHÔNG cần cocoindex
+    # ingestion flow — set COCOINDEX_SKIP_SETUP=1 để lifespan bỏ qua
+    # setup_cocoindex(). Test cần cocoindex_app (A4 BackgroundTask) cấp mock vào
+    # app.state.cocoindex_app SAU lifespan (xem mock_cocoindex_app fixture).
+    monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
+
     from app.config import get_settings
     get_settings.cache_clear()
 
@@ -197,6 +206,14 @@ async def app_with_auth(
     # đã init engine với DSN cũ — phải dispose trước khi init lại).
     from app.db.session import dispose_engine
     await dispose_engine()
+
+    # DEF-05-01: reset audit queue (module-global asyncio.Queue trong
+    # audit_service). Mỗi test dùng event loop riêng — `asyncio.Queue` cũ giữ
+    # internal futures bound vào loop của test trước → `audit_flush_loop` test
+    # sau `await queue.get()` treo vĩnh viễn. reset_queue() force re-init queue
+    # trên event loop hiện tại (helper có sẵn cho mục đích test isolation này).
+    from app.services.audit_service import reset_queue
+    reset_queue()
 
     # TRUNCATE per-test isolation — postgres_container scope=module nên data
     # giữa các test trong cùng module sẽ leak. Phase 3 Plan 05 cần fresh state

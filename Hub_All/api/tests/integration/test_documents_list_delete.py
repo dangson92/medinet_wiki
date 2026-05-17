@@ -58,12 +58,20 @@ async def _create_hub(app_with_auth: Any) -> uuid.UUID:
     hid = uuid.uuid4()
     engine = get_engine()
     async with engine.begin() as conn:
+        # Migration 0003 (Plan 05-01) thêm hubs.code / hubs.subdomain NOT NULL
+        # (server_default đã drop). hubs.status NOT NULL giữ server_default 'active'.
         await conn.execute(
             text(
-                "INSERT INTO hubs (id, slug, name, is_active, created_at) "
-                "VALUES (:id, :slug, 'h', TRUE, NOW())"
+                "INSERT INTO hubs "
+                "(id, slug, code, subdomain, name, is_active, created_at) "
+                "VALUES (:id, :slug, :code, :subdomain, 'h', TRUE, NOW())"
             ),
-            {"id": str(hid), "slug": f"hub-{hid.hex[:8]}"},
+            {
+                "id": str(hid),
+                "slug": f"hub-{hid.hex[:8]}",
+                "code": f"hub-{hid.hex[:8]}",
+                "subdomain": f"hub-{hid.hex[:8]}",
+            },
         )
     return hid
 
