@@ -6,6 +6,7 @@ Dependencies:
 - get_current_user      — extract Bearer + verify + blacklist check → User.
 - require_role          — gate endpoint theo role (AUTH-04).
 - get_current_user_with_hubs — User + hub_assignments từ user_hubs (HUB-02).
+- get_api_key_or_jwt    — auth qua X-API-Key HOẶC Bearer JWT (AUX-02 — Plan 05-05).
 """
 from __future__ import annotations
 
@@ -13,10 +14,10 @@ import logging
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt import JWTError, JWTManager
@@ -216,3 +217,72 @@ async def get_current_user_with_hubs(
     stmt = select(UserHub.hub_id).where(UserHub.user_id == user.id)
     hub_ids = [str(h) for h in (await db.execute(stmt)).scalars().all()]
     return UserWithHubs(user=user, hub_ids=hub_ids)
+
+
+async def get_api_key_or_jwt(
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),  # noqa: B008
+    token: str | None = Depends(oauth2_scheme),  # noqa: B008
+    jwt_mgr: JWTManager = Depends(get_jwt_manager),  # noqa: B008
+    redis: Redis | None = Depends(get_redis),  # noqa: B008
+    db: AsyncSession = Depends(get_session),  # noqa: B008
+) -> User:
+    """Auth qua X-API-Key HOẶC Bearer JWT (AUX-02 — Plan 05-05).
+
+    X-API-Key ưu tiên: verify qua `ApiKeyService.verify_key` (BLOCKER 1 — tên
+    method canonical) → load `api_keys.created_by` user. Nếu không có X-API-Key
+    → fallback `get_current_user` (Bearer JWT logic).
+
+    # Phase 6/7 scaffolding — chưa endpoint Phase 5 nào consume dependency này
+    # (api-keys/audit-logs đều JWT admin-only). Dành cho endpoint external
+    # Phase 6/7 (search/ask nhận CẢ JWT lẫn X-API-Key); smoke test qua
+    # test_x_api_key_invalid_rejected ở Plan 05-06 verify cùng cơ chế verify_key.
+    """
+    _ = request  # chữ ký dependency — slowapi/middleware có thể cần.
+    if x_api_key:
+        from app.services.api_key_service import ApiKeyService
+
+        principal = await ApiKeyService(db=db).verify_key(x_api_key)
+        if principal is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "INVALID_API_KEY",
+                    "message": "API key không hợp lệ hoặc đã thu hồi",
+                },
+            )
+        # principal["id"] là api_keys.id — cần created_by; query lại key row.
+        key_row = (
+            await db.execute(
+                text(
+                    "SELECT created_by FROM api_keys WHERE id = :id"
+                ),
+                {"id": principal["id"]},
+            )
+        ).fetchone()
+        if key_row is None or key_row[0] is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "INVALID_API_KEY",
+                    "message": "API key không gắn user hợp lệ",
+                },
+            )
+        stmt = select(User).where(
+            User.id == key_row[0], User.is_active.is_(True)
+        )
+        user = (await db.execute(stmt)).scalar_one_or_none()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "INVALID_API_KEY",
+                    "message": "User gắn API key đã bị vô hiệu hoá",
+                },
+            )
+        return user
+
+    # Không có X-API-Key → fallback Bearer JWT.
+    return await get_current_user(
+        token=token, jwt_mgr=jwt_mgr, redis=redis, db=db
+    )

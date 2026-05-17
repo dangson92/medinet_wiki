@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from app.auth.dependencies import (
     UserWithHubs,
+    get_api_key_or_jwt,
     get_auth_service,
     get_current_user,
     get_current_user_with_hubs,
@@ -67,6 +68,7 @@ __all__ = [
     "TokenPair",
     "UserWithHubs",
     "auth_router",
+    "get_api_key_or_jwt",
     "get_auth_service",
     "get_current_user",
     "get_current_user_with_hubs",
