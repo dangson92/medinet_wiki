@@ -4,7 +4,8 @@ Dependencies:
 - get_jwt_manager       — lấy JWTManager singleton từ app.state (init lifespan).
 - get_auth_service      — compose AuthService với DB session + Redis + JWT.
 - get_current_user      — extract Bearer + verify + blacklist check → User.
-- require_role          — SKELETON (Plan 03-05 implement đầy đủ).
+- require_role          — gate endpoint theo role (AUTH-04).
+- get_current_user_with_hubs — User + hub_assignments từ user_hubs (HUB-02).
 """
 from __future__ import annotations
 
@@ -186,3 +187,32 @@ def require_role(
         return user
 
     return _dependency
+
+
+class UserWithHubs:
+    """User ORM + danh sách hub_id được assign (HUB-02 isolation source).
+
+    `hub_ids` lấy từ DB `user_hubs` join table — KHÔNG tin payload. Dùng cho
+    `hub_filter_clause()` / `verify_hub_access()` ở repository/service layer.
+    """
+
+    def __init__(self, user: User, hub_ids: list[str]) -> None:
+        self.user = user
+        self.hub_ids = hub_ids
+
+
+async def get_current_user_with_hubs(
+    user: User = Depends(get_current_user),  # noqa: B008 — FastAPI pattern
+    db: AsyncSession = Depends(get_session),  # noqa: B008
+) -> UserWithHubs:
+    """User + hub_assignments từ user_hubs (HUB-02 isolation source).
+
+    Lấy hub_ids từ DB `user_hubs` (KHÔNG tin request payload). admin role vẫn
+    trả hub_ids thực tế nhưng `hub_filter_clause`/`verify_hub_access` sẽ bypass
+    filter cho admin (quản trị cross-hub theo thiết kế).
+    """
+    from app.models.auth import UserHub
+
+    stmt = select(UserHub.hub_id).where(UserHub.user_id == user.id)
+    hub_ids = [str(h) for h in (await db.execute(stmt)).scalars().all()]
+    return UserWithHubs(user=user, hub_ids=hub_ids)

@@ -23,8 +23,10 @@ login/refresh/logout/me).
 from __future__ import annotations
 
 from app.auth.dependencies import (
+    UserWithHubs,
     get_auth_service,
     get_current_user,
+    get_current_user_with_hubs,
     get_jwt_manager,
     oauth2_scheme,
     require_role,
@@ -63,9 +65,11 @@ __all__ = [
     "JWTError",
     "JWTManager",
     "TokenPair",
+    "UserWithHubs",
     "auth_router",
     "get_auth_service",
     "get_current_user",
+    "get_current_user_with_hubs",
     "get_jwt_manager",
     "hash_password",
     "oauth2_scheme",
