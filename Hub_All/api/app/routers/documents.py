@@ -41,10 +41,16 @@ from fastapi import (
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_current_user, require_role
+from app.auth.dependencies import (
+    UserWithHubs,
+    get_current_user,
+    get_current_user_with_hubs,
+    require_role,
+)
 from app.db.session import get_session
 from app.models.auth import User
 from app.pkg import response as resp
+from app.repositories.hub_isolation import HubIsolationError
 from app.services.documents_service import (
     DocumentService,
     trigger_cocoindex_update,
@@ -188,20 +194,27 @@ async def get_by_id(
 async def delete_by_id(
     document_id: str,
     request: Request,
-    user: User = Depends(require_role("admin")),  # noqa: B008
+    principal: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
     service: DocumentService = Depends(get_document_service),  # noqa: B008
 ) -> Response:
-    """DELETE /api/documents/:id — admin → 204 + cascade chunks + audit log (Plan 04-05 INGEST-07).
+    """DELETE /api/documents/:id — admin/editor → 204 + cascade chunks + audit log.
 
-    Sequence:
-    - require_role("admin") → 403 nếu viewer/editor.
-    - service.delete: SELECT exists → DELETE documents (chunks CASCADE FK Phase 2)
-      → INSERT audit_logs(action='document_delete') → best-effort unlink file.
+    HUB-02 / E4 — Plan 05-06: endpoint giờ editor-eligible (KHÔNG còn admin-only).
+    - viewer → 403 FORBIDDEN (read-only — reject TRƯỚC verify_hub_access).
+    - editor → service.delete enforce verify_hub_access (hub_id resource từ DB);
+      editor cross-hub → HubIsolationError → 403 + audit security.hub_isolation_violation.
+    - admin → bypass hub isolation (T-04-05-03 cross-hub DELETE preserved).
+    - service.delete: SELECT exists → verify_hub_access → DELETE documents
+      (chunks CASCADE FK Phase 2) → INSERT audit_logs → best-effort unlink file.
     - Return 204 No Content (KHÔNG body theo HTTP spec).
-
-    NOTE: T-04-05-03 accept — admin có quyền cross-hub DELETE; Phase 5 HUB-02
-    sẽ thêm hub_id permission check cho role=editor.
     """
+    # Viewer read-only — reject TRƯỚC khi vào service layer (T-05-06-06).
+    if principal.user.role == "viewer":
+        return resp.forbidden(
+            message="Viewer không được xoá document",
+            code="FORBIDDEN",
+        )
+
     try:
         doc_uuid = UUID(document_id)
     except ValueError:
@@ -211,11 +224,17 @@ async def delete_by_id(
         )
 
     request_id = getattr(request.state, "request_id", None)
-    deleted = await service.delete(
-        doc_uuid,
-        deleted_by=user.id,
-        request_id=request_id,
-    )
+    try:
+        deleted = await service.delete(
+            doc_uuid,
+            actor=principal.user,
+            actor_hub_ids=principal.hub_ids,
+            request_id=request_id,
+        )
+    except HubIsolationError as e:
+        # E4 — editor cross-hub reject. Audit emit đã xảy ra ở service layer.
+        return resp.forbidden(message=str(e), code="FORBIDDEN")
+
     if not deleted:
         return resp.not_found(
             message=f"Document {document_id} không tồn tại",

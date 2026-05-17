@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -40,11 +41,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_engine
+from app.models.auth import User
+from app.repositories.hub_isolation import HubIsolationError, verify_hub_access
 from app.schemas.documents import (
     DocumentListItem,
     DocumentResponse,
     DocumentUploadResponse,
 )
+from app.services.audit_service import AuditEntry, enqueue_audit
 from app.services.file_extract import (
     ALLOWED_EXTENSIONS,
     UnsupportedFormatError,
@@ -300,19 +304,29 @@ class DocumentService:
         self,
         document_id: UUID,
         *,
-        deleted_by: UUID,
+        actor: User,
+        actor_hub_ids: Sequence[str],
         request_id: str | None = None,
     ) -> bool:
         """Delete document + cascade chunks (FK Phase 2) + audit log entry — Plan 04-05 INGEST-07.
 
+        HUB-02 / E4 — Plan 05-06: enforce hub isolation TRƯỚC khi delete. `hub_id`
+        resource đọc TỪ DB row (KHÔNG từ payload — T-05-06-02). Editor chỉ xoá
+        được document thuộc hub mình được assign; admin bypass; cross-hub reject
+        → enqueue audit `security.hub_isolation_violation` TẠI điểm reject TRƯỚC raise.
+
         Sequence:
-            1. SELECT hub_id + file_path (cho audit log + filesystem cleanup).
-            2. DELETE FROM documents (chunks CASCADE qua FK Phase 2 migration 0001 line 332-336).
-            3. INSERT audit_logs (action='document_delete', target_type='document', target_id, hub_id, request_id).
-            4. Try-delete file vật lý (best-effort — KHÔNG raise nếu fail; T-04-05-05 accept).
+            1. SELECT hub_id + file_path (cho hub isolation + audit + cleanup).
+            2. verify_hub_access — cross-hub reject → audit + raise HubIsolationError.
+            3. DELETE FROM documents (chunks CASCADE qua FK Phase 2 migration 0001 line 332-336).
+            4. INSERT audit_logs (action='document_delete', target_type='document', target_id, hub_id, request_id).
+            5. Try-delete file vật lý (best-effort — KHÔNG raise nếu fail; T-04-05-05 accept).
 
         Returns:
             True nếu xoá thành công, False nếu document không tồn tại.
+
+        Raises:
+            HubIsolationError: editor/viewer cố xoá document ngoài hub được assign.
         """
         # 1) Verify exists + lấy hub_id + file_path trước khi delete.
         row = (
@@ -325,14 +339,42 @@ class DocumentService:
             return False
         hub_id, file_path = row[0], row[1]
 
-        # 2) DELETE documents — chunks CASCADE qua FK (Phase 2 migration 0001 line 332-336).
+        # 2) HUB-02 / E4 — enforce hub isolation. `hub_id` lấy TỪ DB (KHÔNG payload).
+        #    admin role bypass; editor/viewer cross-hub → audit emit + raise.
+        try:
+            verify_hub_access(
+                role=actor.role,
+                user_hub_ids=list(actor_hub_ids),
+                resource_hub_id=str(hub_id),
+            )
+        except HubIsolationError:
+            # Audit emit SỞ HỮU ở service layer — TẠI điểm reject TRƯỚC raise
+            # (T-05-06-03 — forensic trail). main.py handler chỉ render envelope.
+            enqueue_audit(
+                AuditEntry(
+                    action="security.hub_isolation_violation",
+                    user_id=str(actor.id),
+                    target_type="document",
+                    target_id=str(document_id),
+                    hub_id=str(hub_id),
+                    payload={
+                        "attempted_op": "delete",
+                        "resource_hub_id": str(hub_id),
+                        "actor_role": actor.role,
+                    },
+                    request_id=request_id,
+                )
+            )
+            raise  # re-raise — router bắt → 403 envelope
+
+        # 3) DELETE documents — chunks CASCADE qua FK (Phase 2 migration 0001 line 332-336).
         await self.db.execute(
             text("DELETE FROM documents WHERE id = :id"),
             {"id": str(document_id)},
         )
 
-        # 3) Audit log entry (AUX-01 Phase 5 sẽ định nghĩa async batch flush;
-        #    Plan 04-05 INSERT synchronous đơn giản — defer batch tới Phase 5).
+        # 4) Audit log entry — document_delete. GIỮ INSERT synchronous (preserve
+        #    behavior Plan 04-05 — test_delete_happy_path_cascade assert ngay).
         await self.db.execute(
             text(
                 "INSERT INTO audit_logs "
@@ -341,14 +383,14 @@ class DocumentService:
                 ":target_id, :hub_id, :request_id, NOW())"
             ),
             {
-                "user_id": str(deleted_by),
+                "user_id": str(actor.id),
                 "target_id": str(document_id),
                 "hub_id": str(hub_id) if hub_id else None,
                 "request_id": request_id,
             },
         )
 
-        # 4) Best-effort xoá file vật lý (T-04-05-05 accept — orphaned file_store
+        # 5) Best-effort xoá file vật lý (T-04-05-05 accept — orphaned file_store
         #    cleanup defer Phase 10 HARD-04 cron). KHÔNG raise nếu fail.
         try:
             FileStore().delete(Path(file_path))
@@ -358,7 +400,7 @@ class DocumentService:
         logger.info(
             "document_deleted: id=%s by=%s hub_id=%s",
             document_id,
-            deleted_by,
+            actor.id,
             hub_id,
         )
         return True
