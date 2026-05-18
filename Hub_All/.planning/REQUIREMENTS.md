@@ -203,8 +203,8 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | SEARCH-02 | Phase 6 (per-query session config HNSW) | Done (06-01; p95 đo dataset thật → 06-HUMAN-UAT) |
 | SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Done (06-02) |
 | SEARCH-04 | Phase 6 (Redis cache + invalidate) | Done (06-01/06-03; invalidation E2E test → 06-HUMAN-UAT) |
-| ASK-01 | Phase 7 (POST /api/ask + citation) | Pending |
-| ASK-02 | Phase 7 (anti-injection system prompt) | Pending |
+| ASK-01 | Phase 7 (POST /api/ask + citation) | In progress (07-01 contract + prompt + parser layer; endpoint đầy đủ → 07-04) |
+| ASK-02 | Phase 7 (anti-injection system prompt) | In progress (07-01 ANTI_INJECTION_SYSTEM_PROMPT; verify đầy đủ → 07-05) |
 | ASK-03 | Phase 7 (POST /api/ask/cross-hub) | Pending |
 | ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | Pending |
 | ASK-05 | Phase 7 (token usage logging) | Pending |

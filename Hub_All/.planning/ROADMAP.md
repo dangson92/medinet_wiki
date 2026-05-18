@@ -264,7 +264,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   5. Token usage logging: 10 ask calls liên tiếp → `usage_events` table có 10 row với `(user_id, hub_id, model, prompt_tokens, completion_tokens, cost_usd, request_id, created_at)` đầy đủ; `GET /api/usage?group_by=model&date_from=...` trả aggregate đúng
 
 **Plans:** 5 plans (3 waves)
-- [ ] 07-01-PLAN.md — Schema ask.py + ask_prompt.py (anti-injection prompt + citation parser) — Wave 1 (ASK-01/02)
+- [x] 07-01-PLAN.md — Schema ask.py + ask_prompt.py (anti-injection prompt + citation parser) — Wave 1 (ASK-01/02) ✅ 2026-05-18 (3 task, 7 unit test 1 critical PASS)
 - [ ] 07-02-PLAN.md — usage_service.py write/read + GET /api/usage router — Wave 1 (ASK-05)
 - [ ] 07-03-PLAN.md — rag_config_service dimension guard + cost preview (EXTEND WIP commit 2d7a688) — Wave 1 (ASK-04)
 - [ ] 07-04-PLAN.md — AskService (LiteLLM acompletion + citation) + router POST /api/ask + /cross-hub + usage BackgroundTasks — Wave 2 (ASK-01/02/03/05)

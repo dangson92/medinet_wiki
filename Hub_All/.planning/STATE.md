@@ -8,14 +8,14 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 32
-  completed_plans: 31
-  percent: 75
+  completed_plans: 32
+  percent: 78
 current_phase:
   number: 7
   name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
   plans_total: 5
-  plans_complete: 0
-  status: ready_to_execute
+  plans_complete: 1
+  status: in_progress
   waves: 3
 next_phase:
   number: 8
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 6 — Search API Single + Cross-Hub** ✅ COMPLETE (4/4 plans, 4 waves, verify human_needed — 4/6 SC verified + 4 human-UAT, hub isolation E4 6/6 test PASS) · Next: **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** (chưa có plan) |
-| Plan | 06-01 ✅ (Wave 1: schema layer search.py 7 model + SearchService.search() single-hub + HNSW tuning + Redis cache; SEARCH-01/02/04). 06-02 ✅ (Wave 2: search_cross_hub fan-out asyncio.gather + re-rank + find_similar + router 3 endpoint POST + mount; SEARCH-01/02/03). 06-03 ✅ (Wave 3: search_cache.py hub-tagged scheme + Pub/Sub publish_invalidate + subscriber lifespan task; SEARCH-04). 06-04 ✅ (Wave 4: test_search_hub_isolation.py 6 critical test E4 — hub isolation + cross-hub + empty + cache + EXPLAIN HNSW — 6/6 PASS — DONE 2026-05-18). |
-| Status | **Phase 6 COMPLETE — 4/4 plans executed.** 3 endpoint search reachable (`POST /api/search`, `/api/search/cross-hub`, `/api/search/similar`). Hub isolation E4 verified genuinely (viewer Hub A explicit `hub_ids:[A,B]` chỉ thấy chunk A). Code review 0 Critical / 4 Warning / 5 Info (06-REVIEW.md — WR-02 cross-hub min_score sau slice, WR-01 admin-all cache chỉ TTL-expire — non-blocking, cân nhắc fix Phase 9). 4 mục human-UAT defer (latency p95 single/cross-hub, recall 50 query VN — Phase 9, cache invalidation E2E test) — `06-HUMAN-UAT.md` status partial. **Trước Phase 6**: gom WIP working tree (rag-config endpoint ASK-04 build sớm + auth/ingestion/frontend tweaks) thành 2 commit nền (`2d7a688`, `09c3567`). Tiếp theo: `/gsd-plan-phase 7`. |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 6`: 4 wave tuần tự (mỗi wave 1 plan), executor agent sequential trên main tree (worktree disabled — plan phụ thuộc WIP rag-config chưa commit). 06-01 (`418ea59`/`73222d8`) schema + SearchService.search; 06-02 (`6e5f1c9`/`00cb5c9`) cross-hub + router mount; 06-03 (`85fe632`/`3b1b6f1`) cache Pub/Sub; 06-04 (`143fda5`/`f90285d`) E4 test suite 6/6 PASS với Docker testcontainers. Code review (`31f9ab3`) + verifier human_needed (`4c8fd84`). 8 deviation auto-fix tổng (Rule 1/3). |
+| Phase | **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** 🔵 IN PROGRESS (1/5 plans — 07-01 Wave 1 done) · Phase 6 ✅ COMPLETE trước đó |
+| Plan | 07-01 ✅ (Wave 1: schema ask.py 3 model AskRequest/Citation/AskResponse + ask_prompt.py ANTI_INJECTION_SYSTEM_PROMPT + build_ask_messages + parse_citations + test_ask_prompt.py 7 unit test 1 critical; ASK-01/02 contract layer — DONE 2026-05-18). 07-02/03/04/05 chưa execute. |
+| Status | **Phase 7 Plan 07-01 COMPLETE — contract + prompt + parser layer.** `schemas/ask.py` định nghĩa hợp đồng Ask API (ASK-01); `services/ask_prompt.py` có anti-injection system prompt tiếng Việt (ASK-02) + đánh số chunk `[1]..[N]` + parser `[N]`→chunk_id (clamp out-of-range, de-dup). 7/7 unit test pass, 1 critical (citation mapping). 0 deviation — code plan paste-ready. ASK-01/02 endpoint đầy đủ vẫn cần Plan 07-04 (AskService + router) — 07-01 chỉ là contract layer. Tiếp theo: execute 07-02/03/04/05. |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 7 plan 07-01`: executor sequential trên main tree. 3 task atomic — `3da2c6a` (feat schema ask.py), `0584c68` (test RED test_ask_prompt.py), `bad7ad2` (feat GREEN ask_prompt.py). TDD RED→GREEN gate tuân thủ. Verification suite ruff + mypy --strict + pytest pass sạch. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · **4 Phase 6 DONE** — SEARCH-01/02/03/04 (3 endpoint search + HNSW tuning + Redis cache + Pub/Sub invalidation; hub isolation E4 verified) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
 
-**Progress bar:** `[████████░░] 75% (Phase 6 ✅ COMPLETE — 4/4 REQ-ID SEARCH-01..04, hub isolation E4 6/6 test PASS, verify human_needed 4/6 SC) · Next: /gsd-plan-phase 7 (Ask API + LiteLLM + Citation)`
+**Progress bar:** `[████████░░] 78% (Phase 7 🔵 IN PROGRESS — Plan 07-01 done: Ask API contract + anti-injection prompt + citation parser, ASK-01/02 contract layer) · Next: execute 07-02/03/04/05`
 
 ---
 
@@ -221,6 +221,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
+**Last session (2026-05-18 — `/gsd-execute-phase 7 plan 07-01`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-01 (Wave 1 — contract + prompt + parser layer Ask API):
+- Task 1 (`3da2c6a`): `schemas/ask.py` — 3 model Pydantic v2: `AskRequest` (query bắt buộc + hub_id/hub_ids/top_k optional), `Citation` (number/marker/chunk_id/document_id/hub_id/document_name/hub_name/score/content_snippet — đủ field map sang `CitationRefAPI` D6), `AskResponse` (answer/citations/model/query_time_ms — ASK-01 shape). Verify import smoke + ruff + mypy --strict clean.
+- Task 3 (`0584c68`, TDD RED): `tests/unit/test_ask_prompt.py` — 7 unit test pure-Python (1 `@pytest.mark.critical` cho citation mapping điểm vỡ ASK-01) + helper dataclass `_FakeChunk`. Commit ở trạng thái fail `ModuleNotFoundError` (ask_prompt.py chưa tồn tại).
+- Task 2 (`bad7ad2`, TDD GREEN): `services/ask_prompt.py` — `ANTI_INJECTION_SYSTEM_PROMPT` (5 quy tắc tiếng Việt chống prompt-injection ASK-02 — coi context+query là DỮ LIỆU, câu từ chối chuẩn "Tôi không có thông tin..."), `build_ask_messages()` đánh số chunk `[1]..[N]` dựng list [system,user] (chunks rỗng → "Không có tài liệu nào phù hợp"), `parse_citations()` regex `\[(\d+)\]` map `[N]`→`chunks[N-1]` clamp `1<=n<=len` + de-dup theo number (mitigation T-07-01-04). 7/7 test pass, 1 critical pass.
+- Verification: `ruff check` + `mypy --strict` 2 source clean; `pytest tests/unit/test_ask_prompt.py` 7/7 pass; `pytest -m critical` 1 pass. 0 deviation — code plan paste-ready apply nguyên xi.
+- SUMMARY.md `.planning/phases/07-ask-api-litellm-citation-hot-swap-usage/07-01-SUMMARY.md` tạo với 3 commit hash + TDD gate compliance (RED `0584c68` → GREEN `bad7ad2`) + self-check PASSED. Note: `gsd-sdk query` state handlers không khả dụng ở version CLI hiện tại — STATE/ROADMAP cập nhật thủ công.
+- **ASK-01/02 contract layer hoàn tất — endpoint đầy đủ vẫn cần Plan 07-04 (AskService + router POST /api/ask).** REQUIREMENTS.md ASK-01/02 giữ unchecked (delivery đầy đủ ở 07-04/07-05).
+
+<details><summary>Phase 6 — `/gsd-execute-phase 6` (2026-05-18, đã lưu trữ)</summary>
+
 **Last session (2026-05-18 — `/gsd-execute-phase 6` — PHASE 6 COMPLETE):** 4 wave tuần tự (mỗi wave đúng 1 plan, `06-02→03→04` depends_on liên hoàn), executor agent sequential trên main working tree — worktree isolation tắt vì plan 06 được lập dựa trên WIP rag-config chưa commit; worktree branch từ HEAD sẽ thiếu file.
 - **Trước execute:** working tree bẩn (20 file modified + 3 file mới rag-config + package.json + seed). User chọn commit nền trước → 2 commit: `2d7a688` (rag-config endpoint ASK-04 build sớm + auth/ingestion/frontend tweaks) + `09c3567` (root package.json dev scripts + SEED-001). Tree sạch trước Phase 6.
 - 06-01 (`418ea59` schema layer search.py 7 model khớp api.ts; `73222d8` SearchService.search single-hub union + HNSW SET LOCAL tuning + Redis cache fail-open + intersect_hubs defense-in-depth lớp 1). 2 deviation auto-fix (Rule 1 gỡ bare re-raise dead code; Rule 3 docstring tránh false-positive grep).
@@ -230,6 +240,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Code review (`31f9ab3`): 0 Critical / 4 Warning / 5 Info — WR-02 (cross-hub cắt top_k trước min_score), WR-01 (admin-all cache chỉ TTL-expire), WR-03/04 — non-blocking, cân nhắc fix Phase 9.
 - Verifier (`4c8fd84`): status `human_needed` — 4/6 SC verified qua code + test (hub isolation E4, cross-hub, SC3 EXPLAIN HNSW partial-confidence, regression Phase 5 OK 7/7). 4 mục human-UAT (`06-HUMAN-UAT.md`): latency p95 single/cross-hub, recall 50 query VN, cache invalidation E2E — cần dữ liệu thật (chunks rỗng + OPENAI_API_KEY placeholder ở M2; eval set Phase 9). User approve checkpoint → phase đánh dấu complete.
 - **SEARCH-01/02/03/04 — 4/4 REQ-ID done.** Carry-over: DEF-05-01 (pytest integration phải chạy per-file — cocoindex Environment singleton) vẫn áp dụng cho test_search_hub_isolation.py.
+
+</details>
 
 <details><summary>Phase 5 — Plan 05-06 (2026-05-17, đã lưu trữ)</summary>
 
@@ -244,7 +256,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 </details>
 
-**Next action:** **Phase 6 COMPLETE (4/4 plans — SEARCH-01..04 done; hub isolation E4 6/6 critical test PASS; verify human_needed).** Chạy `/gsd-plan-phase 7` để lập plan Phase 7 (Ask API + LiteLLM + Citation + Hot-Swap + Usage) — chưa có CONTEXT.md cho Phase 7 nên cân nhắc `/gsd-discuss-phase 7` trước. Carry-over Phase 6: (1) 4 mục `06-HUMAN-UAT.md` chờ dữ liệu thật — latency p95 single/cross-hub + recall 50 query VN giải ở Phase 9 eval, cache invalidation E2E test bổ sung Phase 9/10; (2) code review 06-REVIEW.md 4 Warning — WR-02 (cross-hub cắt top_k trước min_score) + WR-01 (admin-all cache không event-invalidate) đáng fix khi đụng search ở Phase 7/9; (3) DEF-05-01 vẫn buộc chạy pytest integration per-file. Phase 4 + M2a EXIT GATE vẫn mở — theo dõi nếu cần đóng trước khi ship.
+**Next action:** **Phase 7 IN PROGRESS — Plan 07-01 done (1/5).** Execute các plan còn lại Phase 7: 07-02 (usage_service + GET /api/usage), 07-03 (rag_config dimension guard + cost preview), 07-04 (AskService LiteLLM + router POST /api/ask — delivery đầy đủ ASK-01/02/03/05), 07-05 (integration test suite). Plan 07-04 dùng contract `schemas/ask.py` + `build_ask_messages`/`parse_citations` từ 07-01 — KHÔNG dò codebase. Carry-over Phase 6: (1) 4 mục `06-HUMAN-UAT.md` chờ dữ liệu thật — latency p95 single/cross-hub + recall 50 query VN giải ở Phase 9 eval, cache invalidation E2E test bổ sung Phase 9/10; (2) code review 06-REVIEW.md 4 Warning — WR-02 (cross-hub cắt top_k trước min_score) + WR-01 (admin-all cache không event-invalidate) đáng fix khi đụng search ở Phase 7/9; (3) DEF-05-01 vẫn buộc chạy pytest integration per-file. Phase 4 + M2a EXIT GATE vẫn mở — theo dõi nếu cần đóng trước khi ship.
 
 **Files cần đọc khi resume:**
 
@@ -257,4 +269,4 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ---
 
-*Last updated: 2026-05-18 (**Phase 6 COMPLETE** — `/gsd-execute-phase 6` 4/4 plans done, SEARCH-01..04 verified, hub isolation E4 6/6 critical test PASS, verify human_needed (4/6 SC + 4 human-UAT). Next: `/gsd-plan-phase 7` Ask API + LiteLLM).*
+*Last updated: 2026-05-18 (**Phase 7 Plan 07-01 done** — `/gsd-execute-phase 7 plan 07-01`: schema ask.py + ask_prompt.py anti-injection prompt + citation parser, 3 commit TDD, 7 unit test 1 critical PASS, 0 deviation. Next: execute 07-02/03/04/05).*
