@@ -263,7 +263,12 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Hot-swap embedding within dim 1536: `PUT /api/rag-config` body `{embedding_provider:"gemini", embedding_model:"gemini-embedding-001@1536"}` trả 200 với WARNING modal cost preview "re-embed 5234 chunks, est $0.34, est 12 phút"; cross-dim swap (1536 ↔ 3072) → 400 với message "dimension mismatch — defer cross-dim swap v4.0"
   5. Token usage logging: 10 ask calls liên tiếp → `usage_events` table có 10 row với `(user_id, hub_id, model, prompt_tokens, completion_tokens, cost_usd, request_id, created_at)` đầy đủ; `GET /api/usage?group_by=model&date_from=...` trả aggregate đúng
 
-**Plans:** TBD
+**Plans:** 5 plans (3 waves)
+- [ ] 07-01-PLAN.md — Schema ask.py + ask_prompt.py (anti-injection prompt + citation parser) — Wave 1 (ASK-01/02)
+- [ ] 07-02-PLAN.md — usage_service.py write/read + GET /api/usage router — Wave 1 (ASK-05)
+- [ ] 07-03-PLAN.md — rag_config_service dimension guard + cost preview (EXTEND WIP commit 2d7a688) — Wave 1 (ASK-04)
+- [ ] 07-04-PLAN.md — AskService (LiteLLM acompletion + citation) + router POST /api/ask + /cross-hub + usage BackgroundTasks — Wave 2 (ASK-01/02/03/05)
+- [ ] 07-05-PLAN.md — Integration test suite: citation map + anti-injection + hot-swap + 10 ask usage — Wave 3 (ASK-01..05)
 
 ---
 
