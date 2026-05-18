@@ -331,6 +331,73 @@ async def _assign_user_hub(*, user_id: str, hub_id: str) -> None:
         )
 
 
+async def _insert_document(
+    *, hub_id: str, filename: str, uploaded_by: str | None = None
+) -> str:
+    """INSERT 1 document row, return document_id. Dùng cho search test.
+
+    Cột theo migration 0001 (documents): seed document `status='completed'`
+    để search test (Plan 06-04) có document JOIN-able cho chunks. Bypass upload
+    flow — search isolation test cần data ở nhiều hub (T-06-04-02 accept).
+    """
+    from app.db.session import get_engine
+    engine = get_engine()
+    doc_id = str(uuid.uuid4())
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO documents "
+                "(id, hub_id, uploaded_by, filename, file_path, mime_type, "
+                "file_size_bytes, status, chunk_count, attempts, "
+                "created_at, updated_at, last_heartbeat) "
+                "VALUES (:id, :hub, :uploader, :name, :path, "
+                "'application/octet-stream', 100, 'completed', 1, 0, "
+                "NOW(), NOW(), NOW())"
+            ),
+            {
+                "id": doc_id,
+                "hub": hub_id,
+                "uploader": uploaded_by,
+                "name": filename,
+                "path": f"/tmp/{doc_id}",
+            },
+        )
+    return doc_id
+
+
+async def _insert_chunk(
+    *, document_id: str, hub_id: str, content: str, vector: list[float]
+) -> str:
+    """INSERT 1 chunk row với vector. Dùng cho search test (chunks table rỗng M2).
+
+    `content_hash` BYTEA NOT NULL → seed 4 byte placeholder. `vector` Vector(1536)
+    → caller PHẢI truyền list đúng 1536 phần tử; literal `'[...]'` cast `::vector`.
+    """
+    from app.db.session import get_engine
+    engine = get_engine()
+    chunk_id = str(uuid.uuid4())
+    vec_literal = "[" + ",".join(repr(float(x)) for x in vector) + "]"
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO chunks "
+                "(id, document_id, hub_id, content, content_hash, "
+                "heading_path, page_start, page_end, vector, metadata, created_at) "
+                "VALUES (:id, :doc, :hub, :content, :hash, "
+                "'', 1, 1, CAST(:vec AS vector), '{}'::jsonb, NOW())"
+            ),
+            {
+                "id": chunk_id,
+                "doc": document_id,
+                "hub": hub_id,
+                "content": content,
+                "hash": b"\x00" * 4,
+                "vec": vec_literal,
+            },
+        )
+    return chunk_id
+
+
 @pytest.fixture
 async def admin_user(app_with_auth: Any) -> dict[str, str]:
     """INSERT admin@medinet.vn / Admin@123 — role=admin."""
