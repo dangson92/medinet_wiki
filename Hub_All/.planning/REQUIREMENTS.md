@@ -53,10 +53,10 @@
 
 ### SEARCH — Vector Search Direct + Cross-Hub (4 REQ)
 
-- [ ] **SEARCH-01**: `GET /api/search?q=...&hub_id=X&top_k=10` — embed query qua LiteLLM (SAME provider + dimension như index) → raw SQL `SELECT id, content, metadata, 1 - (vector <=> $1) AS score FROM chunks WHERE hub_id = $2 ORDER BY vector <=> $1 LIMIT $3`. Bypass cocoindex hoàn toàn.
-- [ ] **SEARCH-02**: Per-query session config — `SET LOCAL hnsw.ef_search = 200` + connection-level `SET hnsw.iterative_scan = relaxed_order` + `SET hnsw.max_scan_tuples = 20000` (R2 mitigation). p95 target <800ms cho hub đơn.
-- [ ] **SEARCH-03**: `POST /api/search/cross-hub` body `{q, hub_ids: [...], top_k_per_hub}` — query nhiều hub song song (asyncio.gather), aggregate + re-rank theo score, return top results với `hub_id` mỗi result. User's `hub_assignments` enforce: result KHÔNG thuộc hub user không có access bị filter ở repo layer (defense in depth ngoài SQL filter).
-- [ ] **SEARCH-04**: Redis cache search results — key `search:{hash(q+hub_ids+top_k)}`, TTL 5 phút. Invalidate cache khi document upload/edit/delete trong hub (Pub/Sub channel `hub:{hub_id}:invalidate`).
+- [x] **SEARCH-01**: `GET /api/search?q=...&hub_id=X&top_k=10` — embed query qua LiteLLM (SAME provider + dimension như index) → raw SQL `SELECT id, content, metadata, 1 - (vector <=> $1) AS score FROM chunks WHERE hub_id = $2 ORDER BY vector <=> $1 LIMIT $3`. Bypass cocoindex hoàn toàn. ✓ Plan 06-01/06-02 (D-02: hiện thực bằng `POST /api/search` + body `query`/`hub_ids`/`top_k` khớp `api.ts` thay vì GET `?q=` — contract frontend là source of truth).
+- [x] **SEARCH-02**: Per-query session config — `SET LOCAL hnsw.ef_search = 200` + connection-level `SET hnsw.iterative_scan = relaxed_order` + `SET hnsw.max_scan_tuples = 20000` (R2 mitigation). p95 target <800ms cho hub đơn. ✓ Plan 06-01 (`_run_vector_query` SET LOCAL trong transaction; EXPLAIN test dùng `ix_chunks_vector_hnsw`. Đo p95 trên dataset thật: 06-HUMAN-UAT.md).
+- [x] **SEARCH-03**: `POST /api/search/cross-hub` body `{q, hub_ids: [...], top_k_per_hub}` — query nhiều hub song song (asyncio.gather), aggregate + re-rank theo score, return top results với `hub_id` mỗi result. User's `hub_assignments` enforce: result KHÔNG thuộc hub user không có access bị filter ở repo layer (defense in depth ngoài SQL filter). ✓ Plan 06-02 (`search_cross_hub` fan-out asyncio.gather + re-rank; `intersect_hubs` defense in depth — test_search_hub_isolation cross-hub PASS).
+- [x] **SEARCH-04**: Redis cache search results — key `search:{hash(q+hub_ids+top_k)}`, TTL 5 phút. Invalidate cache khi document upload/edit/delete trong hub (Pub/Sub channel `hub:{hub_id}:invalidate`). ✓ Plan 06-01/06-03 (cache read/write sha256 TTL 300s + hub-tagged scheme + publish_invalidate trên document create/delete + subscriber lifespan task. Invalidation E2E test: 06-HUMAN-UAT.md).
 
 ### ASK — LLM Answerer + Citation + Hot-Swap (5 REQ)
 
@@ -199,10 +199,10 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; 05-05: AuditQueryService + GET /api/audit-logs router; router mount + integration test Plan 05-06) |
 | AUX-02 | Phase 5 (API key management) | Done (05-05 ApiKeyService CRUD + AES-GCM + verify_key; 05-06 router mounted + auth/api_key.py require_api_key X-API-Key; test_x_api_key_invalid_rejected critical PASS) |
 | AUX-03 | Phase 5 (rate limit middleware slowapi) | Done (05-02 Limiter + 429 handler; 05-05 @limiter.limit audit-logs; 05-06 app.state.limiter wired main.py + test_rate_limit.py 429 envelope PASS) |
-| SEARCH-01 | Phase 6 (GET /api/search single-hub) | Pending |
-| SEARCH-02 | Phase 6 (per-query session config HNSW) | Pending |
-| SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Pending |
-| SEARCH-04 | Phase 6 (Redis cache + invalidate) | Pending |
+| SEARCH-01 | Phase 6 (POST /api/search single-hub — D-02) | Done (06-01/06-02) |
+| SEARCH-02 | Phase 6 (per-query session config HNSW) | Done (06-01; p95 đo dataset thật → 06-HUMAN-UAT) |
+| SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Done (06-02) |
+| SEARCH-04 | Phase 6 (Redis cache + invalidate) | Done (06-01/06-03; invalidation E2E test → 06-HUMAN-UAT) |
 | ASK-01 | Phase 7 (POST /api/ask + citation) | Pending |
 | ASK-02 | Phase 7 (anti-injection system prompt) | Pending |
 | ASK-03 | Phase 7 (POST /api/ask/cross-hub) | Pending |

@@ -37,7 +37,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 ### M2b — RAG Completion
 
 - [x] **Phase 5: Hub + User + Audit + APIKey + Settings CRUD** — CRUD endpoint FastAPI (contract = `frontend/src/services/api.ts` + envelope), isolation theo `hub_id`, rate limit ✓ (2026-05-17, 6 plans / 4 waves, 9/9 REQ-ID, E4 hub-isolation verified, verify PASSED 5/5)
-- [ ] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache
+- [x] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache ✓ (2026-05-18, 4 plans / 4 waves, 4/4 REQ-ID SEARCH-01..04; hub isolation E4 6/6 critical test PASS; verify human_needed — 4/6 SC verified, 4 human-UAT pending)
 - [ ] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging
 - [ ] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới (TEARDOWN-01 đã thực hiện sớm 2026-05-14, ngoài lịch — git tag `m1-go-archived` backup)
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
@@ -231,11 +231,14 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Redis cache hoạt động: 2 lần gọi `GET /api/search?q=...` giống nhau trong 5 phút → lần 2 hit cache (latency <50ms); upload document mới trong hub → cache invalidate qua Pub/Sub channel `hub:{hub_id}:invalidate`
   5. Recall sanity check trên 50 query VN sample: top-3 với hub filter trả ≥1 chunk relevant cho mỗi query (manual review) — chuẩn bị data cho Phase 9 eval gate ≥75%
 
-**Plans:** 4 plans (4 waves)
-- [ ] 06-01-PLAN.md — Schema layer (search.py 7 Pydantic model khớp api.ts) + SearchService.search() single-hub union + HNSW tuning + Redis cache (Wave 1, SEARCH-01/02/04)
-- [ ] 06-02-PLAN.md — search_cross_hub() fan-out asyncio.gather + re-rank + find_similar() + router 3 endpoint POST + mount create_app() (Wave 2, SEARCH-01/02/03)
-- [ ] 06-03-PLAN.md — Redis Pub/Sub cache invalidation: hub-tagged scheme + publish hub:{hub_id}:invalidate + subscriber lifespan task (Wave 3, SEARCH-04)
-- [ ] 06-04-PLAN.md — E4 critical test suite: hub isolation + cross-hub + empty result + cache hit + EXPLAIN ANALYZE HNSW Index Scan (Wave 4, SEARCH-01/02/03/04)
+**Plans:** 4 plans (4 waves) — 4/4 complete
+
+> **Phase 6 hoàn tất (2026-05-18):** 3 endpoint search reachable (`POST /api/search`, `/api/search/cross-hub`, `/api/search/similar` — D-02 dùng POST + body `query` thay vì GET `?q=`). Hub isolation E4 verified — `test_search_hub_isolation.py` 6/6 critical test PASS (viewer Hub A explicit `hub_ids:[A,B]` chỉ thấy chunk A; cross-hub A+B request `[A,B,C]` chỉ A,B). Code review 0 Critical / 4 Warning / 5 Info. Verify status `human_needed`: 4/6 SC verified qua code + test; 4 mục cần dữ liệu thật defer (latency p95 single/cross-hub, recall 50 query VN — Phase 9, cache invalidation E2E test) — lưu `06-HUMAN-UAT.md`.
+
+- [x] 06-01-PLAN.md — Schema layer (search.py 7 Pydantic model khớp api.ts) + SearchService.search() single-hub union + HNSW tuning + Redis cache (Wave 1, SEARCH-01/02/04) ✓ 2026-05-18
+- [x] 06-02-PLAN.md — search_cross_hub() fan-out asyncio.gather + re-rank + find_similar() + router 3 endpoint POST + mount create_app() (Wave 2, SEARCH-01/02/03) ✓ 2026-05-18
+- [x] 06-03-PLAN.md — Redis Pub/Sub cache invalidation: hub-tagged scheme + publish hub:{hub_id}:invalidate + subscriber lifespan task (Wave 3, SEARCH-04) ✓ 2026-05-18
+- [x] 06-04-PLAN.md — E4 critical test suite: hub isolation + cross-hub + empty result + cache hit + EXPLAIN ANALYZE HNSW Index Scan (Wave 4, SEARCH-01/02/03/04) ✓ 2026-05-18
 
 ---
 
@@ -350,7 +353,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 4. CocoIndex Flow MVP + Document Ingest | 0/? | Not started | - |
 | 🚦 M2a EXIT GATE | — | Pending Phase 4 | - |
 | 5. Hub + User + Audit + APIKey + Settings CRUD | 6/6 | ✓ Complete | 2026-05-17 |
-| 6. Search API Single + Cross-Hub | 0/? | Not started | - |
+| 6. Search API Single + Cross-Hub | 4/4 | ✓ Complete | 2026-05-18 |
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 0/? | Not started | - |
 | 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 0/? | Not started · TEARDOWN-01 ✓ pull-in | - |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |

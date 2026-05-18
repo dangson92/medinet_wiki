@@ -186,4 +186,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-13 (Pivot lần 2 — M1 Docling abandoned, M2 Full RAG Rewrite với CocoIndex + Python FastAPI + pgvector khởi tạo)*
+*Last updated: 2026-05-18 (Phase 6 COMPLETE — Search API single + cross-hub, SEARCH-01..04 done, hub isolation E4 verified. M2b tiến độ: Phase 5 + 6 done, tiếp theo Phase 7 Ask API.)*

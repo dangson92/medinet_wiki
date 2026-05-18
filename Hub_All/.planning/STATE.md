@@ -2,24 +2,24 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: ready_to_execute
+status: phase_complete
 last_updated: "2026-05-18T00:00:00Z"
 progress:
   total_phases: 10
-  completed_phases: 4
-  total_plans: 28
-  completed_plans: 27
-  percent: 65
+  completed_phases: 5
+  total_plans: 32
+  completed_plans: 31
+  percent: 75
 current_phase:
-  number: 6
-  name: Search API Single + Cross-Hub
-  plans_total: 4
-  plans_complete: 0
-  status: ready_to_execute
-  waves: 4
-next_phase:
   number: 7
   name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
+  plans_total: 0
+  plans_complete: 0
+  status: not_started
+  waves: 0
+next_phase:
+  number: 8
+  name: Frontend E2E Smoke
 ---
 
 # State — MEDWIKI
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 5 — Hub + User + Audit + APIKey + Settings CRUD** ✅ COMPLETE (6/6 plans, verify PASSED 5/5, E4 verified) · Next: **Phase 6 — Search API Single + Cross-Hub** |
-| Plan | 05-01 ✅ (Wave 1: Migration 0003 + audit_service asyncio.Queue; HUB-01/AUX-01). 05-02 ✅ (Wave 2: hub isolation helper + get_current_user_with_hubs + slowapi rate-limit module; HUB-02/AUX-03). 05-03 ✅ (Wave 3: Hub CRUD; HUB-01/HUB-03). 05-04 ✅ (Wave 3: User CRUD + reset-password + Profile; USER-01/02/03). 05-05 ✅ (Wave 3: APIKey CRUD + AES-GCM + X-API-Key + audit-logs query; AUX-01/02/03). 05-06 ✅ (Wave 4: wiring 5 router main.py + slowapi limiter + HubIsolationError handler + X-API-Key require_api_key + hub-isolation enforce document DELETE + E4 critical test suite — DONE 2026-05-17). |
-| Status | **Phase 5 PLANS COMPLETE — 6/6 plans executed.** 05-06 thực thi 3 task atomic: Task 1 (`d9e59e2`) routers/__init__.py export 6 router + main.py mount 5 router Phase 5 + wire slowapi (app.state.limiter + RateLimitExceeded → 429 envelope) + HubIsolationError → 403 handler + auth/api_key.py require_api_key (gọi verify_key — BLOCKER 1). Task 2 (`e32af03`) documents_service.delete enforce verify_hub_access (hub_id load từ DB, KHÔNG payload) + enqueue_audit security.hub_isolation_violation tại điểm reject; documents.py DELETE endpoint editor-eligible + viewer reject + HubIsolationError → 403. Task 3 (`5f5bfea`) conftest fixtures (_insert_hub/_assign_user_hub + TRUNCATE mở rộng + AES_KEY test) + test_hub_isolation.py 6 critical test E4 + test_rate_limit.py 4 test. **E4 EXIT criteria VERIFIED — hub isolation genuinely PASS against real DB; Phase 5 đủ điều kiện ship M2.** Tiếp theo: `/gsd-verify-work 5` UAT rồi `/gsd-execute-phase 6`. |
-| Last activity | 2026-05-17 — `/gsd-execute-phase 5 plan 05-06`: executor agent (sequential) thực thi 3 task atomic (d9e59e2 wiring + e32af03 hub-isolation enforce + 5f5bfea E4 test suite). ruff app+tests clean; mypy --strict app 62 source clean. E4 verify: test_hub_isolation.py 6 critical test PASS — editor cross-hub DELETE 403 + document vẫn tồn tại + audit security.hub_isolation_violation logged. pytest -m critical chạy per-file (DEF-05-01 cocoindex Environment singleton): 4 unit + 44 integration critical PASS; ngoại lệ DUY NHẤT test_ingest_e2e::test_e2e_upload_docx_to_chunks_completed (DEF-05-03 pre-existing). 4 auto-fix deviation (Rule 3 mypy type-ignore add_exception_handler, Rule 3 Sequence[str] tránh shadow class method list, Rule 1 _create_hub DEF-05-02 leftover 2 file, Rule 3 _spawn_rbac_app DEF-05-01 leftover). SUMMARY.md tạo + self-check PASSED. |
-| Total phases | 10 (M2a: 4 + M2b: 6) — **3/10 complete (Phase 1 + 2 + 3)** · **Phase 5 in progress (4/6 plans)** |
-| Total requirements | 38 v1 REQ-ID · 6 satisfied Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · **9 Phase 5 DONE** — HUB-01/02/03 + USER-01/02/03 + AUX-01/02/03 (CRUD endpoint mounted + hub isolation enforce E4 verified + rate-limit + X-API-Key) |
-| Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 → 7 → 9 → 10 |
+| Phase | **Phase 6 — Search API Single + Cross-Hub** ✅ COMPLETE (4/4 plans, 4 waves, verify human_needed — 4/6 SC verified + 4 human-UAT, hub isolation E4 6/6 test PASS) · Next: **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** (chưa có plan) |
+| Plan | 06-01 ✅ (Wave 1: schema layer search.py 7 model + SearchService.search() single-hub + HNSW tuning + Redis cache; SEARCH-01/02/04). 06-02 ✅ (Wave 2: search_cross_hub fan-out asyncio.gather + re-rank + find_similar + router 3 endpoint POST + mount; SEARCH-01/02/03). 06-03 ✅ (Wave 3: search_cache.py hub-tagged scheme + Pub/Sub publish_invalidate + subscriber lifespan task; SEARCH-04). 06-04 ✅ (Wave 4: test_search_hub_isolation.py 6 critical test E4 — hub isolation + cross-hub + empty + cache + EXPLAIN HNSW — 6/6 PASS — DONE 2026-05-18). |
+| Status | **Phase 6 COMPLETE — 4/4 plans executed.** 3 endpoint search reachable (`POST /api/search`, `/api/search/cross-hub`, `/api/search/similar`). Hub isolation E4 verified genuinely (viewer Hub A explicit `hub_ids:[A,B]` chỉ thấy chunk A). Code review 0 Critical / 4 Warning / 5 Info (06-REVIEW.md — WR-02 cross-hub min_score sau slice, WR-01 admin-all cache chỉ TTL-expire — non-blocking, cân nhắc fix Phase 9). 4 mục human-UAT defer (latency p95 single/cross-hub, recall 50 query VN — Phase 9, cache invalidation E2E test) — `06-HUMAN-UAT.md` status partial. **Trước Phase 6**: gom WIP working tree (rag-config endpoint ASK-04 build sớm + auth/ingestion/frontend tweaks) thành 2 commit nền (`2d7a688`, `09c3567`). Tiếp theo: `/gsd-plan-phase 7`. |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 6`: 4 wave tuần tự (mỗi wave 1 plan), executor agent sequential trên main tree (worktree disabled — plan phụ thuộc WIP rag-config chưa commit). 06-01 (`418ea59`/`73222d8`) schema + SearchService.search; 06-02 (`6e5f1c9`/`00cb5c9`) cross-hub + router mount; 06-03 (`85fe632`/`3b1b6f1`) cache Pub/Sub; 06-04 (`143fda5`/`f90285d`) E4 test suite 6/6 PASS với Docker testcontainers. Code review (`31f9ab3`) + verifier human_needed (`4c8fd84`). 8 deviation auto-fix tổng (Rule 1/3). |
+| Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
+| Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · **4 Phase 6 DONE** — SEARCH-01/02/03/04 (3 endpoint search + HNSW tuning + Redis cache + Pub/Sub invalidation; hub isolation E4 verified) |
+| Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
 
-**Progress bar:** `[███████░░░] 65% (Phase 5 ✅ COMPLETE — verify PASSED 5/5, 9/9 REQ-ID, E4 hub-isolation verified) · Next: /gsd-plan-phase 6 (Search API Single + Cross-Hub)`
+**Progress bar:** `[████████░░] 75% (Phase 6 ✅ COMPLETE — 4/4 REQ-ID SEARCH-01..04, hub isolation E4 6/6 test PASS, verify human_needed 4/6 SC) · Next: /gsd-plan-phase 7 (Ask API + LiteLLM + Citation)`
 
 ---
 
@@ -221,6 +221,18 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
+**Last session (2026-05-18 — `/gsd-execute-phase 6` — PHASE 6 COMPLETE):** 4 wave tuần tự (mỗi wave đúng 1 plan, `06-02→03→04` depends_on liên hoàn), executor agent sequential trên main working tree — worktree isolation tắt vì plan 06 được lập dựa trên WIP rag-config chưa commit; worktree branch từ HEAD sẽ thiếu file.
+- **Trước execute:** working tree bẩn (20 file modified + 3 file mới rag-config + package.json + seed). User chọn commit nền trước → 2 commit: `2d7a688` (rag-config endpoint ASK-04 build sớm + auth/ingestion/frontend tweaks) + `09c3567` (root package.json dev scripts + SEED-001). Tree sạch trước Phase 6.
+- 06-01 (`418ea59` schema layer search.py 7 model khớp api.ts; `73222d8` SearchService.search single-hub union + HNSW SET LOCAL tuning + Redis cache fail-open + intersect_hubs defense-in-depth lớp 1). 2 deviation auto-fix (Rule 1 gỡ bare re-raise dead code; Rule 3 docstring tránh false-positive grep).
+- 06-02 (`6e5f1c9` search_cross_hub fan-out asyncio.gather + re-rank score desc + find_similar; `00cb5c9` routers/search.py 3 endpoint POST @limiter.limit + mount create_app). 1 deviation (Rule 3 noqa C901).
+- 06-03 (`85fe632` search_cache.py hub-tagged scheme + publish_invalidate + subscriber loop psubscribe `hub:*:invalidate`; `3b1b6f1` wire publish vào documents create/delete + redis DI factory + subscriber lifespan task step 9). 0 deviation.
+- 06-04 (`143fda5` conftest _insert_document/_insert_chunk seed helper; `f90285d` test_search_hub_isolation.py 6 critical test). **6/6 PASS** với Docker testcontainers — hub isolation E4, cross-hub isolation, empty result, cache hit, EXPLAIN HNSW. 1 deviation (Rule 1 — test EXPLAIN: planner chọn B-tree trên dataset nhỏ → tách query vector-ordering thuần để buộc HNSW; verify index tồn tại + dùng được, không verify cost model).
+- Code review (`31f9ab3`): 0 Critical / 4 Warning / 5 Info — WR-02 (cross-hub cắt top_k trước min_score), WR-01 (admin-all cache chỉ TTL-expire), WR-03/04 — non-blocking, cân nhắc fix Phase 9.
+- Verifier (`4c8fd84`): status `human_needed` — 4/6 SC verified qua code + test (hub isolation E4, cross-hub, SC3 EXPLAIN HNSW partial-confidence, regression Phase 5 OK 7/7). 4 mục human-UAT (`06-HUMAN-UAT.md`): latency p95 single/cross-hub, recall 50 query VN, cache invalidation E2E — cần dữ liệu thật (chunks rỗng + OPENAI_API_KEY placeholder ở M2; eval set Phase 9). User approve checkpoint → phase đánh dấu complete.
+- **SEARCH-01/02/03/04 — 4/4 REQ-ID done.** Carry-over: DEF-05-01 (pytest integration phải chạy per-file — cocoindex Environment singleton) vẫn áp dụng cho test_search_hub_isolation.py.
+
+<details><summary>Phase 5 — Plan 05-06 (2026-05-17, đã lưu trữ)</summary>
+
 **Last session (2026-05-17 — Plan 05-06 execute — PHASE 5 PLANS COMPLETE):** `/gsd-execute-phase 5 plan 05-06` → executor agent (sequential) thực thi 3 task atomic:
 - Task 01 (`d9e59e2`): `routers/__init__.py` export 6 router. `main.py` `create_app()` mount 5 router Phase 5 (hubs/users/profile/api_keys/audit_logs — tổng 7 router) + wire slowapi (`app.state.limiter = limiter` + `add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)` → 429 envelope) + `@app.exception_handler(HubIsolationError)` → 403 envelope. `auth/api_key.py` mới — `require_api_key` X-API-Key dependency (thiếu header → 401 API_KEY_MISSING; key sai → 401 API_KEY_INVALID; gọi `ApiKeyService.verify_key` — BLOCKER 1). `auth/__init__.py` re-export.
 - Task 02 (`e32af03`): `documents_service.delete()` retrofit hub isolation — signature `deleted_by:UUID` → `actor:User` + `actor_hub_ids:Sequence[str]`; gọi `verify_hub_access` (hub_id load TỪ DB row — T-05-06-02 KHÔNG payload); cross-hub reject → `enqueue_audit(security.hub_isolation_violation)` TẠI điểm reject TRƯỚC raise (T-05-06-03); admin bypass. `documents.py` DELETE endpoint auth `require_role("admin")` → `get_current_user_with_hubs` (editor-eligible); viewer reject 403 trước service; `HubIsolationError` → 403 envelope.
@@ -230,7 +242,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - SUMMARY.md `.planning/phases/05-hub-user-audit-apikey-settings-crud/05-06-SUMMARY.md` tạo với 3 commit hash + threat model T-05-06-01..07 (6 mitigate + 1 accept) + E4 verified + self-check PASSED.
 - **HUB-02 + AUX-02 + AUX-03 requirements — router wiring + hub isolation enforce + E4 critical test + rate-limit + X-API-Key hoàn tất. Phase 5 PLANS COMPLETE (6/6).**
 
-**Next action:** **Phase 5 PLANS COMPLETE (6/6 — tất cả 9 REQ-ID HUB/USER/AUX done; E4 EXIT criteria VERIFIED).** Chạy `/gsd-verify-work 5` để UAT Phase 5 (5 ROADMAP success criteria) rồi `/gsd-execute-phase 6` (Search API Single + Cross-Hub). Lưu ý carry-over: DEF-05-03 (test_ingest_e2e cần cocoindex thật — Phase 10 hardening giải bằng fixture riêng / pytest-forked). `pytest -m critical` phải chạy per-file do DEF-05-01 cocoindex Environment singleton (1 lệnh full sẽ treo) — Phase 10 cân nhắc pytest-forked cho integration suite.
+</details>
+
+**Next action:** **Phase 6 COMPLETE (4/4 plans — SEARCH-01..04 done; hub isolation E4 6/6 critical test PASS; verify human_needed).** Chạy `/gsd-plan-phase 7` để lập plan Phase 7 (Ask API + LiteLLM + Citation + Hot-Swap + Usage) — chưa có CONTEXT.md cho Phase 7 nên cân nhắc `/gsd-discuss-phase 7` trước. Carry-over Phase 6: (1) 4 mục `06-HUMAN-UAT.md` chờ dữ liệu thật — latency p95 single/cross-hub + recall 50 query VN giải ở Phase 9 eval, cache invalidation E2E test bổ sung Phase 9/10; (2) code review 06-REVIEW.md 4 Warning — WR-02 (cross-hub cắt top_k trước min_score) + WR-01 (admin-all cache không event-invalidate) đáng fix khi đụng search ở Phase 7/9; (3) DEF-05-01 vẫn buộc chạy pytest integration per-file. Phase 4 + M2a EXIT GATE vẫn mở — theo dõi nếu cần đóng trước khi ship.
 
 **Files cần đọc khi resume:**
 
@@ -243,4 +257,4 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ---
 
-*Last updated: 2026-05-14 (**Phase 3 COMPLETE** — Plan 03-05 thực thi xong, 5/5 plans done, 5/5 ROADMAP AC verified end-to-end, 6/6 AUTH requirements done. Next: `/gsd-execute-phase 4` CocoIndex Flow MVP).*
+*Last updated: 2026-05-18 (**Phase 6 COMPLETE** — `/gsd-execute-phase 6` 4/4 plans done, SEARCH-01..04 verified, hub isolation E4 6/6 critical test PASS, verify human_needed (4/6 SC + 4 human-UAT). Next: `/gsd-plan-phase 7` Ask API + LiteLLM).*
