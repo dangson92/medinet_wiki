@@ -387,6 +387,12 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     app.include_router(usage_router)
     app.include_router(ask_router)
 
+    # Mount ai-chat router (Phase 8 COMPAT-01 — POST /api/ai/chat proxy LLM cho
+    # GeminiAssistant; BLOCKER 08-CONTRACT-DIFF — frontend Dashboard golden path).
+    from app.routers import ai_chat_router
+
+    app.include_router(ai_chat_router)
+
     # Rate limiter (Phase 5 AUX-03 — slowapi). Plan 05-02 tạo module; wiring tại đây.
     # Endpoint Phase 5 decorate @limiter.limit = GET /api/audit-logs (Plan 05-05 W4).
     # search/ask 100/min Phase 6, upload 30/min Phase 4 — decoration defer.

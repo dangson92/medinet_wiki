@@ -22,11 +22,6 @@ import pytest
 from app.routers.ai_chat import AiChatMessage, AiChatRequest, run_ai_chat
 
 
-def _body(content: str) -> dict[str, Any]:
-    """Parse JSONResponse body về dict."""
-    return content  # placeholder — overridden bên dưới
-
-
 def _decode(resp: Any) -> dict[str, Any]:
     """Trích envelope dict từ JSONResponse."""
     return json.loads(resp.body)

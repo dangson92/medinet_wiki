@@ -7,9 +7,12 @@ rag_config_router — port endpoint Go /api/rag-config (ASK-04, build sớm Phas
 Phase 6 thêm search_router (SEARCH-01..03 — 3 endpoint POST).
 Phase 7 thêm usage_router (ASK-05 — 3 endpoint GET token usage) +
 ask_router (ASK-01/02/03 — POST /api/ask + /cross-hub + alias /api/search/answer).
+Phase 8 thêm ai_chat_router (COMPAT-01 — POST /api/ai/chat proxy LLM cho
+GeminiAssistant, BLOCKER 08-CONTRACT-DIFF).
 """
 from __future__ import annotations
 
+from app.routers.ai_chat import router as ai_chat_router
 from app.routers.api_keys import router as api_keys_router
 from app.routers.ask import router as ask_router
 from app.routers.audit_logs import router as audit_logs_router
@@ -22,6 +25,7 @@ from app.routers.usage import router as usage_router
 from app.routers.users import router as users_router
 
 __all__ = [
+    "ai_chat_router",
     "api_keys_router",
     "ask_router",
     "audit_logs_router",
