@@ -22,3 +22,17 @@ class UpdateRagConfigRequest(BaseModel):
     gemini_llm_model: str | None = None
     clear_gemini_key: bool = False
     clear_openai_key: bool = False
+
+
+class EmbeddingCostPreview(BaseModel):
+    """Cost preview khi swap embedding within dim 1536 (R7 / ASK-04).
+
+    Service build nội dung rồi `.model_dump()` ghép vào response dict raw
+    (giữ contract D6 — KHÔNG envelope). `message` LUÔN có 2 chữ số thập phân
+    cho `est_cost_usd` (format `:.2f`) — khớp ROADMAP SC4 verbatim "$X.YZ".
+    """
+
+    n_chunks: int
+    est_cost_usd: float
+    est_minutes: int
+    message: str  # "re-embed N chunks, est $X.YZ, est T phút" — cost LUÔN 2 chữ số
