@@ -208,7 +208,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | ASK-03 | Phase 7 (POST /api/ask/cross-hub) | ✅ Done (Plan 07-04 ask_cross_hub + endpoint; 07-05 cross-hub citation hub_id + hub isolation E4 verified) |
 | ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03 dimension guard; 07-05 hot-swap LLM + cross-dim 400 verified) |
 | ASK-05 | Phase 7 (token usage logging) | ✅ Done (Plan 07-02 write/read path + 07-04 BackgroundTasks; 07-05 10 ask → 10 row + aggregate verified) |
-| COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | 🔄 In progress — Plan 08-01 done (contract diff + replay test tĩnh, SC3 thoả) + 08-02 done (fix api-side: BLOCKER /api/ai/chat + port 8180); còn 08-03 test suite + 08-04 smoke 11 trang |
+| COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | 🔄 In progress — Plan 08-01 done (contract diff + replay test tĩnh, SC3 thoả) + 08-02 done (fix api-side: BLOCKER /api/ai/chat + port 8180) + 08-03 done (test suite tự động golden path SC2 + VN filename UTF-8 SC4, 2 test integration critical PASS); còn 08-04 smoke 11 trang (manual UAT) |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
 | EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | Pending |
 | EVAL-02 | Phase 9 (run_eval.py pytest) | Pending |

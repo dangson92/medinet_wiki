@@ -8,13 +8,13 @@ progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 41
-  completed_plans: 39
-  percent: 89
+  completed_plans: 40
+  percent: 91
 current_phase:
   number: 8
   name: Frontend E2E Smoke
   plans_total: 4
-  plans_complete: 2
+  plans_complete: 3
   status: in_progress
   waves: 4
 next_phase:
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 8 — Frontend E2E Smoke** 🔄 IN PROGRESS (2/4 plans) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
-| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02 ✅ (Wave 2: fix gap api-side — COMPAT-01; DONE 2026-05-18). 08-03/04 📋 chưa execute. |
-| Status | **Phase 8 Plan 08-02 COMPLETE — đóng gap api-side Frontend ↔ FastAPI (COMPAT-01).** Đóng 1 BLOCKER `POST /api/ai/chat` từ `08-CONTRACT-DIFF.md`: router `api/app/routers/ai_chat.py` proxy LLM tối giản cho GeminiAssistant (Dashboard golden path) — JWT bắt buộc, rate-limit 100/min, tái dùng `_resolve_llm_model()` hot-swap, lỗi LLM → envelope `LLM_FAILED` không leak trace; 5 unit test pure-Python PASS (1 `@pytest.mark.critical`). Port 8180 map ở `docker-compose.yml` (`8180:8080`) + Makefile target `dev` mới + `config.app_port` default + `.env.example` — frontend `api.ts` (hardcode 8180, Hyper-V excluded range) reach backend không sửa `frontend/`. CORS `localhost:5173` (Vite 6) có sẵn; validator `_no_lan_in_prod` giữ nguyên (P12). `docker compose config` parse OK 3-service không Go. 1 deviation Rule 3: Makefile chưa có target `dev` → thêm mới (plan đã lường trước). D6 tuân thủ tuyệt đối — không file `frontend/` bị sửa, không deletion. Tiếp theo: Plan 08-03 (test suite tự động golden path API). 2 FIX-API (`/documents/compose`, `/documents/{id}/file`) chưa xử lý — degrade hợp lệ, không golden path. |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-02`: executor sequential trên main tree. 3 commit atomic — `af70241` (fix: port 8180 compose+Makefile+config+env), `3434bac` (test: RED unit test /api/ai/chat), `a203092` (feat: GREEN router ai_chat.py + wire). ruff + mypy --strict PASS; 5 test PASS; route `/api/ai/chat` mounted trong `create_app()`; `git diff --diff-filter=D` rỗng; không file `frontend/` thay đổi. |
+| Phase | **Phase 8 — Frontend E2E Smoke** 🔄 IN PROGRESS (3/4 plans) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
+| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02 ✅ (Wave 2: fix gap api-side — COMPAT-01; DONE 2026-05-18). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01; DONE 2026-05-18). 08-04 📋 chưa execute. |
+| Status | **Phase 8 Plan 08-03 COMPLETE — test suite tự động golden path API (SC2) + VN filename UTF-8 (SC4).** 2 file test integration critical trong `api/tests/integration/`: `test_smoke_golden_path.py` (1 test tuần tự login→upload DOCX→GET detail→cross-hub search→ask→audit-logs qua httpx ASGITransport) + `test_vietnamese_filename.py` (upload "Khám bệnh đa khoa.docx" → response + GET detail trả name UTF-8 nguyên vẹn không mojibake; threat T-08-03-01 path traversal — FileStore UUID-rename, file_path stem khớp UUID4, không `..`, trong file_store_dir). Chạy per-file (DEF-05-01); ruff clean; 2 test critical PASS. 2 deviation: Rule 3 — patch query embedding (search_service.embed_text) vì cross-hub search/ask embed câu query qua embed_text, key placeholder M2 gây 401 (plan chỉ lường mock_llm); Rule 1 — code KHÔNG enqueue `auth.login`/`document.upload` dù có trong AUDIT_ACTIONS enum → golden path sinh 0 audit entry, test verify contract GET /api/audit-logs (200+list) theo plan Task 1 step 7 fallback. conftest.py KHÔNG sửa (plan dự kiến sửa — fixture hiện có đủ tái dùng). D6 tuân thủ tuyệt đối — không file `frontend/` bị sửa, không deletion. Tiếp theo: Plan 08-04 (boot stack + checkpoint human-verify 11 trang React). Input cho 08-04: golden path KHÔNG sinh audit entry — manual UAT muốn thấy audit cần thao tác hub.create/user.create. |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-03`: executor sequential trên main tree. 2 commit test atomic — `467e3f5` (test: golden path API end-to-end SC2), `74a7e3c` (test: VN filename UTF-8 SC4). 2 test critical PASS per-file; ruff clean; `git diff --diff-filter=D` rỗng; không file `frontend/` thay đổi. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · **5 Phase 7 DONE** — ASK-01/02/03/04/05 (Ask API citation + anti-injection + cross-hub + hot-swap LLM + usage logging; critical-path integration test verified) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
-| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 🔄 (1/4 plans done) |
+| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 🔄 (3/4 plans done) |
 
-**Progress bar:** `[█████████░] 89% (Phase 8 🔄 IN PROGRESS — Plan 08-02 đóng gap api-side: BLOCKER /api/ai/chat + port 8180, COMPAT-01 done) · Next: Plan 08-03 test suite tự động`
+**Progress bar:** `[█████████░] 91% (Phase 8 🔄 IN PROGRESS — Plan 08-03 test suite tự động golden path SC2 + VN filename SC4, COMPAT-01) · Next: Plan 08-04 boot stack + UAT 11 trang React`
 
 ---
 
