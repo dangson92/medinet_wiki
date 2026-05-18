@@ -30,7 +30,8 @@ class Settings(BaseSettings):
 
     # Runtime
     app_env: Literal["dev", "staging", "production"] = "dev"
-    app_port: int = 8080
+    # 8180 — frontend api.ts hardcode (Hyper-V excluded range 8038-8137 Windows).
+    app_port: int = 8180
     log_level: str = "info"
     log_format: Literal["json", "console"] = "json"
 

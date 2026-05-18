@@ -1,10 +1,17 @@
 # Medinet Wiki API — dev tasks
-.PHONY: install keys keys-verify keys-verify-jwt lint test test-cov clean migrate-up migrate-down migrate-check migrate-history cocoindex-setup
+.PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov clean migrate-up migrate-down migrate-check migrate-history cocoindex-setup
 
 UV ?= uv
 
 install:
 	$(UV) sync --extra dev
+
+# Chạy API local native (không Docker — xem MEMORY "Chạy backend local nhanh":
+# Postgres/Redis trong Docker, uvicorn native). Port 8180 để khớp frontend
+# `api.ts` hardcode (Hyper-V excluded range 8038-8137). Postgres + Redis phải
+# up trước (`docker compose up -d postgres redis`).
+dev:
+	$(UV) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8180
 
 keys:
 	bash scripts/generate_keys.sh
