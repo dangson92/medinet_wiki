@@ -37,6 +37,7 @@ from app.schemas.search import (
     SimilarResponse,
 )
 from app.services.embedder import embed_text
+from app.services.search_cache import tag_cache_key
 
 if TYPE_CHECKING:
     from app.auth.dependencies import UserWithHubs
@@ -279,12 +280,14 @@ class SearchService:
             cache_hit=False,
         ).model_dump(mode="json")
 
-        # Cache ghi — fail-open.
+        # Cache ghi — fail-open. tag_cache_key gắn cache key vào SET hub-tag
+        # (06-03 / D-12) NẰM TRONG cùng block try/except fail-open với redis.set.
         if self.redis is not None:
             try:
                 await self.redis.set(
                     cache_key, json.dumps(result), ex=CACHE_TTL_SECONDS
                 )
+                await tag_cache_key(self.redis, cache_key, hub_ids)
             except Exception as exc:  # noqa: BLE001 — fail-open, KHÔNG raise
                 logger.warning("search cache set thất bại: %s", exc)
 
@@ -385,12 +388,15 @@ class SearchService:
             cache_hit=False,
         ).model_dump(mode="json")
 
-        # Cache ghi — fail-open.
+        # Cache ghi — fail-open. tag_cache_key gắn cache key cross-hub vào SET
+        # hub-tag cho TỪNG hub fan-out (06-03 / D-12) — NẰM TRONG cùng block
+        # try/except fail-open với redis.set.
         if self.redis is not None:
             try:
                 await self.redis.set(
                     cache_key, json.dumps(result), ex=CACHE_TTL_SECONDS
                 )
+                await tag_cache_key(self.redis, cache_key, hub_ids)
             except Exception as exc:  # noqa: BLE001 — fail-open, KHÔNG raise
                 logger.warning("cross-hub cache set thất bại: %s", exc)
 
