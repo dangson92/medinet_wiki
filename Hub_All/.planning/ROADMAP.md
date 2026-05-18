@@ -361,7 +361,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 🚦 M2a EXIT GATE | — | Pending Phase 4 | - |
 | 5. Hub + User + Audit + APIKey + Settings CRUD | 6/6 | ✓ Complete | 2026-05-17 |
 | 6. Search API Single + Cross-Hub | 4/4 | ✓ Complete | 2026-05-18 |
-| 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 0/? | Not started | - |
+| 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 5/5 | ✓ Complete | 2026-05-18 |
 | 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 0/? | Not started · TEARDOWN-01 ✓ pull-in | - |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |

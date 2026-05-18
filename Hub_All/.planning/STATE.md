@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: ready_to_execute
+status: phase_complete
 last_updated: "2026-05-18T00:00:00Z"
 progress:
   total_phases: 10
@@ -11,15 +11,15 @@ progress:
   completed_plans: 37
   percent: 86
 current_phase:
-  number: 7
-  name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
-  plans_total: 5
-  plans_complete: 5
-  status: complete
-  waves: 3
-next_phase:
   number: 8
   name: Frontend E2E Smoke
+  plans_total: 0
+  plans_complete: 0
+  status: not_started
+  waves: 0
+next_phase:
+  number: 9
+  name: Eval Framework + Quality Gate ≥75% top-3
 ---
 
 # State — MEDWIKI

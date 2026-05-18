@@ -60,7 +60,7 @@ Sẽ liệt kê chi tiết trong `REQUIREMENTS.md`. Tóm tắt 8 nhóm:
 - [ ] **USER** — user management CRUD + RBAC
 - [ ] **INGEST** — cocoindex flow: source (file_store) → extract (TBD parser, OCR tiếng Việt = open question) → chunk → embed → pgvector
 - [ ] **SEARCH** — `/api/search` hybrid query (vector + metadata filter), top-k pgvector
-- [ ] **ASK** — `/api/ask` LLM answerer với citation + cross-hub option
+- [x] **ASK** — `/api/ask` LLM answerer với citation + cross-hub option ✓ Phase 7 (ASK-01..05 — citation `[N]`, anti-injection, hot-swap provider, token usage)
 - [ ] **EVAL** — eval framework Python mới + queries.jsonl + dataset 10 file + gate ≥75% top-3
 
 ### Out of Scope (M2)
@@ -186,4 +186,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-18 (Phase 6 COMPLETE — Search API single + cross-hub, SEARCH-01..04 done, hub isolation E4 verified. M2b tiến độ: Phase 5 + 6 done, tiếp theo Phase 7 Ask API.)*
+*Last updated: 2026-05-18 (Phase 7 COMPLETE — Ask API + LiteLLM + citation `[N]` + hot-swap provider + token usage, ASK-01..05 done; verify human_needed (latency/anti-injection LLM thật defer Phase 9). M2b tiến độ: Phase 5 + 6 + 7 done, tiếp theo Phase 8 Frontend E2E Smoke.)*
