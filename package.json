@@ -1,0 +1,14 @@
+{
+  "name": "medinet-wiki-dev",
+  "private": true,
+  "description": "Lệnh tiện ích chạy dev cho Medinet Wiki (M2). Không có dependency — không cần npm install.",
+  "scripts": {
+    "infra": "docker compose -f Hub_All/docker-compose.yml up -d postgres redis",
+    "infra:down": "docker compose -f Hub_All/docker-compose.yml down",
+    "migrate": "cd Hub_All/api && uv run alembic upgrade head",
+    "backend": "cd Hub_All/api && uv run uvicorn app.main:app --port 8080",
+    "backend:reload": "cd Hub_All/api && uv run uvicorn app.main:app --port 8080 --reload --reload-exclude \"file_store/*\" --reload-exclude \"Hub_All/*\"",
+    "frontend": "npm --prefix Hub_All/frontend run dev",
+    "dev": "echo Mo 2 terminal: chay \"npm run backend\" o terminal 1 va \"npm run frontend\" o terminal 2 (sau khi da \"npm run infra\")."
+  }
+}
