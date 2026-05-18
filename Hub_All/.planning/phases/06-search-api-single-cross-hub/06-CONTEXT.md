@@ -81,7 +81,7 @@ Requirements: SEARCH-01, SEARCH-02, SEARCH-03, SEARCH-04.
 
 - **Hub isolation là điều kiện ship** — integration test bắt buộc: viewer Hub A KHÔNG bao giờ thấy chunk Hub B kể cả khi truyền explicit `hub_ids` chứa hub B.
 - Response envelope `{success, data, error, meta}` shape-identical mọi endpoint (kể cả 401/403/422/429). Search trả data = `SearchResponseAPI`.
-- `EXPLAIN ANALYZE` cho vector query phải show `Index Scan using ...hnsw` KHÔNG `Seq Scan` trên dataset 1K+ chunks (Success Criteria #3) — đưa vào verification.
+- `EXPLAIN ANALYZE` cho vector query phải show `Index Scan using ix_chunks_vector_hnsw` KHÔNG `Seq Scan` trên dataset 1K+ chunks (Success Criteria #3) — đưa vào verification.
 - p95 latency: <800ms single-hub, <1.5s cross-hub (Success Criteria #1,#2). Sanity check ở Phase 6; tune `ef_search`/`iterative_scan` nếu vỡ.
 - Auth: JWT bắt buộc, role viewer trở lên. Lấy `get_current_user` dependency Phase 3.
 - Empty result hợp lệ: hub chưa có chunk → trả `results: []`, KHÔNG lỗi.
@@ -103,7 +103,7 @@ Requirements: SEARCH-01, SEARCH-02, SEARCH-03, SEARCH-04.
 ### Codebase — reuse
 - `Hub_All/api/app/services/embedder.py` — `embed_text()` query embedding (dim 1536 PIN)
 - `Hub_All/api/app/rag/flow.py` — `ChunkRow` schema, cách chunks được index (tham khảo column thực)
-- `Hub_All/api/migrations/versions/0001_initial_schema.py` §chunks §documents §hubs — column thật: `chunks(id, document_id, hub_id, content, content_hash, heading_path, page_start, page_end, vector, metadata, created_at)`, `documents(id, hub_id, uploaded_by, filename, file_path, mime_type, file_size_bytes, status, ..., updated_at)`, `hubs(id, slug, name, description, ..., code, subdomain, status, updated_at)`. HNSW index `chunks_vector_hnsw` (vector_cosine_ops).
+- `Hub_All/api/migrations/versions/0001_initial_schema.py` §chunks §documents §hubs — column thật: `chunks(id, document_id, hub_id, content, content_hash, heading_path, page_start, page_end, vector, metadata, created_at)`, `documents(id, hub_id, uploaded_by, filename, file_path, mime_type, file_size_bytes, status, ..., updated_at)`, `hubs(id, slug, name, description, ..., code, subdomain, status, updated_at)`. HNSW index `ix_chunks_vector_hnsw` (vector_cosine_ops).
 - `Hub_All/api/app/repositories/hub_isolation.py` + Phase 5 hub isolation pattern (`HubisolationError` → 403 handler đã có ở `main.py`)
 - `Hub_All/api/app/services/documents_service.py` — wire Pub/Sub invalidate publish vào upload/reupload/edit/delete
 - `Hub_All/api/app/routers/__init__.py` + `app/main.py::create_app()` — cách mount router
