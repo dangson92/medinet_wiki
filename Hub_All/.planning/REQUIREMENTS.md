@@ -203,11 +203,11 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | SEARCH-02 | Phase 6 (per-query session config HNSW) | Done (06-01; p95 đo dataset thật → 06-HUMAN-UAT) |
 | SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Done (06-02) |
 | SEARCH-04 | Phase 6 (Redis cache + invalidate) | Done (06-01/06-03; invalidation E2E test → 06-HUMAN-UAT) |
-| ASK-01 | Phase 7 (POST /api/ask + citation) | In progress (07-01 contract + prompt + parser layer; endpoint đầy đủ → 07-04) |
-| ASK-02 | Phase 7 (anti-injection system prompt) | In progress (07-01 ANTI_INJECTION_SYSTEM_PROMPT; verify đầy đủ → 07-05) |
-| ASK-03 | Phase 7 (POST /api/ask/cross-hub) | Pending |
+| ASK-01 | Phase 7 (POST /api/ask + citation) | In progress (07-01 contract/prompt/parser + 07-04 AskService + POST /api/ask endpoint; verify citation map → 07-05) |
+| ASK-02 | Phase 7 (anti-injection system prompt) | In progress (07-01 ANTI_INJECTION_SYSTEM_PROMPT wired qua 07-04 build_ask_messages; anti-injection test → 07-05) |
+| ASK-03 | Phase 7 (POST /api/ask/cross-hub) | In progress (07-04 AskService.ask_cross_hub + POST /api/ask/cross-hub endpoint; verify → 07-05) |
 | ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03) |
-| ASK-05 | Phase 7 (token usage logging) | Pending |
+| ASK-05 | Phase 7 (token usage logging) | In progress (07-02 log_usage_event write path + 07-04 router BackgroundTasks.add_task; 10-ask SC5 verify → 07-05) |
 | COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | Pending |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
 | EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | Pending |
