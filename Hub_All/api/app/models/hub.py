@@ -7,7 +7,7 @@ NOT NULL mirror của `code` (HubService.create set `slug = code.lower()`).
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, CheckConstraint, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -37,4 +37,8 @@ class Hub(UUIDMixin, TimestampMixin, Base):
             "status IN ('active','inactive')",
             name="hub_status_enum",
         ),
+        # Migration 0003 tạo unique constraint `uq_hubs_code` — model phải khai
+        # báo khớp để `alembic check` không phát hiện drift (W1 — `code` là field
+        # contract frontend chính thức, bắt buộc unique).
+        UniqueConstraint("code", name="uq_hubs_code"),
     )
