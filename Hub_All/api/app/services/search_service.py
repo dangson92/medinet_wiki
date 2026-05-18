@@ -13,10 +13,14 @@ Predicate "tập hub admin search" = `is_active = TRUE` — NHẤT QUÁN với 0
 `search_cross_hub` (`SELECT id FROM hubs WHERE is_active = TRUE`). KHÔNG dùng
 predicate cột `status` ở bất kỳ đâu (chỉ `is_active`).
 
-Cross-hub fan-out (`search_cross_hub`) + `find_similar` thêm ở 06-02.
+Cross-hub fan-out (`search_cross_hub`) — fan-out song song mỗi hub qua
+`asyncio.gather` rồi aggregate + re-rank theo score (SEARCH-03 / D-06). Cache
+cross-hub tách namespace `search:cross:` (06-03 invalidation xử lý chung prefix
+`search:`). `find_similar` (D-04) — find-similar không có REQ-ID, KHÔNG cache.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -24,7 +28,14 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.repositories.hub_isolation import HubIsolationError
-from app.schemas.search import SearchRequest, SearchResponse, SearchResultItem
+from app.schemas.search import (
+    SearchRequest,
+    SearchResponse,
+    SearchResultItem,
+    SimilarMatch,
+    SimilarRequest,
+    SimilarResponse,
+)
 from app.services.embedder import embed_text
 
 if TYPE_CHECKING:
@@ -80,6 +91,18 @@ def _cache_key(
     """Cache key `search:<sha256>` — hub_ids đã intersect nên cache hub-scoped."""
     raw = f"{query}|{sorted(hub_ids)}|{top_k}|{min_score}"
     return "search:" + hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _cross_cache_key(
+    query: str,
+    hub_ids: list[str],
+    top_k: int,
+    min_score: float | None,
+) -> str:
+    """Cache key cross-hub `search:cross:<sha256>` — tách namespace khỏi
+    single-hub `search:` để 06-03 invalidation xử lý chung prefix `search:`."""
+    raw = f"{query}|{sorted(hub_ids)}|{top_k}|{min_score}"
+    return "search:cross:" + hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _resolve_top_k(raw: int | None) -> int:
@@ -274,3 +297,154 @@ class SearchService:
             },
         )
         return result
+
+    async def search_cross_hub(  # noqa: C901 — chuỗi step fan-out + cache phẳng
+        self,
+        *,
+        body: SearchRequest,
+        user: UserWithHubs,
+    ) -> dict[str, Any]:
+        """Cross-hub fan-out search (SEARCH-03 / D-06).
+
+        Query SONG SONG mỗi hub qua `asyncio.gather` (mỗi hub lấy `top_k`
+        riêng), aggregate toàn bộ rồi re-rank theo score desc → global top-k.
+
+        Khác `search()` (1 câu SQL union): fan-out per-hub cần danh sách hub cụ
+        thể — admin không filter → query tất cả hub `is_active = TRUE` (predicate
+        NHẤT QUÁN branch admin-all của `_run_vector_query` ở 06-01).
+
+        Trả dict (`SearchResponse.model_dump(mode="json")`) — router wrap envelope.
+        """
+        t0 = time.perf_counter()
+        top_k = _resolve_top_k(body.top_k)
+        hub_ids = intersect_hubs(body.hub_ids, user.hub_ids, user.user.role)
+
+        # admin không filter: fan-out cần danh sách hub cụ thể → query tất cả hub
+        # active. Predicate `is_active = TRUE` NHẤT QUÁN branch admin-all của
+        # `_run_vector_query` (06-01). TUYỆT ĐỐI KHÔNG dùng cột `status`.
+        if user.user.role == "admin" and not body.hub_ids:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("SELECT id FROM hubs WHERE is_active = TRUE")
+            hub_ids = [str(r["id"]) for r in rows]
+
+        # Không hub nào để fan-out (non-admin chưa assign / không hub active) →
+        # empty result hợp lệ.
+        if not hub_ids:
+            return SearchResponse(
+                results=[],
+                total_hubs_searched=0,
+                query_time_ms=int((time.perf_counter() - t0) * 1000),
+                cache_hit=False,
+            ).model_dump(mode="json")
+
+        # Cache đọc (D-11) — namespace `search:cross:`, fail-open.
+        cache_key = _cross_cache_key(body.query, hub_ids, top_k, body.min_score)
+        if self.redis is not None:
+            try:
+                cached = await self.redis.get(cache_key)
+            except Exception as exc:  # noqa: BLE001 — fail-open, KHÔNG raise
+                logger.warning("cross-hub cache get thất bại: %s", exc)
+            else:
+                if cached:
+                    result: dict[str, Any] = json.loads(cached)
+                    result["cache_hit"] = True
+                    return result
+
+        # Embed query 1 lần (D-09) — ValueError / EmbedderError tự bubble lên
+        # router để map 400 / 502 (KHÔNG catch ở service).
+        query_vector = await embed_text(body.query)
+
+        # Fan-out per-hub qua asyncio.gather — `_run_vector_query` trả tuple
+        # `(rows, count)`; `_search_one` CHỈ lấy phần tử [0] (`rows`).
+        async def _search_one(hub_id: str) -> list[Any]:
+            rows, _ = await self._run_vector_query(
+                query_vector=query_vector,
+                hub_ids=[hub_id],
+                top_k=top_k,
+                all_hubs=False,
+            )
+            return rows
+
+        per_hub = await asyncio.gather(*[_search_one(h) for h in hub_ids])
+
+        # Aggregate + re-rank theo score desc → global top-k.
+        all_rows = [r for rows in per_hub for r in rows]
+        all_rows.sort(key=lambda r: float(r["score"]), reverse=True)
+        items = [_row_to_item(r) for r in all_rows[:top_k]]
+
+        # min_score filter (D-14) — categories/tags/date_* accept-but-noop M2.
+        if body.min_score is not None:
+            items = [it for it in items if it.score >= body.min_score]
+
+        # total_hubs_searched = số hub fan-out thực sự (với admin-all `hub_ids`
+        # đã = danh sách hub `is_active = TRUE`).
+        result = SearchResponse(
+            results=items,
+            total_hubs_searched=len(hub_ids),
+            query_time_ms=int((time.perf_counter() - t0) * 1000),
+            cache_hit=False,
+        ).model_dump(mode="json")
+
+        # Cache ghi — fail-open.
+        if self.redis is not None:
+            try:
+                await self.redis.set(
+                    cache_key, json.dumps(result), ex=CACHE_TTL_SECONDS
+                )
+            except Exception as exc:  # noqa: BLE001 — fail-open, KHÔNG raise
+                logger.warning("cross-hub cache set thất bại: %s", exc)
+
+        logger.info(
+            "cross_hub_search_completed",
+            extra={"hub_count": len(hub_ids), "result_count": len(items)},
+        )
+        return result
+
+    async def find_similar(
+        self,
+        *,
+        body: SimilarRequest,
+        user: UserWithHubs,
+    ) -> dict[str, Any]:
+        """Find-similar (D-04 — không có REQ-ID, KHÔNG cache D-11).
+
+        Nhận `{content, hub_id?, threshold?}` → embed `content` rồi vector query
+        trả `SimilarResponse`. Empty result hợp lệ (KHÔNG raise).
+        """
+        top_k = DEFAULT_TOP_K  # frontend không gửi top_k cho similar.
+        requested = [body.hub_id] if body.hub_id else None
+        hub_ids = intersect_hubs(requested, user.hub_ids, user.user.role)
+        is_admin_all = user.user.role == "admin" and not body.hub_id
+
+        # Non-admin chưa assign hub (intersect rỗng) → empty result hợp lệ.
+        if not is_admin_all and not hub_ids:
+            return SimilarResponse(matches=[]).model_dump(mode="json")
+
+        # Embed content (D-09) — ValueError / EmbedderError tự bubble lên router.
+        query_vector = await embed_text(body.content)
+
+        rows, _ = await self._run_vector_query(
+            query_vector=query_vector,
+            hub_ids=hub_ids,
+            top_k=top_k,
+            all_hubs=is_admin_all,
+        )
+
+        # threshold filter — giữ row có score >= threshold (mặc định 0.0).
+        threshold = body.threshold if body.threshold is not None else 0.0
+        matches = [
+            SimilarMatch(
+                page_id=str(r["document_id"]),
+                page_title=r["filename"],
+                similarity_score=float(r["score"]),
+                hub_name=r["hub_name"],
+            )
+            for r in rows
+            if float(r["score"]) >= threshold
+        ]
+
+        logger.info(
+            "find_similar_completed",
+            extra={"hub_count": len(hub_ids), "result_count": len(matches)},
+        )
+        return SimilarResponse(matches=matches).model_dump(mode="json")
