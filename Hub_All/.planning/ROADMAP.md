@@ -231,7 +231,11 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Redis cache hoạt động: 2 lần gọi `GET /api/search?q=...` giống nhau trong 5 phút → lần 2 hit cache (latency <50ms); upload document mới trong hub → cache invalidate qua Pub/Sub channel `hub:{hub_id}:invalidate`
   5. Recall sanity check trên 50 query VN sample: top-3 với hub filter trả ≥1 chunk relevant cho mỗi query (manual review) — chuẩn bị data cho Phase 9 eval gate ≥75%
 
-**Plans:** TBD
+**Plans:** 4 plans (4 waves)
+- [ ] 06-01-PLAN.md — Schema layer (search.py 7 Pydantic model khớp api.ts) + SearchService.search() single-hub union + HNSW tuning + Redis cache (Wave 1, SEARCH-01/02/04)
+- [ ] 06-02-PLAN.md — search_cross_hub() fan-out asyncio.gather + re-rank + find_similar() + router 3 endpoint POST + mount create_app() (Wave 2, SEARCH-01/02/03)
+- [ ] 06-03-PLAN.md — Redis Pub/Sub cache invalidation: hub-tagged scheme + publish hub:{hub_id}:invalidate + subscriber lifespan task (Wave 3, SEARCH-04)
+- [ ] 06-04-PLAN.md — E4 critical test suite: hub isolation + cross-hub + empty result + cache hit + EXPLAIN ANALYZE HNSW Index Scan (Wave 4, SEARCH-01/02/03/04)
 
 ---
 
