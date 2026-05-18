@@ -84,7 +84,7 @@
 
 ### FRONTEND-COMPAT — Verify React 19 Vẫn Hoạt Động (1 REQ)
 
-- [ ] **COMPAT-01**: Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`), smoke từng trang React (Dashboard, HubRegistry, DocumentIngestion, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — golden path mỗi trang PASS. **Ngoại lệ: trang `SyncQueue`** — feature sync queue đã loại khỏi M2 (Phase 5 CONTEXT D-01), `/api/sync/*` KHÔNG implement; trang này dự kiến lỗi API, KHÔNG tính vào golden-path PASS, dọn ở frontend rewrite v3.0. Replay test: so response envelope shape FastAPI mới vs router signature `git show m1-go-archived` + frontend types (Go runtime đã teardown). Vietnamese filename UTF-8 test ("Khám bệnh đa khoa.docx") upload + display preserve.
+- [x] **COMPAT-01**: ✅ Phase 8 COMPLETE 2026-05-19 (lớp tĩnh/tự động ĐẠT; SC1/SC2-browser/SC5 defer `/gsd-verify-work 8` — `08-HUMAN-UAT.md`). Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`), smoke từng trang React (Dashboard, HubRegistry, DocumentIngestion, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — golden path mỗi trang PASS. **Ngoại lệ: trang `SyncQueue`** — feature sync queue đã loại khỏi M2 (Phase 5 CONTEXT D-01), `/api/sync/*` KHÔNG implement; trang này dự kiến lỗi API, KHÔNG tính vào golden-path PASS, dọn ở frontend rewrite v3.0. Replay test: so response envelope shape FastAPI mới vs router signature `git show m1-go-archived` + frontend types (Go runtime đã teardown). Vietnamese filename UTF-8 test ("Khám bệnh đa khoa.docx") upload + display preserve.
 
 ### TEARDOWN — Xóa Go Backend (1 REQ)
 
@@ -208,7 +208,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | ASK-03 | Phase 7 (POST /api/ask/cross-hub) | ✅ Done (Plan 07-04 ask_cross_hub + endpoint; 07-05 cross-hub citation hub_id + hub isolation E4 verified) |
 | ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03 dimension guard; 07-05 hot-swap LLM + cross-dim 400 verified) |
 | ASK-05 | Phase 7 (token usage logging) | ✅ Done (Plan 07-02 write/read path + 07-04 BackgroundTasks; 07-05 10 ask → 10 row + aggregate verified) |
-| COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | 🔄 In progress — Plan 08-01 done (contract diff + replay test tĩnh, SC3 thoả) + 08-02 done (fix api-side: BLOCKER /api/ai/chat + port 8180) + 08-03 done (test suite tự động golden path SC2 + VN filename UTF-8 SC4, 2 test integration critical PASS); còn 08-04 smoke 11 trang (manual UAT) |
+| COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | ✅ Phase 8 COMPLETE 2026-05-19 — lớp tĩnh/tự động ĐẠT: 08-01 contract diff + replay tĩnh (SC3), 08-02 fix api-side (BLOCKER /api/ai/chat + port 8180), 08-03 test golden path API SC2 + VN filename UTF-8 SC4 (2 test critical PASS), regression 109/109 unit PASS. Lớp browser SC1 (render 11 trang) / SC2-browser (citation `[1]` clickable) / SC5 (docker compose healthy) defer human UAT — `08-HUMAN-UAT.md`, chạy `/gsd-verify-work 8` |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
 | EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | Pending |
 | EVAL-02 | Phase 9 (run_eval.py pytest) | Pending |
