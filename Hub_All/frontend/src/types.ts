@@ -91,8 +91,9 @@ export interface RAGDocument {
   type: 'pdf' | 'docx' | 'txt' | 'md' | 'xlsx' | 'pptx';
   size: string;
   hubId: string;
-  status: 'pending' | 'processing' | 'completed' | 'error';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'failed_unsupported' | 'error';
   progress: number;
+  chunkCount?: number;
   uploadedAt: string;
   uploadedBy: string;
   errorMessage?: string;

@@ -4,7 +4,7 @@
     POST /api/auth/login    — body {email, password} → 200 LoginResponse / 401
     POST /api/auth/refresh  — body {refresh_token} → 200 LoginResponse / 401
     POST /api/auth/logout   — Bearer + optional body {refresh_token} → 200
-    GET  /api/auth/me       — Bearer → 200 UserPublic / 401 INVALID_TOKEN
+    GET  /api/auth/me       — Bearer → 200 UserWithRolesResponse / 401 INVALID_TOKEN
 
 Mọi response qua `app.pkg.response.ok/error_*` envelope (Plan 03-01) — KHÔNG
 return Pydantic model raw để D6 frontend compat.
@@ -50,7 +50,8 @@ async def login(
         result = await service.login(req)
     except AuthError as e:
         return _auth_error_to_response(e)
-    return resp.ok(data=result.model_dump())
+    # mode="json" — serialize datetime trong user.created_at/updated_at sang ISO.
+    return resp.ok(data=result.model_dump(mode="json"))
 
 
 @router.post("/refresh")
@@ -62,7 +63,7 @@ async def refresh(
         result = await service.refresh(req)
     except AuthError as e:
         return _auth_error_to_response(e)
-    return resp.ok(data=result.model_dump())
+    return resp.ok(data=result.model_dump(mode="json"))
 
 
 @router.post("/logout")
@@ -110,4 +111,4 @@ async def me(
         public = await service.get_current_user_info(str(user.id))
     except AuthError as e:
         return _auth_error_to_response(e)
-    return resp.ok(data=public.model_dump())
+    return resp.ok(data=public.model_dump(mode="json"))

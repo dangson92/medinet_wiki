@@ -80,7 +80,7 @@ async def _upload(
         data={"hub_id": hub_id},
     )
     assert r.status_code == 202, r.text
-    return str(r.json()["data"]["document_id"])
+    return str(r.json()["data"]["id"])
 
 
 async def _count(query: str, params: dict[str, Any]) -> int:

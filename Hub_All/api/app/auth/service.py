@@ -21,9 +21,13 @@ from app.auth.schemas import (
     LoginRequest,
     LoginResponse,
     RefreshRequest,
-    UserPublic,
 )
 from app.models.auth import RefreshToken, User, UserHub
+from app.schemas.users import (
+    RoleAssignment,
+    UserResponse,
+    UserWithRolesResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,38 @@ class AuthError(Exception):
 def _hash_refresh_token(token: str) -> str:
     """T-02-03 mitigation — store SHA-256 thay vì plaintext refresh token."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _build_user_with_roles(
+    user: User, hub_ids: list[str]
+) -> UserWithRolesResponse:
+    """ORM User + hub_ids → UserWithRolesResponse (`{user, roles}`).
+
+    D6 contract: shape match Go cũ `model.UserWithRoles` — frontend
+    `Layout.tsx` đọc `user.user.name`. `roles` build từ hub assignments;
+    role = `users.role` (M2: 1 role mặc định áp cho mọi hub — schema chưa
+    có role per-hub). `name` map từ cột `full_name`.
+    """
+    return UserWithRolesResponse(
+        user=UserResponse(
+            id=str(user.id),
+            email=user.email,
+            name=user.full_name or "",
+            phone=user.phone,
+            department=user.department,
+            avatar_url=user.avatar_url,
+            status=user.status,  # type: ignore[arg-type]  # DB CHECK enum
+            failed_login_count=0,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        ),
+        roles=[
+            RoleAssignment(
+                user_id=str(user.id), hub_id=hid, role=user.role
+            )
+            for hid in hub_ids
+        ],
+    )
 
 
 class AuthService:
@@ -106,13 +142,7 @@ class AuthService:
             access_token=pair.access_token,
             refresh_token=pair.refresh_token,
             expires_at=int(pair.access_expires_at.timestamp()),
-            user=UserPublic(
-                id=str(user.id),
-                email=user.email,
-                full_name=user.full_name,
-                role=user.role,
-                hub_assignments=hub_ids,
-            ),
+            user=_build_user_with_roles(user, hub_ids),
         )
 
     async def refresh(self, req: RefreshRequest) -> LoginResponse:
@@ -196,13 +226,7 @@ class AuthService:
             access_token=pair.access_token,
             refresh_token=pair.refresh_token,
             expires_at=int(pair.access_expires_at.timestamp()),
-            user=UserPublic(
-                id=str(user.id),
-                email=user.email,
-                full_name=user.full_name,
-                role=user.role,
-                hub_assignments=hub_ids,
-            ),
+            user=_build_user_with_roles(user, hub_ids),
         )
 
     async def logout(
@@ -241,7 +265,9 @@ class AuthService:
             except JWTError:
                 logger.info("auth_logout_invalid_refresh — bỏ qua")
 
-    async def get_current_user_info(self, user_id: str) -> UserPublic:
+    async def get_current_user_info(
+        self, user_id: str
+    ) -> UserWithRolesResponse:
         """AUTH-03 — GET /api/auth/me data."""
         stmt = select(User).where(
             User.id == UUID(user_id), User.is_active.is_(True)
@@ -253,10 +279,4 @@ class AuthService:
         hub_ids = [
             str(h) for h in (await self.db.execute(hub_stmt)).scalars().all()
         ]
-        return UserPublic(
-            id=str(user.id),
-            email=user.email,
-            full_name=user.full_name,
-            role=user.role,
-            hub_assignments=hub_ids,
-        )
+        return _build_user_with_roles(user, hub_ids)

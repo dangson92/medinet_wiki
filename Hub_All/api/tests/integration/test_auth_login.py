@@ -42,14 +42,14 @@ async def test_login_happy_admin_returns_envelope(
     assert isinstance(data["access_token"], str)
     assert isinstance(data["refresh_token"], str)
 
-    # User nested.
-    user = data["user"]
+    # User nested — shape UserWithRoles `{user, roles}` (D6 contract frontend).
+    user_with_roles = data["user"]
+    user = user_with_roles["user"]
     assert user["id"] == admin_user["id"]
     assert user["email"] == admin_user["email"]
-    assert user["full_name"] == "System Admin"
-    assert user["role"] == "admin"
-    # Chưa assign hub (test fixture không INSERT user_hubs) → list rỗng.
-    assert user["hub_assignments"] == []
+    assert user["name"] == "System Admin"
+    # Chưa assign hub (test fixture không INSERT user_hubs) → roles rỗng.
+    assert user_with_roles["roles"] == []
 
 
 @pytest.mark.critical

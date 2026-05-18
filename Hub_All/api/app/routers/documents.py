@@ -149,15 +149,15 @@ async def upload(
     if cocoindex_app is None:
         logger.warning(
             "upload_no_cocoindex_app_in_state: doc_id=%s — BackgroundTask sẽ set status=failed",
-            result.document_id,
+            result.id,
         )
     background_tasks.add_task(
         trigger_cocoindex_update,
         cocoindex_app,
-        UUID(result.document_id),
+        UUID(result.id),
     )
 
-    return resp.accepted(data=result.model_dump())
+    return resp.accepted(data=result.model_dump(mode="json"))
 
 
 @router.get("/{document_id}")
@@ -188,6 +188,36 @@ async def get_by_id(
             code="NOT_FOUND",
         )
     return resp.ok(data=doc.model_dump(mode="json"))
+
+
+@router.get("/{document_id}/status")
+async def get_status(
+    document_id: str,
+    user: User = Depends(get_current_user),  # noqa: B008
+    service: DocumentService = Depends(get_document_service),  # noqa: B008
+) -> JSONResponse:
+    """GET /api/documents/:id/status — Bearer → {status, progress}.
+
+    Frontend poll endpoint này mỗi 1.5s cho document pending/processing để
+    cập nhật progress bar (D6 — Go cũ có endpoint tương đương).
+    `progress` derive từ status (xem schemas.documents.progress_for_status).
+    """
+    _ = user  # Reserved cho Phase 5 hub isolation enforce.
+    try:
+        doc_uuid = UUID(document_id)
+    except ValueError:
+        return resp.bad_request(
+            message=f"document_id không phải UUID hợp lệ: {document_id!r}",
+            code="INVALID_DOCUMENT_ID",
+        )
+
+    doc = await service.get(doc_uuid)
+    if doc is None:
+        return resp.not_found(
+            message=f"Document {document_id} không tồn tại",
+            code="NOT_FOUND",
+        )
+    return resp.ok(data={"status": doc.status, "progress": doc.progress})
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

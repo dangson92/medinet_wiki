@@ -90,6 +90,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     except Exception as e:  # noqa: BLE001 — Phase 1 không crash.
         logger.warning("redis_init_failed: %s", e)
 
+    # 2.5) RAG config — load settings DB đã persist → apply os.environ + singleton.
+    #      PHẢI chạy TRƯỚC setup_cocoindex (step 3): initial backfill embed mọi
+    #      pending document và CẦN đúng provider/model admin đã lưu. Nếu load sau,
+    #      backfill dùng config .env cũ (vd OPENAI_API_KEY placeholder) → embed fail.
+    #      Best-effort: lỗi chỉ log, KHÔNG crash lifespan.
+    if app.state.db_pool is not None:
+        try:
+            from app.services.rag_config_service import (
+                load_persisted_into_runtime,
+            )
+
+            await load_persisted_into_runtime(app.state.db_pool)
+            logger.info("rag_config_runtime_loaded")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("rag_config_load_failed: %s", e)
+
     # 3) Cocoindex 1.0.3 init + initial backfill (Phase 4 Plan 04-03 REVISION 2 — INGEST-01..03).
     #    setup_cocoindex(settings) → register @coco.lifespan + coco.start_blocking
     #    + cocoindex_app.update_blocking() initial backfill cho mọi pending documents.
@@ -319,6 +335,7 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         audit_logs_router,
         hubs_router,
         profile_router,
+        rag_config_router,
         users_router,
     )
 
@@ -327,6 +344,9 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     app.include_router(profile_router)
     app.include_router(api_keys_router)
     app.include_router(audit_logs_router)
+    # rag-config router — port endpoint Go /api/rag-config (ASK-04, build sớm
+    # ngoài Phase 7 theo user request — frontend Settings.tsx đang gọi endpoint này).
+    app.include_router(rag_config_router)
 
     # Rate limiter (Phase 5 AUX-03 — slowapi). Plan 05-02 tạo module; wiring tại đây.
     # Endpoint Phase 5 decorate @limiter.limit = GET /api/audit-logs (Plan 05-05 W4).

@@ -44,9 +44,9 @@ from app.db.session import get_engine
 from app.models.auth import User
 from app.repositories.hub_isolation import HubIsolationError, verify_hub_access
 from app.schemas.documents import (
-    DocumentListItem,
+    TERMINAL_STATUSES,
     DocumentResponse,
-    DocumentUploadResponse,
+    progress_for_status,
 )
 from app.services.audit_service import AuditEntry, enqueue_audit
 from app.services.file_extract import (
@@ -59,6 +59,42 @@ from app.services.file_store import FileStore
 logger = logging.getLogger(__name__)
 
 SCANNED_PDF_MESSAGE = "PDF scan chưa hỗ trợ trong M2. Khuyến nghị: chuyển sang DOCX."
+
+# Cột SELECT chung cho get + list — thứ tự khớp _row_to_response().
+_DOC_COLUMNS = (
+    "id, hub_id, uploaded_by, filename, file_path, file_size_bytes, "
+    "status, error_message, chunk_count, created_at, updated_at"
+)
+
+
+def _row_to_response(row: Any) -> DocumentResponse:
+    """Map 1 DB row → DocumentResponse (shape Go `model.Document` — D6).
+
+    row order khớp _DOC_COLUMNS: id, hub_id, uploaded_by, filename, file_path,
+    file_size_bytes, status, error_message, chunk_count, created_at, updated_at.
+
+    Derive:
+    - file_type: đuôi file (documents không lưu cột file_type như Go).
+    - progress: từ status (documents không có cột progress).
+    - processed_at: = updated_at khi status terminal, ngược lại None.
+    """
+    status_value = row[6]
+    updated_at = row[10]
+    return DocumentResponse(
+        id=str(row[0]),
+        hub_id=str(row[1]),
+        uploaded_by=str(row[2]) if row[2] else None,
+        name=row[3],
+        file_path=row[4],
+        file_type=Path(row[3]).suffix.lower().lstrip("."),
+        file_size=row[5] or 0,
+        status=status_value,
+        progress=progress_for_status(status_value),
+        error_message=row[7],
+        chunk_count=row[8],
+        uploaded_at=row[9],
+        processed_at=updated_at if status_value in TERMINAL_STATUSES else None,
+    )
 
 
 class DocumentService:
@@ -80,7 +116,7 @@ class DocumentService:
         file_content: bytes,
         original_filename: str,
         mime_type: str | None = None,
-    ) -> DocumentUploadResponse:
+    ) -> DocumentResponse:
         """Save file + early-detect scanned PDF + INSERT documents.
 
         REVISION 2 A4: KHÔNG còn pg-notify — caller (router) trigger cocoindex
@@ -175,7 +211,12 @@ class DocumentService:
             },
         )
 
-        # FastAPI get_session() auto-commit on success.
+        # Commit NGAY sau INSERT — KHÔNG dựa vào get_session() auto-commit.
+        # FastAPI đóng exit-stack của yield-dependency SAU khi background tasks
+        # đã chạy xong. Nếu để get_session commit, BackgroundTask
+        # trigger_cocoindex_update chạy TRƯỚC commit → cocoindex
+        # update_blocking() SELECT documents KHÔNG thấy row vừa INSERT → 0 chunk.
+        await self.db.commit()
         logger.info(
             "document_created: id=%s hub_id=%s filename=%s size=%d",
             doc_id,
@@ -184,43 +225,26 @@ class DocumentService:
             file_size,
         )
 
-        return DocumentUploadResponse(
-            document_id=str(doc_id),
-            status="pending",
-            filename=original_filename,
-        )
+        # D6: trả full document shape (Go `Upload` cũ trả nguyên Document object).
+        # Re-fetch trong cùng session — row vừa INSERT đã visible trước commit.
+        doc = await self.get(doc_id)
+        if doc is None:  # không thể xảy ra — vừa INSERT trong cùng session
+            raise RuntimeError(
+                f"document {doc_id} không đọc lại được ngay sau INSERT"
+            )
+        return doc
 
     async def get(self, document_id: UUID) -> DocumentResponse | None:
         """SELECT 1 document qua id. None nếu không tồn tại."""
         row = (
             await self.db.execute(
-                text(
-                    "SELECT id, hub_id, uploaded_by, filename, file_path, mime_type, "
-                    "file_size_bytes, status, error_message, last_heartbeat, "
-                    "attempts, chunk_count, created_at, updated_at "
-                    "FROM documents WHERE id = :id"
-                ),
+                text(f"SELECT {_DOC_COLUMNS} FROM documents WHERE id = :id"),
                 {"id": str(document_id)},
             )
         ).fetchone()
         if row is None:
             return None
-        return DocumentResponse(
-            id=str(row[0]),
-            hub_id=str(row[1]),
-            uploaded_by=str(row[2]) if row[2] else None,
-            filename=row[3],
-            file_path=row[4],
-            mime_type=row[5],
-            file_size_bytes=row[6],
-            status=row[7],
-            error_message=row[8],
-            last_heartbeat=row[9],
-            attempts=row[10],
-            chunk_count=row[11],
-            created_at=row[12],
-            updated_at=row[13],
-        )
+        return _row_to_response(row)
 
     async def list(
         self,
@@ -231,7 +255,7 @@ class DocumentService:
         search: str | None = None,
         page: int = 1,
         per_page: int = 20,
-    ) -> tuple[list[DocumentListItem], int]:
+    ) -> tuple[list[DocumentResponse], int]:
         """List documents với filter + pagination — Plan 04-05 INGEST-08.
 
         Args:
@@ -243,7 +267,7 @@ class DocumentService:
             per_page: cap min(per_page, 100) by router (KHÔNG cap ở service layer).
 
         Returns:
-            Tuple (items, total) — items DocumentListItem list, total số rows match.
+            Tuple (items, total) — items DocumentResponse list, total số rows match.
         """
         # Build WHERE clauses + bind params (asyncpg parametrize an toàn — no SQL injection).
         where_clauses: list[str] = []
@@ -278,26 +302,14 @@ class DocumentService:
         rows = (
             await self.db.execute(
                 text(
-                    f"SELECT id, hub_id, filename, status, chunk_count, created_at, updated_at "
-                    f"FROM documents {where_sql} "
+                    f"SELECT {_DOC_COLUMNS} FROM documents {where_sql} "
                     f"ORDER BY created_at DESC "
                     f"LIMIT :limit OFFSET :offset"
                 ),
                 params_with_pg,
             )
         ).fetchall()
-        items = [
-            DocumentListItem(
-                id=str(r[0]),
-                hub_id=str(r[1]),
-                filename=r[2],
-                status=r[3],
-                chunk_count=r[4],
-                created_at=r[5],
-                updated_at=r[6],
-            )
-            for r in rows
-        ]
+        items = [_row_to_response(r) for r in rows]
         return items, total
 
     async def delete(

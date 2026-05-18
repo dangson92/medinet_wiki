@@ -257,7 +257,7 @@ async def _upload_docx(
     content: bytes,
     name: str,
 ) -> str:
-    """POST /api/documents/upload → return document_id từ envelope D6."""
+    """POST /api/documents/upload → return document id từ envelope D6."""
     r = await client.post(
         "/api/documents/upload",
         headers={"Authorization": f"Bearer {token}"},
@@ -271,7 +271,7 @@ async def _upload_docx(
         data={"hub_id": str(hub_id)},
     )
     assert r.status_code == 202, r.text
-    return str(r.json()["data"]["document_id"])
+    return str(r.json()["data"]["id"])
 
 
 async def _wait_until(

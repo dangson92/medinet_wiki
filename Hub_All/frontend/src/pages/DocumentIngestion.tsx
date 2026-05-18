@@ -63,6 +63,7 @@ function mapDocToRAG(doc: DocumentAPI): RAGDocument {
     hubId: doc.hub_id,
     status: doc.status as any,
     progress: doc.progress,
+    chunkCount: doc.chunk_count,
     uploadedAt: doc.uploaded_at,
     uploadedBy: doc.uploaded_by || 'Admin',
     errorMessage: doc.error_message,
@@ -477,24 +478,23 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
       case 'completed': return <CheckCircle2 className="text-success" size={18} />;
       case 'processing': return <Loader2 className="text-accent animate-spin" size={18} />;
       case 'pending': return <Loader2 className="text-amber-500 animate-spin" size={18} />;
+      case 'failed':
+      case 'failed_unsupported':
       case 'error': return <AlertCircle className="text-danger" size={18} />;
       default: return <Clock className="text-slate-400" size={18} />;
     }
   };
 
-  const getPipelineStage = (progress: number) => {
-    if (progress < 10) return 'Trích xuất';
-    if (progress < 40) return 'Chunking';
-    if (progress < 80) return 'Embedding';
-    return 'Lưu trữ';
-  };
-
-  const getStatusText = (status: string, progress: number) => {
+  // CocoIndex chạy một lượt update_blocking() — KHÔNG có 4 stage progress như
+  // backend Go cũ. Trạng thái thực chỉ: pending → completed / failed.
+  const getStatusText = (status: string) => {
     switch (status) {
       case 'completed': return 'Đã nạp';
-      case 'processing': return `${getPipelineStage(progress)} (${progress}%)`;
-      case 'pending': return 'Đang chờ...';
+      case 'processing': return 'Đang xử lý...';
+      case 'pending': return 'Đang xử lý...';
+      case 'failed':
       case 'error': return 'Lỗi';
+      case 'failed_unsupported': return 'Không hỗ trợ';
       default: return 'Chờ xử lý';
     }
   };
@@ -620,10 +620,11 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                                 {getStatusIcon(doc.status)}
                                 <span className={cn(
                                   "text-xs font-medium",
-                                  doc.status === 'completed' ? "text-success" : 
-                                  doc.status === 'error' ? "text-danger" : "text-slate-600 dark:text-slate-300"
+                                  doc.status === 'completed' ? "text-success" :
+                                  (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error') ? "text-danger" :
+                                  "text-slate-600 dark:text-slate-300"
                                 )}>
-                                  {getStatusText(doc.status, doc.progress)}
+                                  {getStatusText(doc.status)}
                                 </span>
                               </div>
                               {doc.status === 'processing' && (
@@ -743,11 +744,45 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                             >
                               <td colSpan={5} className="px-6 py-5 border-t border-slate-100 dark:border-slate-700">
                                 <div className="space-y-4">
-                                  {/* Nội dung trích xuất */}
-                                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700">
-                                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                                      {doc.content || "Đang trích xuất nội dung..."}
-                                    </p>
+                                  {/* Trạng thái xử lý — CocoIndex chạy một lượt update_blocking():
+                                      pending → completed / failed. KHÔNG có 4 stage như backend Go cũ. */}
+                                  <div className={cn(
+                                    "flex items-start gap-3 p-3 rounded-lg border",
+                                    doc.status === 'completed'
+                                      ? "bg-success/5 border-success/20"
+                                      : (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error')
+                                      ? "bg-danger/5 border-danger/20"
+                                      : "bg-accent/5 border-accent/20"
+                                  )}>
+                                    {doc.status === 'completed' ? (
+                                      <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" />
+                                    ) : (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error') ? (
+                                      <AlertCircle size={18} className="text-danger shrink-0 mt-0.5" />
+                                    ) : (
+                                      <Loader2 size={18} className="text-accent animate-spin shrink-0 mt-0.5" />
+                                    )}
+                                    <div className="text-sm">
+                                      {doc.status === 'completed' ? (
+                                        <>
+                                          <p className="font-medium text-slate-800 dark:text-slate-100">Đã nạp vào kho tri thức</p>
+                                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            CocoIndex đã trích xuất, chia chunk và vector hóa — {doc.chunkCount ?? 0} chunks.
+                                          </p>
+                                        </>
+                                      ) : (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error') ? (
+                                        <>
+                                          <p className="font-medium text-slate-800 dark:text-slate-100">Nạp tri thức thất bại</p>
+                                          <p className="text-xs text-danger mt-0.5">{doc.errorMessage || 'Không rõ nguyên nhân'}</p>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <p className="font-medium text-slate-800 dark:text-slate-100">Đang xử lý qua CocoIndex</p>
+                                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Trích xuất · chia chunk · embed chạy nền trong một lượt — trạng thái tự cập nhật khi hoàn tất.
+                                          </p>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
 
                                   {/* Thông tin kỹ thuật - 1 dòng */}
@@ -761,49 +796,6 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                                       <Cpu size={13} className="text-slate-400 dark:text-slate-500" />
                                       <span className="text-slate-700 dark:text-slate-200 font-medium">{ragConfig?.embedding_model || 'gemini-embedding-001'}</span>
                                     </div>
-                                  </div>
-
-                                  {/* Pipeline steps - inline with animated active step */}
-                                  <div className="flex items-center gap-1">
-                                    {(() => {
-                                      const isActive = doc.status === 'pending' || doc.status === 'processing';
-                                      const steps = [
-                                        { label: 'Trích xuất', done: doc.progress >= 10 },
-                                        { label: 'Chunking', done: doc.progress >= 40 },
-                                        { label: 'Embedding', done: doc.progress >= 80 },
-                                        { label: 'Lưu trữ', done: doc.status === 'completed' }
-                                      ];
-                                      const activeIndex = isActive ? steps.findIndex(s => !s.done) : -1;
-                                      return steps.map((step, i, arr) => (
-                                      <React.Fragment key={i}>
-                                        {i === activeIndex && isActive ? (
-                                          <span className="relative text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
-                                            <span className="absolute inset-0 rounded-full border border-accent/60 animate-[pulse-border_1.5s_ease-in-out_infinite]" />
-                                            <Loader2 size={10} className="inline animate-spin mr-1" />
-                                            {step.label}
-                                          </span>
-                                        ) : (
-                                          <span className={cn(
-                                            "text-xs px-2 py-0.5 rounded-full transition-all",
-                                            step.done
-                                              ? "bg-success/10 text-success font-medium"
-                                              : doc.status === 'error' && i === activeIndex
-                                              ? "bg-danger/10 text-danger"
-                                              : "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
-                                          )}>
-                                            {step.done && <CheckCircle2 size={10} className="inline mr-0.5" />}
-                                            {step.label}
-                                          </span>
-                                        )}
-                                        {i < arr.length - 1 && (
-                                          <div className={cn(
-                                            "w-3 h-px transition-all",
-                                            step.done ? "bg-success/40" : "bg-slate-200 dark:bg-slate-700"
-                                          )} />
-                                        )}
-                                      </React.Fragment>
-                                    ));
-                                    })()}
                                   </div>
                                 </div>
                               </td>

@@ -105,7 +105,7 @@ async def _upload(
         data={"hub_id": str(hub_id)},
     )
     assert r.status_code == 202, r.text
-    return str(r.json()["data"]["document_id"])
+    return str(r.json()["data"]["id"])
 
 
 @pytest.mark.critical
@@ -214,7 +214,7 @@ async def test_list_filter_search_filename(
     assert body["meta"]["total"] == 1, (
         f"ILIKE 'báo' phải match 1 file 'Báo cáo Q1.docx', got total={body['meta']['total']}"
     )
-    assert "Báo cáo" in body["data"][0]["filename"]
+    assert "Báo cáo" in body["data"][0]["name"]
 
 
 @pytest.mark.critical

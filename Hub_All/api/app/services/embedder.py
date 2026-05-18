@@ -64,6 +64,14 @@ async def embed_text(text: str, model: str | None = None) -> list[float]:
     settings = get_settings()
     model_name = model or settings.rag_embedding_model
 
+    # Chuẩn hoá tên model cho LiteLLM routing. Frontend Settings gửi tên TRẦN
+    # (vd "gemini-embedding-001") — LiteLLM hiểu tên trần đó là Vertex AI
+    # (cần Google Cloud SDK + credentials GCP). Provider Gemini API (Google AI
+    # Studio, key dạng "AIza...") YÊU CẦU tiền tố "gemini/". Tự thêm prefix khi
+    # provider=gemini và model chưa có "/" — KHÔNG sửa frontend (ràng buộc D6).
+    if settings.rag_embedding_provider == "gemini" and "/" not in model_name:
+        model_name = f"gemini/{model_name}"
+
     try:
         response: Any = await litellm.aembedding(
             model=model_name,

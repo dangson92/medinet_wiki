@@ -44,6 +44,24 @@ def docx_vn(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def docx_tables_only(tmp_path: Path) -> Path:
+    """DOCX layout-bảng — 0 paragraph nội dung, toàn bộ chữ nằm trong table cell.
+
+    Tái hiện đúng dạng tài liệu nội bộ Medinet (vd PhanCong_NhanVat) dựng layout
+    bằng bảng — case mà `_extract_docx` cũ (chỉ đọc paragraphs) extract ra rỗng.
+    """
+    doc = DocxDocument()
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "PHÂN CÔNG NHÂN VẬT"
+    table.cell(0, 1).text = "Mã T3-02"
+    table.cell(1, 0).text = "Nội dung quan trọng nằm trong ô bảng."
+    table.cell(1, 1).text = "Tư vấn viên phụ trách kênh."
+    path = tmp_path / "bảng-layout.docx"
+    doc.save(str(path))
+    return path
+
+
+@pytest.fixture
 def txt_utf8_vn(tmp_path: Path) -> Path:
     path = tmp_path / "khám-utf8.txt"
     path.write_text("Khám bệnh đa khoa\nLâm sàng tốt.", encoding="utf-8")
@@ -122,6 +140,23 @@ def test_extract_docx_vietnamese(docx_vn: Path) -> None:
     assert meta["format"] == "docx"
     assert meta["pages"] == 1
     assert meta["paragraph_count"] == 4
+
+
+def test_extract_docx_tables(docx_tables_only: Path) -> None:
+    """DOCX toàn bảng (0 paragraph) — extract phải ra nội dung trong table cell.
+
+    Regression: `_extract_docx` cũ chỉ đọc `doc.paragraphs` → tài liệu layout-bảng
+    extract ra rỗng → 0 chunk → document kẹt. Core value M2 yêu cầu tái hiện "bảng".
+    """
+    text, is_scanned, meta = extract_text(docx_tables_only)
+    assert "PHÂN CÔNG NHÂN VẬT" in text
+    assert "Mã T3-02" in text
+    assert "Nội dung quan trọng nằm trong ô bảng." in text
+    assert "Tư vấn viên phụ trách kênh." in text
+    assert is_scanned is False
+    assert meta["format"] == "docx"
+    assert meta["table_count"] == 1
+    assert meta["paragraph_count"] == 0
 
 
 def test_extract_txt_utf8_vietnamese(txt_utf8_vn: Path) -> None:

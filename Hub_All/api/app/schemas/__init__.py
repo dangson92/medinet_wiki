@@ -3,16 +3,14 @@ from __future__ import annotations
 
 from app.schemas.documents import (
     DOCUMENT_STATUS_VALUES,
-    DocumentListItem,
     DocumentResponse,
     DocumentStatus,
-    DocumentUploadResponse,
+    progress_for_status,
 )
 
 __all__ = [
     "DOCUMENT_STATUS_VALUES",
-    "DocumentListItem",
     "DocumentResponse",
     "DocumentStatus",
-    "DocumentUploadResponse",
+    "progress_for_status",
 ]

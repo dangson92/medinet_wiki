@@ -72,19 +72,20 @@ async def test_me_endpoint_returns_user_info_via_token(
     admin_user: dict[str, str],
     admin_token: str,
 ) -> None:
-    """AUTH-03 — GET /api/auth/me với Bearer admin → 200 + UserPublic shape."""
+    """AUTH-03 — GET /api/auth/me với Bearer admin → 200 + UserWithRoles shape."""
     r = await auth_client.get(
         "/api/auth/me", headers={"Authorization": f"Bearer {admin_token}"}
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["success"] is True
+    # shape UserWithRoles `{user, roles}` — D6 contract frontend.
     data = body["data"]
-    assert data["id"] == admin_user["id"]
-    assert data["email"] == admin_user["email"]
-    assert data["role"] == "admin"
-    assert "hub_assignments" in data
-    assert data["full_name"] == "System Admin"
+    assert "roles" in data
+    user = data["user"]
+    assert user["id"] == admin_user["id"]
+    assert user["email"] == admin_user["email"]
+    assert user["name"] == "System Admin"
 
 
 @pytest.mark.critical

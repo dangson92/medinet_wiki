@@ -125,9 +125,9 @@ async def test_upload_happy_path_docx(
     assert body["success"] is True
     assert body["error"] is None
     data = body["data"]
-    assert "document_id" in data
+    assert "id" in data
     assert data["status"] == "pending"
-    assert data["filename"] == "Khám-bệnh.docx"
+    assert data["name"] == "Khám-bệnh.docx"
 
     # Verify row trong DB — last_heartbeat NOT NULL (WARNING #7 bootstrap).
     from app.db.session import get_engine
@@ -139,7 +139,7 @@ async def test_upload_happy_path_docx(
                     "SELECT status, hub_id, uploaded_by, filename, last_heartbeat "
                     "FROM documents WHERE id = :id"
                 ),
-                {"id": data["document_id"]},
+                {"id": data["id"]},
             )
         ).fetchone()
     assert row is not None
@@ -413,7 +413,7 @@ async def test_get_document_by_id_after_upload(
         data={"hub_id": str(hub_id)},
     )
     assert r.status_code == 202
-    doc_id = r.json()["data"]["document_id"]
+    doc_id = r.json()["data"]["id"]
 
     r2 = await auth_client.get(
         f"/api/documents/{doc_id}",
@@ -427,10 +427,23 @@ async def test_get_document_by_id_after_upload(
     # Status có thể đã chuyển sang 'failed' nếu BackgroundTask mock đã chạy
     # (mock generate 0 chunks → status='failed'). Accept cả 2 state.
     assert data["status"] in ("pending", "failed")
-    assert data["attempts"] == 0
-    assert data["filename"] == "test.docx"
-    # WARNING #7 bootstrap last_heartbeat NOT NULL — serialize qua API.
-    assert data["last_heartbeat"] is not None, (
+    assert data["name"] == "test.docx"
+    # D6: payload KHÔNG còn expose attempts/last_heartbeat (Go shape không có).
+    # WARNING #7 bootstrap last_heartbeat NOT NULL — verify trực tiếp DB.
+    from app.db.session import get_engine
+    engine = get_engine()
+    async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT attempts, last_heartbeat FROM documents WHERE id = :id"
+                ),
+                {"id": doc_id},
+            )
+        ).fetchone()
+    assert row is not None
+    assert row[0] == 0
+    assert row[1] is not None, (
         "WARNING #7 violated — last_heartbeat phải bootstrap=NOW() lúc INSERT"
     )
 
