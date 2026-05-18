@@ -63,7 +63,7 @@
 - [ ] **ASK-01**: `POST /api/ask` body `{q, hub_id, top_k?}` → SEARCH-01 lấy top-k chunks → build prompt với chunks đánh số `[1]`, `[2]`,... → `litellm.acompletion(model=cfg.llm_model, messages=[...])` **non-streaming** (streaming defer post-M2 vì citation parsing mid-stream phức tạp) → parse `[N]` markers trong response → return `{answer, citations: [{chunk_id, document_id, score, content_snippet}]}`.
 - [ ] **ASK-02**: System prompt anti-injection — instruct LLM "CHỈ trả lời từ context cung cấp, không suy diễn ngoài, format `[N]` cho citation". Test: user query yêu cầu bỏ qua system prompt KHÔNG bypass được.
 - [ ] **ASK-03**: `POST /api/ask/cross-hub` body `{q, hub_ids: [...]}` — như ASK-01 nhưng dùng SEARCH-03 lấy chunks từ nhiều hub. Citation kèm `hub_id`.
-- [ ] **ASK-04**: `GET /api/rag-config` + `PUT /api/rag-config` — admin endpoint hot-swap embedding + LLM provider:
+- [x] **ASK-04**: `GET /api/rag-config` + `PUT /api/rag-config` — admin endpoint hot-swap embedding + LLM provider: ✅ Plan 07-03 (2026-05-18)
   - LLM swap: trivial config reload, không re-index
   - Embedding swap WITHIN dim 1536 (OpenAI ↔ Gemini): allowed, WARNING modal "vector hiện tại sinh bằng provider X, swap có thể giảm chất lượng — re-embed all? [yes/no]" (R7 mitigation)
   - Embedding swap CROSS-dim (1536 ↔ 3072): REFUSE 400 "dimension mismatch — defer cross-dim swap v4.0"
@@ -206,7 +206,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | ASK-01 | Phase 7 (POST /api/ask + citation) | In progress (07-01 contract + prompt + parser layer; endpoint đầy đủ → 07-04) |
 | ASK-02 | Phase 7 (anti-injection system prompt) | In progress (07-01 ANTI_INJECTION_SYSTEM_PROMPT; verify đầy đủ → 07-05) |
 | ASK-03 | Phase 7 (POST /api/ask/cross-hub) | Pending |
-| ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | Pending |
+| ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03) |
 | ASK-05 | Phase 7 (token usage logging) | Pending |
 | COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | Pending |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |

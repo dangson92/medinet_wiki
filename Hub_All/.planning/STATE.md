@@ -14,7 +14,7 @@ current_phase:
   number: 7
   name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
   plans_total: 5
-  plans_complete: 2
+  plans_complete: 3
   status: in_progress
   waves: 3
 next_phase:
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** 🔵 IN PROGRESS (2/5 plans — 07-01 + 07-02 Wave 1 done) · Phase 6 ✅ COMPLETE trước đó |
-| Plan | 07-01 ✅ (Wave 1: schema ask.py + ask_prompt.py anti-injection + citation parser; ASK-01/02 contract layer). 07-02 ✅ (Wave 1: schemas/usage.py 6 model TokenUsage + usage_service.py log_usage_event write + query/aggregate/realtime read + routers/usage.py 3 endpoint GET admin-only mount; ASK-05 write+read path — DONE 2026-05-18). 07-03/04/05 chưa execute. |
-| Status | **Phase 7 Plan 07-02 COMPLETE — token usage write + read path layer.** `schemas/usage.py` định nghĩa contract D6 TokenUsage; `services/usage_service.py` tách write path `log_usage_event()` best-effort (gọi từ BackgroundTasks Plan 07-04) khỏi read path `query_usage`/`aggregate_usage`/`realtime_usage`; `routers/usage.py` 3 endpoint GET admin-only mount vào create_app (`GET /api/usage?group_by=` delegate aggregate — ROADMAP SC5 URL literal). 3/3 unit test pass. 0 deviation — code plan paste-ready. ASK-05 endpoint mount xong; `log_usage_event` call từ AskService + 10-ask verification vẫn cần Plan 07-04/07-05. Tiếp theo: execute 07-03/04/05. |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 7 plan 07-02`: executor sequential trên main tree. 3 task atomic — `12c3a2d` (test RED test_usage_schema.py), `476b8d7` (feat GREEN schemas/usage.py), `cf3a522` (feat usage_service.py), `634114f` (feat routers/usage.py + mount). Task 1 TDD RED→GREEN; Task 2/3 type=auto. Verification suite ruff + mypy --strict + pytest + create_app mount check pass sạch. |
+| Phase | **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** 🔵 IN PROGRESS (3/5 plans — 07-01 + 07-02 + 07-03 Wave 1 done) · Phase 6 ✅ COMPLETE trước đó |
+| Plan | 07-01 ✅ (Wave 1: schema ask.py + ask_prompt.py anti-injection + citation parser; ASK-01/02 contract layer). 07-02 ✅ (Wave 1: schemas/usage.py 6 model TokenUsage + usage_service.py log_usage_event write + query/aggregate/realtime read + routers/usage.py 3 endpoint GET admin-only mount; ASK-05 write+read path). 07-03 ✅ (Wave 1: rag_config_service dimension guard + cost preview; ASK-04/R7 — DONE 2026-05-18). 07-04/05 chưa execute. |
+| Status | **Phase 7 Plan 07-03 COMPLETE — rag-config dimension guard + cost preview (ASK-04 / R7).** Hoàn thiện endpoint `/api/rag-config` đã build sớm (commit `2d7a688`): `_embedding_dim_of()` parse hậu tố `@<dim>` từ model name; `update_config()` thêm dimension guard — cross-dim swap (1536↔3072) trả str → router map 400 "dimension mismatch — defer cross-dim swap v4.0", within-dim embedding swap trả dict + `warning` + `cost_preview` (re-embed N chunks, est $X.YZ, est T phút — cost luôn 2 chữ số `:.2f`); `_embedding_cost_preview()` count(*) chunks best-effort. `EmbeddingCostPreview` schema mới. 6/6 unit test pass (1 critical). 0 deviation. Router `rag_config.py` KHÔNG đụng (contract D6 raw JSON). Tiếp theo: execute 07-04/05. |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 7 plan 07-03`: executor sequential trên main tree. 3 task atomic — `789bc0d` (feat EmbeddingCostPreview schema), `2752d0b` (feat dimension guard + cost preview update_config), `29a11db` (test test_rag_config_dim_guard.py 6 test). Verification suite ruff + mypy --strict + pytest 6/6 + 1 critical pass sạch; `git diff --stat` xác nhận router KHÔNG đụng. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · **4 Phase 6 DONE** — SEARCH-01/02/03/04 (3 endpoint search + HNSW tuning + Redis cache + Pub/Sub invalidation; hub isolation E4 verified) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
 
-**Progress bar:** `[████████░░] 79% (Phase 7 🔵 IN PROGRESS — Plan 07-01 + 07-02 done: Ask API contract layer + token usage write/read path + 3 endpoint GET) · Next: execute 07-03/04/05`
+**Progress bar:** `[████████░░] 80% (Phase 7 🔵 IN PROGRESS — Plan 07-01 + 07-02 + 07-03 done: Ask API contract layer + token usage write/read path + rag-config dimension guard/cost preview) · Next: execute 07-04/05`
 
 ---
 
@@ -221,7 +221,15 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - Update: `Makefile` root (gỡ eval-* M1 + backend-* proxy), `.env.example` (gỡ Docling/ChromaDB/backend Go), `.gitignore` (gỡ `backend/chroma_data/`), `CLAUDE.md` (gỡ section DEPRECATED Go, đổi sang "ARCHIVED"), `ROADMAP.md` (Phase 8 đổi title + SC5 đánh dấu done).
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
-**Last session (2026-05-18 — `/gsd-execute-phase 7 plan 07-02`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-02 (Wave 1 — token usage write + read path, ASK-05):
+**Last session (2026-05-18 — `/gsd-execute-phase 7 plan 07-03`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-03 (Wave 1 — rag-config dimension guard + cost preview, ASK-04 / R7):
+- Task 1 (`789bc0d`): `schemas/rag_config.py` — thêm model `EmbeddingCostPreview` (n_chunks/est_cost_usd/est_minutes/message) mô tả shape cost preview within-dim swap. `UpdateRagConfigRequest` GIỮ NGUYÊN — request không đổi. Service build nội dung rồi `.model_dump()` ghép vào response dict raw (contract D6).
+- Task 2 (`2752d0b`): `services/rag_config_service.py` — hằng `PINNED_DIM=1536`/`COST_PER_CHUNK_USD=0.000013`/`CHUNKS_PER_MINUTE=450` + import math/re. Helper `_embedding_dim_of(model)` regex `@(\d+)\s*$` parse hậu tố dim, fallback 1536 (D-07-03-A). Method `_embedding_cost_preview()` count(*) chunks bọc try/except fallback n=0 (T-07-03-04), message format `:.2f` cost luôn 2 chữ số. `update_config()` chèn dimension guard sau validate provider name — cross-dim → trả str (router map 400 "dimension mismatch — defer cross-dim swap v4.0"), within-dim embedding swap → tính cost_preview; return dict thêm `warning`+`cost_preview`.
+- Task 3 (`29a11db`): `tests/unit/test_rag_config_dim_guard.py` — 6 unit test pure-Python (1 `@pytest.mark.critical` nhánh refuse cross-dim): phủ `_embedding_dim_of` no-suffix/within/cross-dim + cost formula + message 2 chữ số thập phân (n=7692 → cost 0.10 trailing-zero case, khớp regex `est \$\d+\.\d{2},` — ROADMAP SC4).
+- Verification: `ruff check` + `mypy --strict` 2 source clean; `pytest test_rag_config_dim_guard.py` 6/6 pass; `pytest -m critical` 1 pass; `git diff --stat HEAD~3 HEAD` xác nhận CHỈ 3 file (service+schema+test) — router `rag_config.py` KHÔNG đụng (contract D6 raw JSON giữ nguyên); `git diff --diff-filter=D` rỗng. 0 deviation — code plan paste-ready apply nguyên xi.
+- SUMMARY.md `.planning/phases/07-ask-api-litellm-citation-hot-swap-usage/07-03-SUMMARY.md` tạo với 3 commit hash + threat model T-07-03-01..04 (3 mitigate + 1 accept) + self-check PASSED.
+- **ASK-04 / R7 dimension guard + cost preview hoàn tất — cross-dim swap refuse 400, within-dim swap cho phép kèm WARNING cost preview. Endpoint `/api/rag-config` đầy đủ. Note: `gsd-sdk query` state handlers vẫn không khả dụng — STATE/ROADMAP cập nhật thủ công.**
+
+**Previous session (2026-05-18 — `/gsd-execute-phase 7 plan 07-02`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-02 (Wave 1 — token usage write + read path, ASK-05):
 - Task 1 (`12c3a2d` TDD RED → `476b8d7` GREEN): `schemas/usage.py` — 6 model Pydantic v2 (`UsageEventResponse`/`UsageGroup`/`UsageDailyPoint`/`UsageStats`/`UsageRealtimePoint`/`UsageRealtime`) khớp 1:1 contract D6 `api.ts` (`TokenUsageAPI`/`TokenUsageStatsAPI`/`TokenUsageRealtimeAPI`). `test_usage_schema.py` 3 unit test pure-Python (RED `ModuleNotFoundError` → GREEN 3/3 pass).
 - Task 2 (`cf3a522`): `services/usage_service.py` — tách write path `log_usage_event()` (ghi 1 row `usage_events` best-effort, bọc try/except KHÔNG raise — gọi từ BackgroundTasks Plan 07-04; PII-safe by schema T-07-02-PII) khỏi read path `query_usage()` (list filter date/model/hub/provider, cap per_page 100) + `aggregate_usage()` (by_model/by_provider/by_operation/daily — phục vụ cả `/stats` và `?group_by=`) + `realtime_usage()` (window 60 phút group theo phút). Toàn bộ query asyncpg parametrized `$N` — KHÔNG nối chuỗi (T-07-02-03).
 - Task 3 (`634114f`): `routers/usage.py` — 3 endpoint GET admin-only (`require_role("admin")` — T-07-02-02): `GET /api/usage` (+`?group_by=` delegate `aggregate_usage()` cho ROADMAP SC5 URL literal) + `/stats` + `/realtime`. Wiring `routers/__init__.py` re-export `usage_router` + `main.py create_app()` mount cạnh `search_router`. `create_app()` xác nhận mount đúng 3 path `/api/usage{,/stats,/realtime}`.
@@ -264,7 +272,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 </details>
 
-**Next action:** **Phase 7 IN PROGRESS — Plan 07-01 + 07-02 done (2/5).** Execute các plan còn lại Phase 7: 07-03 (rag_config dimension guard + cost preview), 07-04 (AskService LiteLLM + router POST /api/ask — delivery đầy đủ ASK-01/02/03/05; gọi `log_usage_event` từ usage_service qua BackgroundTasks), 07-05 (integration test suite — bao gồm ROADMAP SC5 10-ask `usage_events` verify). Plan 07-04 dùng contract `schemas/ask.py` + `build_ask_messages`/`parse_citations` từ 07-01 — KHÔNG dò codebase. Carry-over Phase 6: (1) 4 mục `06-HUMAN-UAT.md` chờ dữ liệu thật — latency p95 single/cross-hub + recall 50 query VN giải ở Phase 9 eval, cache invalidation E2E test bổ sung Phase 9/10; (2) code review 06-REVIEW.md 4 Warning — WR-02 (cross-hub cắt top_k trước min_score) + WR-01 (admin-all cache không event-invalidate) đáng fix khi đụng search ở Phase 7/9; (3) DEF-05-01 vẫn buộc chạy pytest integration per-file. Phase 4 + M2a EXIT GATE vẫn mở — theo dõi nếu cần đóng trước khi ship.
+**Next action:** **Phase 7 IN PROGRESS — Plan 07-01 + 07-02 + 07-03 done (3/5).** Execute các plan còn lại Phase 7: 07-04 (AskService LiteLLM + router POST /api/ask — delivery đầy đủ ASK-01/02/03/05; gọi `log_usage_event` từ usage_service qua BackgroundTasks), 07-05 (integration test suite — bao gồm ROADMAP SC5 10-ask `usage_events` verify + test `update_config` cross-dim 400 / within-dim warning end-to-end). Plan 07-04 dùng contract `schemas/ask.py` + `build_ask_messages`/`parse_citations` từ 07-01 — KHÔNG dò codebase. Carry-over Phase 6: (1) 4 mục `06-HUMAN-UAT.md` chờ dữ liệu thật — latency p95 single/cross-hub + recall 50 query VN giải ở Phase 9 eval, cache invalidation E2E test bổ sung Phase 9/10; (2) code review 06-REVIEW.md 4 Warning — WR-02 (cross-hub cắt top_k trước min_score) + WR-01 (admin-all cache không event-invalidate) đáng fix khi đụng search ở Phase 7/9; (3) DEF-05-01 vẫn buộc chạy pytest integration per-file. Phase 4 + M2a EXIT GATE vẫn mở — theo dõi nếu cần đóng trước khi ship.
 
 **Files cần đọc khi resume:**
 
@@ -277,4 +285,4 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ---
 
-*Last updated: 2026-05-18 (**Phase 7 Plan 07-02 done** — `/gsd-execute-phase 7 plan 07-02`: schemas/usage.py + usage_service.py log_usage_event write + query/aggregate/realtime read + routers/usage.py 3 endpoint GET admin-only mount, 4 commit (Task 1 TDD), 3 unit test PASS, 0 deviation. Next: execute 07-03/04/05).*
+*Last updated: 2026-05-18 (**Phase 7 Plan 07-03 done** — `/gsd-execute-phase 7 plan 07-03`: rag_config_service dimension guard + cost preview + EmbeddingCostPreview schema, 3 commit, 6 unit test PASS (1 critical), 0 deviation, router KHÔNG đụng. Next: execute 07-04/05).*
