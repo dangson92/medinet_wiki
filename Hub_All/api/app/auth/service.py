@@ -64,7 +64,7 @@ def _build_user_with_roles(
             phone=user.phone,
             department=user.department,
             avatar_url=user.avatar_url,
-            status=user.status,  # type: ignore[arg-type]  # DB CHECK enum
+            status=user.status,  # DB CHECK enum
             failed_login_count=0,
             created_at=user.created_at,
             updated_at=user.updated_at,

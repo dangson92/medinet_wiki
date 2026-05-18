@@ -19,6 +19,7 @@ DEVIATION /test: Go trả 200 cho mọi case (kể cả key sai) — frontend ch
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/api/rag-config", tags=["rag-config"])
 @router.get("")
 async def get_rag_config(
     db: AsyncSession = Depends(get_session),  # noqa: B008
-) -> dict:
+) -> dict[str, Any]:
     """GET /api/rag-config — config RAG hiện tại. Public (key đã MASKED)."""
     return await RagConfigService(db=db).get_config()
 
@@ -49,7 +50,7 @@ async def update_rag_config(
     req: UpdateRagConfigRequest,
     user: User = Depends(require_role("admin")),  # noqa: B008
     db: AsyncSession = Depends(get_session),  # noqa: B008
-) -> JSONResponse | dict:
+) -> JSONResponse | dict[str, Any]:
     """PUT /api/rag-config — update + hot-swap provider/key, admin-only."""
     result = await RagConfigService(db=db).update_config(
         req=req, updated_by=user.id
@@ -64,7 +65,7 @@ async def test_rag_config(
     provider: str,
     user: User = Depends(get_current_user),  # noqa: B008
     db: AsyncSession = Depends(get_session),  # noqa: B008
-) -> JSONResponse | dict:
+) -> JSONResponse | dict[str, Any]:
     """GET /api/rag-config/test?provider=gemini|openai — kiểm tra API key.
 
     Gọi thử endpoint list-models của provider bằng key đã lưu.
@@ -120,7 +121,7 @@ async def test_rag_config(
 async def rag_config_collections(
     user: User = Depends(require_role("admin")),  # noqa: B008
     db: AsyncSession = Depends(get_session),  # noqa: B008
-) -> dict:
+) -> dict[str, Any]:
     """GET /api/rag-config/collections — inventory vector store theo hub, admin-only."""
     _ = user
     return await RagConfigService(db=db).collections()
