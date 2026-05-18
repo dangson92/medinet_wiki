@@ -348,6 +348,11 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     # ngoài Phase 7 theo user request — frontend Settings.tsx đang gọi endpoint này).
     app.include_router(rag_config_router)
 
+    # Mount search router (Phase 6 SEARCH-01..03 — 3 endpoint POST).
+    from app.routers import search_router
+
+    app.include_router(search_router)
+
     # Rate limiter (Phase 5 AUX-03 — slowapi). Plan 05-02 tạo module; wiring tại đây.
     # Endpoint Phase 5 decorate @limiter.limit = GET /api/audit-logs (Plan 05-05 W4).
     # search/ask 100/min Phase 6, upload 30/min Phase 4 — decoration defer.
