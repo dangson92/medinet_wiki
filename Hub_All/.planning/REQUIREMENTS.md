@@ -60,14 +60,14 @@
 
 ### ASK — LLM Answerer + Citation + Hot-Swap (5 REQ)
 
-- [ ] **ASK-01**: `POST /api/ask` body `{q, hub_id, top_k?}` → SEARCH-01 lấy top-k chunks → build prompt với chunks đánh số `[1]`, `[2]`,... → `litellm.acompletion(model=cfg.llm_model, messages=[...])` **non-streaming** (streaming defer post-M2 vì citation parsing mid-stream phức tạp) → parse `[N]` markers trong response → return `{answer, citations: [{chunk_id, document_id, score, content_snippet}]}`.
-- [ ] **ASK-02**: System prompt anti-injection — instruct LLM "CHỈ trả lời từ context cung cấp, không suy diễn ngoài, format `[N]` cho citation". Test: user query yêu cầu bỏ qua system prompt KHÔNG bypass được.
-- [ ] **ASK-03**: `POST /api/ask/cross-hub` body `{q, hub_ids: [...]}` — như ASK-01 nhưng dùng SEARCH-03 lấy chunks từ nhiều hub. Citation kèm `hub_id`.
+- [x] **ASK-01**: `POST /api/ask` body `{q, hub_id, top_k?}` → SEARCH-01 lấy top-k chunks → build prompt với chunks đánh số `[1]`, `[2]`,... → `litellm.acompletion(model=cfg.llm_model, messages=[...])` **non-streaming** (streaming defer post-M2 vì citation parsing mid-stream phức tạp) → parse `[N]` markers trong response → return `{answer, citations: [{chunk_id, document_id, score, content_snippet}]}`: ✅ Plan 07-04 + 07-05 (2026-05-18 — citation map verified critical test)
+- [x] **ASK-02**: System prompt anti-injection — instruct LLM "CHỈ trả lời từ context cung cấp, không suy diễn ngoài, format `[N]` cho citation". Test: user query yêu cầu bỏ qua system prompt KHÔNG bypass được: ✅ Plan 07-01 + 07-05 (2026-05-18 — anti-injection prompt được chèn verified; hành vi LLM thật defer Phase 9)
+- [x] **ASK-03**: `POST /api/ask/cross-hub` body `{q, hub_ids: [...]}` — như ASK-01 nhưng dùng SEARCH-03 lấy chunks từ nhiều hub. Citation kèm `hub_id`: ✅ Plan 07-04 + 07-05 (2026-05-18 — cross-hub citation hub_id + hub isolation E4 verified)
 - [x] **ASK-04**: `GET /api/rag-config` + `PUT /api/rag-config` — admin endpoint hot-swap embedding + LLM provider: ✅ Plan 07-03 (2026-05-18)
   - LLM swap: trivial config reload, không re-index
   - Embedding swap WITHIN dim 1536 (OpenAI ↔ Gemini): allowed, WARNING modal "vector hiện tại sinh bằng provider X, swap có thể giảm chất lượng — re-embed all? [yes/no]" (R7 mitigation)
   - Embedding swap CROSS-dim (1536 ↔ 3072): REFUSE 400 "dimension mismatch — defer cross-dim swap v4.0"
-- [ ] **ASK-05**: Token usage logging — mỗi LLM call ghi `(user_id, hub_id, model, prompt_tokens, completion_tokens, cost_usd, request_id, created_at)` vào `usage_events`. FastAPI `BackgroundTasks` async (defer Go-style batcher v4.0). `GET /api/usage` aggregate theo user/hub/model/date.
+- [x] **ASK-05**: Token usage logging — mỗi LLM call ghi `(user_id, hub_id, model, prompt_tokens, completion_tokens, cost_usd, request_id, created_at)` vào `usage_events`. FastAPI `BackgroundTasks` async (defer Go-style batcher v4.0). `GET /api/usage` aggregate theo user/hub/model/date: ✅ Plan 07-02 + 07-04 + 07-05 (2026-05-18 — 10 ask → 10 row + aggregate verified critical test)
 
 ### AUDIT + APIKEY + AUX (3 REQ)
 
@@ -203,11 +203,11 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | SEARCH-02 | Phase 6 (per-query session config HNSW) | Done (06-01; p95 đo dataset thật → 06-HUMAN-UAT) |
 | SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Done (06-02) |
 | SEARCH-04 | Phase 6 (Redis cache + invalidate) | Done (06-01/06-03; invalidation E2E test → 06-HUMAN-UAT) |
-| ASK-01 | Phase 7 (POST /api/ask + citation) | In progress (07-01 contract/prompt/parser + 07-04 AskService + POST /api/ask endpoint; verify citation map → 07-05) |
-| ASK-02 | Phase 7 (anti-injection system prompt) | In progress (07-01 ANTI_INJECTION_SYSTEM_PROMPT wired qua 07-04 build_ask_messages; anti-injection test → 07-05) |
-| ASK-03 | Phase 7 (POST /api/ask/cross-hub) | In progress (07-04 AskService.ask_cross_hub + POST /api/ask/cross-hub endpoint; verify → 07-05) |
-| ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03) |
-| ASK-05 | Phase 7 (token usage logging) | In progress (07-02 log_usage_event write path + 07-04 router BackgroundTasks.add_task; 10-ask SC5 verify → 07-05) |
+| ASK-01 | Phase 7 (POST /api/ask + citation) | ✅ Done (Plan 07-04 AskService + endpoint; 07-05 citation map `[N]`→chunk_id critical test verified) |
+| ASK-02 | Phase 7 (anti-injection system prompt) | ✅ Done (Plan 07-01 ANTI_INJECTION_SYSTEM_PROMPT; 07-05 prompt được chèn verified — hành vi LLM thật defer Phase 9) |
+| ASK-03 | Phase 7 (POST /api/ask/cross-hub) | ✅ Done (Plan 07-04 ask_cross_hub + endpoint; 07-05 cross-hub citation hub_id + hub isolation E4 verified) |
+| ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03 dimension guard; 07-05 hot-swap LLM + cross-dim 400 verified) |
+| ASK-05 | Phase 7 (token usage logging) | ✅ Done (Plan 07-02 write/read path + 07-04 BackgroundTasks; 07-05 10 ask → 10 row + aggregate verified) |
 | COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | Pending |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
 | EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | Pending |

@@ -6,16 +6,16 @@ status: ready_to_execute
 last_updated: "2026-05-18T00:00:00Z"
 progress:
   total_phases: 10
-  completed_phases: 5
-  total_plans: 32
-  completed_plans: 32
-  percent: 78
+  completed_phases: 6
+  total_plans: 37
+  completed_plans: 37
+  percent: 86
 current_phase:
   number: 7
   name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
   plans_total: 5
-  plans_complete: 4
-  status: in_progress
+  plans_complete: 5
+  status: complete
   waves: 3
 next_phase:
   number: 8
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** 🔵 IN PROGRESS (4/5 plans — 07-01 + 07-02 + 07-03 Wave 1 + 07-04 Wave 2 done) · Phase 6 ✅ COMPLETE trước đó |
-| Plan | 07-01 ✅ (Wave 1: schema ask.py + ask_prompt.py anti-injection + citation parser; ASK-01/02 contract layer). 07-02 ✅ (Wave 1: schemas/usage.py 6 model TokenUsage + usage_service.py log_usage_event write + query/aggregate/realtime read + routers/usage.py 3 endpoint GET admin-only mount; ASK-05 write+read path). 07-03 ✅ (Wave 1: rag_config_service dimension guard + cost preview; ASK-04/R7). 07-04 ✅ (Wave 2: ask_service.py AskService + routers/ask.py 3 endpoint POST; ASK-01/02/03/05 — DONE 2026-05-18). 07-05 chưa execute. |
-| Status | **Phase 7 Plan 07-04 COMPLETE — Ask API lắp ráp đầy đủ (ASK-01/02/03/05 + AUX-03).** `ask_service.py`: `AskService.ask()`/`ask_cross_hub()` nối retrieve (tái dùng `SearchService` Phase 6) → bù `document_id` qua query `chunks` (D-07-04-C) → `build_ask_messages` 07-01 → `litellm.acompletion()` non-streaming → `parse_citations` 07-01 → `AskOutcome(AskResponse, UsageRecord)`. `AskError` bao lỗi provider; `_resolve_llm_model()` đọc settings mỗi lần (hot-swap ASK-04). `routers/ask.py`: 3 endpoint POST `/api/ask` + `/api/ask/cross-hub` + alias `/api/search/answer` (D-07-04-A), helper `_run_ask` dùng chung, `limiter.limit(SEARCH_LIMIT)` 100/min (AUX-03), usage log qua `BackgroundTasks.add_task(log_usage_event)` (D-07-04-D). BƯỚC 0 xác nhận LiteLLM 1.83.14 pin sẵn `litellm>=1.82,<2` — `acompletion`/`completion_cost` chữ ký khớp `<interfaces>`, không drift. 1 deviation Rule 3 (docstring tránh grep false-positive `@limiter.limit`). Tiếp theo: execute 07-05 (integration test suite + ROADMAP SC1/SC5 end-to-end). |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 7 plan 07-04`: executor sequential trên main tree. 2 task atomic — `74bf598` (feat AskService — retrieve + LiteLLM acompletion + citation + usage), `f998b62` (feat router /api/ask + /cross-hub + alias /api/search/answer). Verification suite ruff + mypy --strict 4 file + mount 3 path PASS; `git diff --diff-filter=D HEAD~2 HEAD` rỗng. |
-| Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
-| Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · **4 Phase 6 DONE** — SEARCH-01/02/03/04 (3 endpoint search + HNSW tuning + Redis cache + Pub/Sub invalidation; hub isolation E4 verified) |
-| Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 → 9 → 10 |
+| Phase | **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** ✅ COMPLETE (5/5 plans) · Phase 6 ✅ COMPLETE trước đó |
+| Plan | 07-01 ✅ (Wave 1: schema ask.py + ask_prompt.py anti-injection + citation parser; ASK-01/02 contract layer). 07-02 ✅ (Wave 1: schemas/usage.py + usage_service.py write/read + routers/usage.py 3 endpoint GET; ASK-05). 07-03 ✅ (Wave 1: rag_config_service dimension guard + cost preview; ASK-04/R7). 07-04 ✅ (Wave 2: ask_service.py AskService + routers/ask.py 3 endpoint POST; ASK-01/02/03/05). 07-05 ✅ (Wave 3: integration test suite — 3 file test + conftest helper + 07-HUMAN-UAT.md; ASK-01..05 critical-path verified — DONE 2026-05-18). |
+| Status | **Phase 7 COMPLETE — Ask API + integration test suite đóng quality gate (ASK-01..05).** Plan 07-05 thêm 3 file integration test (18 test, 11 critical) verify thật trên Postgres testcontainer + app boot, LiteLLM call MOCK (D-07-05-A — `OPENAI_API_KEY` M2 dev placeholder): `test_ask_api.py` (citation map `[N]`→`chunk_id` + anti-injection prompt + cross-hub + hub isolation E4), `test_rag_config_hotswap.py` (hot-swap LLM provider runtime + usage_events.model + cross-dim guard 400), `test_usage_logging.py` (10 ask → 10 row usage_events verify deterministic qua `_wait_usage_count` poll + aggregate). `conftest.py` bổ sung fixture `mock_llm` + helper `_wait_usage_count`/`_make_vec`/`make_fake_completion`. 1 deviation Rule 1: fix `rag_config_service` hot-swap LLM model không có hiệu lực (`_apply_runtime`/`load_persisted_into_runtime` không mutate `s.rag_llm_model`). DEF-05-01 tuân thủ — 3 file test chạy per-file pytest. Latency p95 SC1 + anti-injection LLM thật defer Phase 9 (07-HUMAN-UAT.md). Tiếp theo: Phase 8 Frontend E2E Smoke. |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 7 plan 07-05`: executor sequential trên main tree. 4 task atomic — `0cc39d3` (conftest fixture mock LLM + helper), `442b1ec` (test_ask_api.py ASK-01/02/03), `9977791` (test_rag_config_hotswap.py ASK-04 + Rule 1 fix), `13fe9ef` (test_usage_logging.py ASK-05 + 07-HUMAN-UAT.md). 18 test pass per-file, ruff + mypy --strict PASS; `git diff --diff-filter=D HEAD~5 HEAD` rỗng. |
+| Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
+| Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · **5 Phase 7 DONE** — ASK-01/02/03/04/05 (Ask API citation + anti-injection + cross-hub + hot-swap LLM + usage logging; critical-path integration test verified) |
+| Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
 
-**Progress bar:** `[█████████░] 82% (Phase 7 🔵 IN PROGRESS — Plan 07-01 + 07-02 + 07-03 + 07-04 done: Ask API contract layer + token usage write/read path + rag-config dimension guard/cost preview + AskService LiteLLM + router POST /api/ask) · Next: execute 07-05`
+**Progress bar:** `[█████████░] 86% (Phase 7 ✅ COMPLETE — Ask API ASK-01..05: citation + anti-injection + cross-hub + hot-swap LLM + usage logging + integration test suite 18 test) · Next: Phase 8 Frontend E2E Smoke`
 
 ---
 

@@ -38,7 +38,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 
 - [x] **Phase 5: Hub + User + Audit + APIKey + Settings CRUD** — CRUD endpoint FastAPI (contract = `frontend/src/services/api.ts` + envelope), isolation theo `hub_id`, rate limit ✓ (2026-05-17, 6 plans / 4 waves, 9/9 REQ-ID, E4 hub-isolation verified, verify PASSED 5/5)
 - [x] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache ✓ (2026-05-18, 4 plans / 4 waves, 4/4 REQ-ID SEARCH-01..04; hub isolation E4 6/6 critical test PASS; verify human_needed — 4/6 SC verified, 4 human-UAT pending)
-- [ ] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging
+- [x] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging ✓ (2026-05-18, 5 plans / 3 waves, 5/5 REQ-ID ASK-01..05; integration test 18 test / 11 critical PASS; verify human_needed — latency p95 + anti-injection LLM thật defer Phase 9, 07-HUMAN-UAT.md)
 - [ ] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới (TEARDOWN-01 đã thực hiện sớm 2026-05-14, ngoài lịch — git tag `m1-go-archived` backup)
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
@@ -268,7 +268,9 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 07-02-PLAN.md — usage_service.py write/read + GET /api/usage router — Wave 1 (ASK-05) ✅ 2026-05-18 (3 task, schemas/usage.py + log_usage_event + 3 endpoint GET admin-only, 3 unit test PASS)
 - [x] 07-03-PLAN.md — rag_config_service dimension guard + cost preview (EXTEND WIP commit 2d7a688) — Wave 1 (ASK-04) ✅ 2026-05-18 (3 task, EmbeddingCostPreview schema + _embedding_dim_of + dimension guard cross-dim 400 / within-dim warning, 6 unit test 1 critical PASS, router KHÔNG đụng)
 - [x] 07-04-PLAN.md — AskService (LiteLLM acompletion + citation) + router POST /api/ask + /cross-hub + usage BackgroundTasks — Wave 2 (ASK-01/02/03/05) ✅ 2026-05-18 (2 task, ask_service.py AskService + routers/ask.py 3 endpoint rate-limit 100/min + usage BackgroundTasks, LiteLLM 1.83.14 acompletion xác nhận, ruff + mypy --strict + mount 3 path PASS, 1 deviation Rule 3)
-- [ ] 07-05-PLAN.md — Integration test suite: citation map + anti-injection + hot-swap + 10 ask usage — Wave 3 (ASK-01..05)
+- [x] 07-05-PLAN.md — Integration test suite: citation map + anti-injection + hot-swap + 10 ask usage — Wave 3 (ASK-01..05) ✅ 2026-05-18 (4 task, 3 file integration test 18 test / 11 critical PASS per-file trên Postgres testcontainer + conftest fixture mock_llm + 07-HUMAN-UAT.md, 1 deviation Rule 1 — fix hot-swap LLM model không có hiệu lực)
+
+> **Phase 7 hoàn tất (2026-05-18):** Ask API đầy đủ ASK-01..05 — `POST /api/ask` + `/api/ask/cross-hub` + alias `/api/search/answer` (citation `[N]`→`chunk_id`, anti-injection prompt, cross-hub), hot-swap LLM provider runtime qua `PUT /api/rag-config` (cross-dim embedding swap REFUSE 400), token usage logging qua BackgroundTasks. Integration test suite 18 test (11 critical) verify thật trên Postgres testcontainer + app boot, LiteLLM call MOCK (D-07-05-A — `OPENAI_API_KEY` M2 dev placeholder): citation mapping deterministic, anti-injection prompt được chèn, hub isolation E4 `/ask`, 10 ask → 10 row `usage_events`. Verify status `human_needed`: latency p95 SC1 + anti-injection hành vi LLM thật SC2 + chất lượng re-embed within-dim R7 defer Phase 9 (cần dữ liệu + key thật) — lưu `07-HUMAN-UAT.md`.
 
 ---
 
