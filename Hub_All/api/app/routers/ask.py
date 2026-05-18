@@ -84,6 +84,22 @@ async def _run_ask(
     Thành công → schedule `log_usage_event` qua BackgroundTasks (ASK-05) rồi
     trả `AskResponse` wrap envelope.
     """
+    # WR-01/WR-02 fix — validate hub scope ở router layer (AskRequest docstring
+    # yêu cầu "một trong hai phải có"). Thiếu `hub_id` → `/api/ask` âm thầm chạy
+    # cross-hub toàn bộ hub user được assign; thiếu `hub_ids` → `/cross-hub`
+    # fan-out mọi hub (rủi ro chi phí LLM).
+    if cross_hub:
+        if not body.hub_ids:
+            return resp.bad_request(
+                message="cross-hub ask yêu cầu hub_ids — danh sách hub không được rỗng",
+                code="INVALID_QUERY",
+            )
+    elif not body.hub_id or not body.hub_id.strip():
+        return resp.bad_request(
+            message="ask yêu cầu hub_id — không được để trống",
+            code="INVALID_QUERY",
+        )
+
     try:
         if cross_hub:
             outcome = await service.ask_cross_hub(body=body, user=user)
