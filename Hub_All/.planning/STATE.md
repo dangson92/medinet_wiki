@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: ready_to_execute
+status: in_progress
 last_updated: "2026-05-18T00:00:00Z"
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 37
-  completed_plans: 37
-  percent: 86
+  total_plans: 41
+  completed_plans: 38
+  percent: 87
 current_phase:
   number: 8
   name: Frontend E2E Smoke
   plans_total: 4
-  plans_complete: 0
-  status: planned
+  plans_complete: 1
+  status: in_progress
   waves: 4
 next_phase:
   number: 9
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 7 — Ask API + LiteLLM + Citation + Hot-Swap + Usage** ✅ COMPLETE (5/5 plans) · Phase 6 ✅ COMPLETE trước đó |
-| Plan | 07-01 ✅ (Wave 1: schema ask.py + ask_prompt.py anti-injection + citation parser; ASK-01/02 contract layer). 07-02 ✅ (Wave 1: schemas/usage.py + usage_service.py write/read + routers/usage.py 3 endpoint GET; ASK-05). 07-03 ✅ (Wave 1: rag_config_service dimension guard + cost preview; ASK-04/R7). 07-04 ✅ (Wave 2: ask_service.py AskService + routers/ask.py 3 endpoint POST; ASK-01/02/03/05). 07-05 ✅ (Wave 3: integration test suite — 3 file test + conftest helper + 07-HUMAN-UAT.md; ASK-01..05 critical-path verified — DONE 2026-05-18). |
-| Status | **Phase 7 COMPLETE — Ask API + integration test suite đóng quality gate (ASK-01..05).** Plan 07-05 thêm 3 file integration test (18 test, 11 critical) verify thật trên Postgres testcontainer + app boot, LiteLLM call MOCK (D-07-05-A — `OPENAI_API_KEY` M2 dev placeholder): `test_ask_api.py` (citation map `[N]`→`chunk_id` + anti-injection prompt + cross-hub + hub isolation E4), `test_rag_config_hotswap.py` (hot-swap LLM provider runtime + usage_events.model + cross-dim guard 400), `test_usage_logging.py` (10 ask → 10 row usage_events verify deterministic qua `_wait_usage_count` poll + aggregate). `conftest.py` bổ sung fixture `mock_llm` + helper `_wait_usage_count`/`_make_vec`/`make_fake_completion`. 1 deviation Rule 1: fix `rag_config_service` hot-swap LLM model không có hiệu lực (`_apply_runtime`/`load_persisted_into_runtime` không mutate `s.rag_llm_model`). DEF-05-01 tuân thủ — 3 file test chạy per-file pytest. Latency p95 SC1 + anti-injection LLM thật defer Phase 9 (07-HUMAN-UAT.md). Tiếp theo: Phase 8 Frontend E2E Smoke. |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 7 plan 07-05`: executor sequential trên main tree. 4 task atomic — `0cc39d3` (conftest fixture mock LLM + helper), `442b1ec` (test_ask_api.py ASK-01/02/03), `9977791` (test_rag_config_hotswap.py ASK-04 + Rule 1 fix), `13fe9ef` (test_usage_logging.py ASK-05 + 07-HUMAN-UAT.md). 18 test pass per-file, ruff + mypy --strict PASS; `git diff --diff-filter=D HEAD~5 HEAD` rỗng. |
+| Phase | **Phase 8 — Frontend E2E Smoke** 🔄 IN PROGRESS (1/4 plans) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
+| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02/03/04 📋 chưa execute. |
+| Status | **Phase 8 Plan 08-01 COMPLETE — bản đồ contract Frontend ↔ FastAPI (COMPAT-01).** Script `api/scripts/smoke/contract_diff.py` (stdlib regex, exit 0/1) trích 54 endpoint frontend `api.ts` đối chiếu 11 router FastAPI + Go signature (`git show m1-go-archived`), sinh `08-CONTRACT-DIFF.md`: **36 MATCH / 1 BLOCKER / 15 EXCLUDED / 2 FIX-API / 0 UNCLASSIFIED**. Gap api-side xác định cho Plan 08-02: BLOCKER `POST /api/ai/chat` (GeminiAssistant golden path Dashboard) + FIX-API `POST /api/documents/compose` + `GET /api/documents/{id}/file`. Envelope `{success,data,error,meta}` xác nhận tương thích D6 — 3/4 key khớp tuyệt đối, `meta.total_pages` lệch nhỏ (optional, không crash render — ứng viên polish 08-02). SC3 ROADMAP Phase 8 (replay/contract test) thoả qua đối chiếu tĩnh (Go đã teardown). 3 deviation Rule 1/3: fix UTF-8 console Windows + 2 bug regex/normalize parse `api.ts`. D6 tuân thủ tuyệt đối — không file `frontend/` bị sửa. Tiếp theo: Plan 08-02 (fix api-side). |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-01`: executor sequential trên main tree. 2 task atomic — `2c8911e` (feat: contract_diff.py + __init__.py), `0ca55cf` (docs: 08-CONTRACT-DIFF.md envelope diff + SC3). ruff + mypy --strict PASS qua `uv run`; script exit 0; `git diff --diff-filter=D HEAD~2 HEAD` rỗng; không file `frontend/` thay đổi. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · **5 Phase 7 DONE** — ASK-01/02/03/04/05 (Ask API citation + anti-injection + cross-hub + hot-swap LLM + usage logging; critical-path integration test verified) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
-| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 |
+| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 🔄 (1/4 plans done) |
 
-**Progress bar:** `[█████████░] 86% (Phase 7 ✅ COMPLETE — Ask API ASK-01..05: citation + anti-injection + cross-hub + hot-swap LLM + usage logging + integration test suite 18 test) · Next: Phase 8 Frontend E2E Smoke`
+**Progress bar:** `[█████████░] 87% (Phase 8 🔄 IN PROGRESS — Plan 08-01 contract diff Frontend↔FastAPI: 36 MATCH / 1 BLOCKER / 2 FIX-API, COMPAT-01 done) · Next: Plan 08-02 fix api-side`
 
 ---
 
@@ -93,6 +93,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **D7: Abandon M1 hoàn toàn** — chưa runtime verify, chưa production.
 - **D8: Eval framework làm lại từ đầu**.
 - **D9: Phase numbering reset về 1**.
+- **D-08-01: SC3 (replay/contract test) thoả qua đối chiếu TĨNH** — Go backend đã teardown 2026-05-14 nên không replay live được; đối chiếu 3 lớp (path api.ts↔FastAPI↔router.go, envelope shape, classification gap) qua script regex. Go signature lấy qua `git show m1-go-archived`.
+- **D-08-01-B: `meta.total_pages` lệch nhỏ KHÔNG nâng BLOCKER** — `paginated()` FastAPI thiếu field `total_pages`; frontend khai báo optional → không crash render. Ghi nhận làm ứng viên polish Plan 08-02.
 
 ### Risk register (active)
 
