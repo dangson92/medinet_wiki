@@ -491,3 +491,122 @@ async def admin_token_pair(
 ) -> dict[str, Any]:
     """Trả CẢ access_token + refresh_token cho test refresh race (AC5)."""
     return await _login_get_token(auth_client, admin_user)
+
+
+# ========================================================================
+# === Phase 7 Plan 07-05 fixtures (Ask API integration test) =============
+# ========================================================================
+#
+# Plan 07-05 — integration test suite critical-path Phase 7 (ASK-01..05).
+# LLM call MOCK (D-07-05-A): OPENAI_API_KEY ở M2 dev là placeholder
+# `sk-replace-me` → KHÔNG gọi provider thật. Mock `litellm.acompletion` +
+# `litellm.completion_cost` qua `mock_llm` fixture — vừa tránh gọi key giả vừa
+# KIỂM SOÁT answer (vd "Trả lời [1] và [2]." → verify citation mapping
+# deterministic).
+#
+# DEF-05-01: file test boot app qua `app_with_auth` PHẢI chạy PER-FILE
+# (cocoindex 1.0.3 `core.Environment` là process-global singleton — không
+# re-open). Mỗi file test = 1 pytest invocation riêng.
+
+
+def make_fake_completion(
+    content: str,
+    *,
+    prompt_tokens: int = 120,
+    completion_tokens: int = 40,
+) -> Any:
+    """Object giả mô phỏng LiteLLM `ModelResponse` cho test mock.
+
+    `AskService._call_llm` đọc `resp.choices[0].message.content`;
+    `AskService._extract_usage` đọc `resp.usage.prompt_tokens` /
+    `.completion_tokens` / `.total_tokens`. `SimpleNamespace` lồng nhau cấp
+    đủ các attribute đó — KHÔNG cần import litellm type thật.
+    """
+    from types import SimpleNamespace
+
+    msg = SimpleNamespace(content=content)
+    choice = SimpleNamespace(message=msg)
+    usage = SimpleNamespace(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
+    )
+    return SimpleNamespace(choices=[choice], usage=usage)
+
+
+@pytest.fixture
+def mock_llm(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Monkeypatch `litellm.acompletion` + `litellm.completion_cost` (D-07-05-A).
+
+    Trả `state` dict — test set `state["answer"]` TRƯỚC khi gọi `/api/ask` để
+    kiểm soát câu trả lời LLM (verify citation mapping deterministic). Sau
+    response, test đọc:
+    - `state["captured_messages"]` — list message đã gửi cho LLM (verify
+      anti-injection prompt được chèn vào `messages[0]`).
+    - `state["captured_model"]` — model LiteLLM nhận (verify hot-swap ASK-04).
+
+    `completion_cost` mock trả float cố định 0.0012 — key placeholder M2 dev
+    không có bảng giá thật.
+    """
+    state: dict[str, Any] = {
+        "answer": "Trả lời mặc định [1].",
+        "captured_messages": None,
+        "captured_model": None,
+    }
+
+    async def _fake_acompletion(
+        *, model: str, messages: list[dict[str, str]], **kw: Any
+    ) -> Any:
+        _ = kw
+        state["captured_messages"] = messages
+        state["captured_model"] = model
+        return make_fake_completion(state["answer"])
+
+    def _fake_cost(*a: Any, **kw: Any) -> float:
+        _ = (a, kw)
+        return 0.0012
+
+    monkeypatch.setattr("litellm.acompletion", _fake_acompletion)
+    monkeypatch.setattr("litellm.completion_cost", _fake_cost)
+    return state
+
+
+async def _wait_usage_count(
+    conn: Any,
+    expected: int,
+    *,
+    timeout_s: float = 2.0,
+    interval_s: float = 0.05,
+) -> int:
+    """Poll `count(*)` usage_events tới khi == `expected` hoặc timeout (D-07-05-B).
+
+    `usage_events` ghi qua FastAPI `BackgroundTasks` — với httpx `ASGITransport`,
+    background task chạy SAU response nhưng timing không xác định. Thay vì
+    `asyncio.sleep` cố định (flaky), POLL có giới hạn: lặp query count mỗi
+    `interval_s` cho tới khi đạt `expected` RỒI mới return → deterministic.
+
+    Raise `AssertionError` nếu sau `timeout_s` vẫn chưa đạt `expected`.
+    """
+    import asyncio
+    import time
+
+    deadline = time.monotonic() + timeout_s
+    last = -1
+    while time.monotonic() < deadline:
+        last = await conn.fetchval("SELECT count(*) FROM usage_events")
+        if last == expected:
+            return int(last)
+        await asyncio.sleep(interval_s)
+    raise AssertionError(
+        f"usage_events count={last}, kỳ vọng {expected} sau {timeout_s}s"
+    )
+
+
+def _make_vec(seed: float) -> list[float]:
+    """Vector deterministic 1536-dim — mọi phần tử = `seed`.
+
+    Dùng cho `_insert_chunk` + monkeypatch query embedding (cùng vector → cosine
+    distance xác định). Tương đương `_fixed_vector` trong test_search_hub_isolation
+    — helper chung đặt ở conftest cho test Phase 7 tái dùng.
+    """
+    return [seed] * 1536
