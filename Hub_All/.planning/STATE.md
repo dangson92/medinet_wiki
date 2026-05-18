@@ -8,14 +8,14 @@ progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 41
-  completed_plans: 40
-  percent: 91
+  completed_plans: 41
+  percent: 92
 current_phase:
   number: 8
   name: Frontend E2E Smoke
   plans_total: 4
-  plans_complete: 3
-  status: in_progress
+  plans_complete: 4
+  status: human_uat_pending
   waves: 4
 next_phase:
   number: 9
@@ -27,7 +27,7 @@ next_phase:
 **Mã dự án:** MEDWIKI
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Ngày tạo state:** 2026-05-13 (pivot lần 2 — M1 Docling abandoned)
-**Last updated:** 2026-05-13 (roadmap 10 phase tạo xong)
+**Last updated:** 2026-05-18 (Plan 08-04 artifact xong — boot stack + checklist + biên bản UAT; Phase 8 human-UAT pending)
 
 ---
 
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 8 — Frontend E2E Smoke** 🔄 IN PROGRESS (3/4 plans) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
-| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02 ✅ (Wave 2: fix gap api-side — COMPAT-01; DONE 2026-05-18). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01; DONE 2026-05-18). 08-04 📋 chưa execute. |
-| Status | **Phase 8 Plan 08-03 COMPLETE — test suite tự động golden path API (SC2) + VN filename UTF-8 (SC4).** 2 file test integration critical trong `api/tests/integration/`: `test_smoke_golden_path.py` (1 test tuần tự login→upload DOCX→GET detail→cross-hub search→ask→audit-logs qua httpx ASGITransport) + `test_vietnamese_filename.py` (upload "Khám bệnh đa khoa.docx" → response + GET detail trả name UTF-8 nguyên vẹn không mojibake; threat T-08-03-01 path traversal — FileStore UUID-rename, file_path stem khớp UUID4, không `..`, trong file_store_dir). Chạy per-file (DEF-05-01); ruff clean; 2 test critical PASS. 2 deviation: Rule 3 — patch query embedding (search_service.embed_text) vì cross-hub search/ask embed câu query qua embed_text, key placeholder M2 gây 401 (plan chỉ lường mock_llm); Rule 1 — code KHÔNG enqueue `auth.login`/`document.upload` dù có trong AUDIT_ACTIONS enum → golden path sinh 0 audit entry, test verify contract GET /api/audit-logs (200+list) theo plan Task 1 step 7 fallback. conftest.py KHÔNG sửa (plan dự kiến sửa — fixture hiện có đủ tái dùng). D6 tuân thủ tuyệt đối — không file `frontend/` bị sửa, không deletion. Tiếp theo: Plan 08-04 (boot stack + checkpoint human-verify 11 trang React). Input cho 08-04: golden path KHÔNG sinh audit entry — manual UAT muốn thấy audit cần thao tác hub.create/user.create. |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-03`: executor sequential trên main tree. 2 commit test atomic — `467e3f5` (test: golden path API end-to-end SC2), `74a7e3c` (test: VN filename UTF-8 SC4). 2 test critical PASS per-file; ruff clean; `git diff --diff-filter=D` rỗng; không file `frontend/` thay đổi. |
-| Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
-| Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · **5 Phase 7 DONE** — ASK-01/02/03/04/05 (Ask API citation + anti-injection + cross-hub + hot-swap LLM + usage logging; critical-path integration test verified) |
+| Phase | **Phase 8 — Frontend E2E Smoke** ⏳ HUMAN-UAT PENDING (4/4 plans artifact xong) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
+| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02 ✅ (Wave 2: fix gap api-side — COMPAT-01; DONE 2026-05-18). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01; DONE 2026-05-18). 08-04 ✅ artifact (Wave 4: boot stack + checklist + biên bản UAT — COMPAT-01; DONE 2026-05-18) — ⚠️ human-UAT PENDING. |
+| Status | **Phase 8 Plan 08-04 COMPLETE về artifact — boot stack + checklist + biên bản UAT; human verification PENDING.** Task 1 (`422243a`): `api/scripts/smoke/boot_stack.sh` (docker compose up + poll 3-service healthy + curl /healthz + assert no Go) + `08-SMOKE-CHECKLIST.md` 4 section A/B/C/D. Checkpoint `human-verify` bị AUTO-APPROVE cơ học trong chế độ `--auto` (`auto_advance:true`) — KHÔNG có người thật boot stack hay click 11 trang React; `08-SMOKE-CHECKLIST.md` CHƯA điền. Task 2 (`76afc02`): sinh `08-HUMAN-UAT.md` từ cấu trúc checklist + 5 SC Phase 8 — KHÔNG fabricate PASS; SC1 (11 trang render) / SC2 (golden path browser citation `[1]`) / SC5 (docker compose healthy) để `result:[pending]`; chỉ SC3 (08-01 đối chiếu tĩnh) + SC4 (08-03 test critical) đánh `passed`. Verdict UAT = PARTIAL; COMPAT-01 = PARTIAL. D6 tuân thủ tuyệt đối — chỉ 1 file mới `.planning/.../08-HUMAN-UAT.md`, không file `frontend/` bị sửa, không deletion. **BẮT BUỘC tiếp theo: `/gsd-verify-work 8` — người dùng boot stack thật + render 11 trang + golden path browser, điền checklist, cập nhật `result:` Test 1/2/3 trong 08-HUMAN-UAT.md → mới đóng được Phase 8 + COMPAT-01.** |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-04` (continuation agent sau checkpoint auto-approve): 2 commit atomic — `422243a` (feat: boot stack script + checklist smoke 11 trang), `76afc02` (docs: biên bản UAT Phase 8 — SC1/SC2/SC5 pending). Self-check PASSED; D6 tuân thủ; không file `frontend/` thay đổi. |
+| Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7 complete · Phase 8 artifact xong (human-UAT pending) · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
+| Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · **5 Phase 7 DONE** — ASK-01/02/03/04/05 (Ask API citation + anti-injection + cross-hub + hot-swap LLM + usage logging; critical-path integration test verified) · COMPAT-01 = PARTIAL (lớp tĩnh/tự động ĐẠT; lớp browser SC1/SC2/SC5 chờ human UAT) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
-| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 🔄 (3/4 plans done) |
+| Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 ⏳ (4/4 plans artifact xong — human-UAT pending) |
 
-**Progress bar:** `[█████████░] 91% (Phase 8 🔄 IN PROGRESS — Plan 08-03 test suite tự động golden path SC2 + VN filename SC4, COMPAT-01) · Next: Plan 08-04 boot stack + UAT 11 trang React`
+**Progress bar:** `[█████████░] 92% (Phase 8 ⏳ HUMAN-UAT PENDING — Plan 08-04 boot stack + checklist + biên bản UAT xong; SC1/SC2/SC5 chờ /gsd-verify-work 8) · Next: /gsd-verify-work 8 verify thật → đóng Phase 8 → Phase 9 Eval Framework`
 
 ---
 
@@ -152,6 +152,13 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 ---
 
 ## Session Continuity
+
+**Last session (2026-05-18 — `/gsd-execute-phase 8 plan 08-04` — continuation sau checkpoint auto-approve):** continuation agent tiếp tục Plan 08-04 từ Task 2 (Task 1 đã xong commit `422243a` ở agent trước). Bối cảnh: plan có `checkpoint:human-verify` (gate blocking) — orchestrator chế độ `--auto` (`auto_advance:true`) AUTO-APPROVE checkpoint cơ học để giữ chuỗi chạy; KHÔNG có người thật boot stack hay click 11 trang React; `08-SMOKE-CHECKLIST.md` CHƯA điền.
+- Task 2 (`76afc02` — `docs(08-04)`): sinh `.planning/phases/08-frontend-e2e-smoke/08-HUMAN-UAT.md` từ cấu trúc `08-SMOKE-CHECKLIST.md` + 5 SC Phase 8, dùng UAT template chuẩn (mẫu `07-HUMAN-UAT.md`, frontmatter `status:partial`). KHÔNG fabricate PASS: SC1 (11 trang React render) / SC2 (golden path browser + citation `[1]` clickable) / SC5 (docker compose 3-service healthy) đánh `result:[pending]` — cần mắt người; SC3 (08-01 đối chiếu tĩnh contract, artifact `08-CONTRACT-DIFF.md`) + SC4 (08-03 `test_vietnamese_filename.py` critical PASS) đánh `passed` vì có artifact thật. Summary: total 5 / passed 2 / pending 3. Verdict UAT = PARTIAL; COMPAT-01 = PARTIAL.
+- Deviation: [Continuation - Quy trình] KHÔNG ghi PASS cho SC1/SC2/SC5 — auto-approve cơ học không tương đương human verification; ghi PASS giả sẽ làm sai lệch trạng thái Phase 8.
+- `08-04-SUMMARY.md` tạo xong — ghi rõ checkpoint auto-approved, human-UAT pending. STATE.md + ROADMAP.md cập nhật: 08-04 ✅ artifact, Phase 8 status `human_uat_pending`, COMPAT-01 PARTIAL.
+- **BẮT BUỘC tiếp theo: `/gsd-verify-work 8`** — người dùng boot stack thật (`bash api/scripts/smoke/boot_stack.sh` + `npm run dev`), render 11 trang React, chạy golden path browser, điền `08-SMOKE-CHECKLIST.md`, cập nhật `result:` Test 1/2/3 trong `08-HUMAN-UAT.md`. Chỉ khi SC1/SC2/SC5 PASS → COMPAT-01 ĐẠT → Phase 8 đóng → Phase 9.
+- D6 tuân thủ tuyệt đối — chỉ thêm file `.planning/.../08-HUMAN-UAT.md` + `08-04-SUMMARY.md`; KHÔNG file nào trong `frontend/` bị sửa; không deletion.
 
 **Last session (2026-05-17 — Plan 05-05 execute):** `/gsd-execute-phase 5 plan 05-05` → executor agent (sequential) thực thi 3 task atomic:
 - Task 01 (`b3d97f8`): `pkg/crypto.py` — AES-256-GCM helper: `_load_key` (đọc `settings.aes_key`, base64url-decode, validate 32-byte → ValueError), `encrypt_secret` (nonce 12B random prepend ciphertext → base64url token), `decrypt_secret` (tách nonce decrypt). `schemas/api_keys.py` — 4 Pydantic v2 schema: `CreateApiKeyRequest`/`UpdateApiKeyRequest`/`ApiKeyResponse` (= APIKeyAPI — status derive is_active; requests_today/7d/bandwidth_used=0, allowed_rag_configs=[] hằng)/`ApiKeyWithPlaintext(ApiKeyResponse)` (+plain_key — POST create only). `schemas/audit.py` — `AuditLogResponse` (= AuditLogAPI; is_ai=False, ip/user_agent/duration_ms=None hằng). `pyproject.toml` thêm `cryptography`. `.env.example` AES_KEY documented placeholder.
