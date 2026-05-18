@@ -33,8 +33,10 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import random
 import uuid
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -42,11 +44,150 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from alembic.config import Config
+from asgi_lifespan import LifespanManager
 from docx import Document as DocxDocument
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from testcontainers.postgres import PostgresContainer
+from testcontainers.redis import RedisContainer
 
 E2E_TIMEOUT_SECONDS = 60
 E2E_POLL_INTERVAL_SECONDS = 1.0
+
+
+# ========================================================================
+# === E2E cocoindex fixtures (DEF-05-01 follow-up) =======================
+# ========================================================================
+#
+# Conftest `app_with_auth` set `COCOINDEX_SKIP_SETUP=1` (DEF-05-01) — đúng cho
+# CRUD test KHÔNG cần ingestion flow. NHƯNG e2e test trong file NÀY cần cocoindex
+# flow chạy thật (upload DOCX → chunks pgvector).
+#
+# Constraint DEF-05-01: cocoindex 1.0.3 `core.Environment` là process-global
+# singleton — start_blocking() + stop_blocking() rồi start_blocking() lần 2 sẽ
+# FAIL `environment already open`. File e2e có 3 test → KHÔNG thể start/stop
+# cocoindex per-test.
+#
+# Giải pháp: setup_cocoindex() chạy ĐÚNG 1 LẦN ở session scope (`_cocoindex_env`),
+# stop 1 lần ở session teardown. File `app_with_auth` override (shadow conftest)
+# GIỮ `COCOINDEX_SKIP_SETUP=1` để lifespan KHÔNG start/stop cocoindex per-test,
+# rồi gắn real cocoindex_app session-scoped vào `app.state` SAU lifespan (cùng
+# pattern `mock_cocoindex_app` ở test_documents_*.py nhưng dùng instance THẬT).
+# File này là file DUY NHẤT mở cocoindex Environment trong process test.
+
+
+@pytest.fixture(scope="session")
+def _cocoindex_env(
+    request: pytest.FixtureRequest,
+) -> Iterator[Any]:
+    """Setup cocoindex 1.0.3 default env ĐÚNG 1 LẦN cho cả test session.
+
+    Yield real `cocoindex_app` instance. Teardown stop_blocking() 1 lần.
+
+    setup_cocoindex() đọc DATABASE_URL / COCOINDEX_DATABASE_URL từ env — fixture
+    `app_with_auth` (chạy trước, cùng test) đã set env trỏ vào postgres container
+    + apply migration head. cocoindex update_blocking() apply schema diff riêng.
+    """
+    from app.config import get_settings
+    from app.rag.setup import get_cocoindex_app, setup_cocoindex, stop_cocoindex
+
+    get_settings.cache_clear()
+    setup_cocoindex(get_settings())
+    cocoindex_app = get_cocoindex_app()
+
+    def _teardown() -> None:
+        stop_cocoindex()
+
+    request.addfinalizer(_teardown)
+    return cocoindex_app
+
+
+@pytest.fixture
+async def app_with_auth(  # noqa: F811 — shadow conftest fixture cho file e2e này
+    postgres_container: PostgresContainer,
+    redis_container: RedisContainer,
+    alembic_cfg: Config,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> AsyncIterator[Any]:
+    """Override conftest `app_with_auth` — app + migration + real cocoindex_app.
+
+    Giống hệt conftest fixture (env vars + migration + truncate + lifespan) NHƯNG
+    sau lifespan gắn real cocoindex_app (session-scoped `_cocoindex_env`) vào
+    `app.state.cocoindex_app`. GIỮ `COCOINDEX_SKIP_SETUP=1` để lifespan KHÔNG
+    start/stop cocoindex per-test (singleton constraint DEF-05-01).
+    """
+    sync_url = postgres_container.get_connection_url().replace(
+        "postgresql+psycopg2://", "postgresql://"
+    )
+    async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://")
+    redis_host = redis_container.get_container_host_ip()
+    redis_port = redis_container.get_exposed_port(6379)
+
+    monkeypatch.setenv("DATABASE_URL", async_url)
+    monkeypatch.setenv("COCOINDEX_DATABASE_URL", sync_url)
+    monkeypatch.setenv("REDIS_URL", f"redis://{redis_host}:{redis_port}/0")
+    monkeypatch.setenv("APP_ENV", "dev")
+    monkeypatch.setenv("JWT_PRIVATE_KEY_PATH", "keys/private.pem")
+    monkeypatch.setenv("JWT_PUBLIC_KEY_PATH", "keys/public.pem")
+    monkeypatch.setenv("JWT_ACCESS_TOKEN_TTL", "900")
+    monkeypatch.setenv("JWT_REFRESH_TOKEN_TTL", "604800")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
+    monkeypatch.setenv(
+        "AES_KEY", "bWVkaW5ldC10ZXN0LWFlcy1rZXktMzJieXRlcyEhMDA="
+    )
+    # GIỮ skip: lifespan KHÔNG start/stop cocoindex per-test — Environment
+    # singleton mở 1 lần qua `_cocoindex_env` session fixture.
+    monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
+
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    from alembic import command
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+
+    from app.db.session import dispose_engine
+    await dispose_engine()
+
+    from app.services.audit_service import reset_queue
+    reset_queue()
+
+    sync_dsn = os.environ["DATABASE_URL"].replace(
+        "postgresql+asyncpg://", "postgresql://"
+    )
+    sync_eng = create_engine(sync_dsn)
+    with sync_eng.begin() as conn:
+        conn.execute(
+            text(
+                "TRUNCATE TABLE users, refresh_tokens, user_hubs, hubs, "
+                "audit_logs, api_keys, documents, chunks "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+    sync_eng.dispose()
+
+    # Setup cocoindex Environment 1 lần (session scope) — request AFTER env vars
+    # + migration sẵn sàng (setup_cocoindex đọc DSN + cần schema documents/chunks).
+    cocoindex_app = request.getfixturevalue("_cocoindex_env")
+
+    from app.main import create_app
+    app = create_app()
+    async with LifespanManager(app):
+        # Gắn real cocoindex_app SAU lifespan startup (lifespan skip setup vì
+        # COCOINDEX_SKIP_SETUP=1) — e2e test cần app.state.cocoindex_app thật.
+        app.state.cocoindex_app = cocoindex_app
+        app.state.cocoindex_ready = True
+        try:
+            yield app
+        finally:
+            # CRITICAL: clear cocoindex_app TRƯỚC khi LifespanManager shutdown.
+            # main.py lifespan shutdown gọi stop_cocoindex() nếu app.state.cocoindex_app
+            # is not None → sẽ coco.stop_blocking() đóng Environment + asyncpg pool.
+            # Environment singleton KHÔNG re-open được (DEF-05-01) → test thứ 2 sẽ
+            # FAIL `pool is closed`. Owner DUY NHẤT của stop_cocoindex là session
+            # fixture `_cocoindex_env` finalizer (chạy 1 lần cuối session).
+            app.state.cocoindex_app = None
+            app.state.cocoindex_ready = False
 
 
 def _make_docx_vn(tmp_path: Path, content_extra: str = "") -> bytes:
@@ -163,16 +304,53 @@ async def _wait_until(
     )
 
 
-async def _force_cocoindex_update(app_with_auth: Any) -> None:
-    """ALTERNATIVE FAST PATH — gọi cocoindex_app.update_blocking trực tiếp.
+async def _reconcile_document_status(app_with_auth: Any, doc_id: str) -> None:
+    """Re-trigger cocoindex update_blocking + reconcile documents.status (A4 race fix).
 
-    Dùng nếu BackgroundTask flakiness trong testcontainers env. Plan 04-03 REVISION 2
-    lifespan setup app.state.cocoindex_app — test có thể trigger sync update_blocking
-    + UPDATE status thủ công (replicate trigger_cocoindex_update logic).
+    Phase 4 "New Gap A" (04-VERIFICATION.md): A4 BackgroundTask trigger_cocoindex_update
+    chạy update_blocking() ngay sau response upload — có thể TRƯỚC khi transaction
+    INSERT documents row commit visible cho cocoindex asyncpg pool (pool riêng, tách
+    khỏi app SQLAlchemy engine). Hậu quả: cocoindex flow PgTableSource fetch 0 rows
+    → index_document KHÔNG chạy → 0 chunks → trigger set status='failed' / STUCK.
+
+    Helper này (test-level, gọi SAU khi `_upload_docx` return → row chắc chắn đã
+    commit) re-trigger update_blocking ĐỂ cocoindex fetch row visible → generate
+    chunks, rồi replicate logic count-chunks → UPDATE documents.status như
+    `trigger_cocoindex_update` (documents_service.py). Idempotent — cocoindex memo
+    skip rows đã xử lý nếu gọi lại.
     """
     cocoindex_app = getattr(app_with_auth.state, "cocoindex_app", None)
-    if cocoindex_app is not None:
-        await asyncio.to_thread(cocoindex_app.update_blocking)
+    if cocoindex_app is None:
+        return
+
+    from app.db.session import get_engine
+
+    await asyncio.to_thread(cocoindex_app.update_blocking)
+
+    engine = get_engine()
+    async with engine.begin() as conn:
+        count = (
+            await conn.execute(
+                text("SELECT COUNT(*) FROM chunks WHERE document_id = :id"),
+                {"id": doc_id},
+            )
+        ).scalar() or 0
+        # Chỉ reconcile khi row CHƯA terminal (tránh ghi đè 'failed_unsupported').
+        new_status = "completed" if count > 0 else "failed"
+        await conn.execute(
+            text(
+                "UPDATE documents SET status=:st, chunk_count=:cnt, "
+                "error_message=:err, last_heartbeat=NOW(), updated_at=NOW() "
+                "WHERE id = :id AND status NOT IN "
+                "('completed', 'failed_unsupported')"
+            ),
+            {
+                "st": new_status,
+                "cnt": count,
+                "err": None if count > 0 else "cocoindex flow generated 0 chunks",
+                "id": doc_id,
+            },
+        )
 
 
 @pytest.mark.critical
@@ -209,6 +387,13 @@ async def test_e2e_upload_docx_to_chunks_completed(
     hub_id = await _create_hub(app_with_auth)
     content = _make_docx_vn(tmp_path)
     doc_id = await _upload_docx(auth_client, admin_token, hub_id, content, "khám.docx")
+
+    # A4 race fix (Phase 4 "New Gap A" — 04-VERIFICATION.md): BackgroundTask
+    # trigger_cocoindex_update có thể chạy update_blocking() TRƯỚC khi transaction
+    # INSERT documents row commit visible cho cocoindex asyncpg pool → flow fetch
+    # 0 rows → 0 chunks → status STUCK. Test re-trigger update_blocking + reconcile
+    # status SAU khi row chắc chắn committed (helper _reconcile_document_status).
+    await _reconcile_document_status(app_with_auth, doc_id)
 
     # Đợi A4 BackgroundTask trigger_cocoindex_update hoàn thành.
     data = await _wait_until(
@@ -341,8 +526,9 @@ async def test_e2e_content_hash_incremental_dedup(
     hub_id = await _create_hub(app_with_auth)
     content = _make_docx_vn(tmp_path)
 
-    # Upload lần 1
+    # Upload lần 1 — reconcile sau commit (A4 race fix, xem _reconcile_document_status).
     doc1 = await _upload_docx(auth_client, admin_token, hub_id, content, "v1.docx")
+    await _reconcile_document_status(app_with_auth, doc1)
     data1 = await _wait_until(
         auth_client,
         admin_token,
@@ -355,6 +541,7 @@ async def test_e2e_content_hash_incremental_dedup(
 
     # Upload lần 2 cùng content (khác filename + cùng hub_id)
     doc2 = await _upload_docx(auth_client, admin_token, hub_id, content, "v2.docx")
+    await _reconcile_document_status(app_with_auth, doc2)
     data2 = await _wait_until(
         auth_client,
         admin_token,
