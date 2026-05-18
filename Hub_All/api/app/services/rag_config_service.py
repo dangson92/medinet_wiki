@@ -143,6 +143,12 @@ def _apply_runtime(req: UpdateRagConfigRequest) -> None:
         s.rag_embedding_model = req.embedding_model
     if req.llm_provider:
         s.rag_llm_provider = req.llm_provider
+    # Hot-swap LLM model (ASK-04): `ask_service._resolve_llm_model()` đọc
+    # `s.rag_llm_model` mỗi lần gọi. KHÔNG mutate field này thì admin đổi
+    # `gemini_llm_model` qua /api/rag-config sẽ KHÔNG có hiệu lực — model cũ
+    # `gpt-4o-mini` vẫn được gửi cho LiteLLM (chỉ prefix `gemini/` đổi).
+    if req.gemini_llm_model:
+        s.rag_llm_model = req.gemini_llm_model
     if req.clear_openai_key:
         os.environ.pop("OPENAI_API_KEY", None)
         s.openai_api_key = "sk-replace-me"
@@ -389,6 +395,10 @@ async def load_persisted_into_runtime(pool: Any) -> None:
             s.rag_embedding_model = str(val)
         elif key == "LLM_PROVIDER":
             s.rag_llm_provider = str(val)
+        elif key == "LLM_GEMINI_MODEL":
+            # Hot-swap LLM model giữ qua restart (ASK-04) — `_resolve_llm_model`
+            # đọc `s.rag_llm_model`.
+            s.rag_llm_model = str(val)
         elif key in _SECRET_KEYS:
             try:
                 plain = decrypt_secret(str(val))
