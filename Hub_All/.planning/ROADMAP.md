@@ -227,7 +227,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 **Success Criteria** (what must be TRUE):
   1. `GET /api/search?q=...&hub_id=X&top_k=10` trả top-10 chunks sắp xếp theo cosine similarity (`1 - (vector <=> query_vec)`), filter `WHERE hub_id = $1` enforce — viewer của Hub A KHÔNG thấy chunk Hub B; latency p95 <800ms ở dataset 5K chunks
   2. `POST /api/search/cross-hub` body `{q, hub_ids:[1,2], top_k_per_hub:5}` parallel query 2 hub qua asyncio.gather → aggregate top-10 overall + re-rank theo score; result kèm `hub_id` per result; viewer assigned Hub A+B request `hub_ids:[A,B,C]` → C bị filter ở repo layer (defense in depth ngoài SQL filter)
-  3. `EXPLAIN ANALYZE` cho query `WHERE hub_id = $1 ORDER BY vector <=> $2 LIMIT 10` hiển thị `Index Scan using chunks_vector_hnsw` (KHÔNG `Seq Scan`) trên dataset 1K+ chunks — confirm R1 mitigation
+  3. `EXPLAIN ANALYZE` cho query `WHERE hub_id = $1 ORDER BY vector <=> $2 LIMIT 10` hiển thị `Index Scan using ix_chunks_vector_hnsw` (KHÔNG `Seq Scan`) trên dataset 1K+ chunks — confirm R1 mitigation
   4. Redis cache hoạt động: 2 lần gọi `GET /api/search?q=...` giống nhau trong 5 phút → lần 2 hit cache (latency <50ms); upload document mới trong hub → cache invalidate qua Pub/Sub channel `hub:{hub_id}:invalidate`
   5. Recall sanity check trên 50 query VN sample: top-3 với hub filter trả ≥1 chunk relevant cho mỗi query (manual review) — chuẩn bị data cho Phase 9 eval gate ≥75%
 
