@@ -8,13 +8,13 @@ progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 41
-  completed_plans: 38
-  percent: 87
+  completed_plans: 39
+  percent: 89
 current_phase:
   number: 8
   name: Frontend E2E Smoke
   plans_total: 4
-  plans_complete: 1
+  plans_complete: 2
   status: in_progress
   waves: 4
 next_phase:
@@ -53,16 +53,16 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
-| Phase | **Phase 8 — Frontend E2E Smoke** 🔄 IN PROGRESS (1/4 plans) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
-| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02/03/04 📋 chưa execute. |
-| Status | **Phase 8 Plan 08-01 COMPLETE — bản đồ contract Frontend ↔ FastAPI (COMPAT-01).** Script `api/scripts/smoke/contract_diff.py` (stdlib regex, exit 0/1) trích 54 endpoint frontend `api.ts` đối chiếu 11 router FastAPI + Go signature (`git show m1-go-archived`), sinh `08-CONTRACT-DIFF.md`: **36 MATCH / 1 BLOCKER / 15 EXCLUDED / 2 FIX-API / 0 UNCLASSIFIED**. Gap api-side xác định cho Plan 08-02: BLOCKER `POST /api/ai/chat` (GeminiAssistant golden path Dashboard) + FIX-API `POST /api/documents/compose` + `GET /api/documents/{id}/file`. Envelope `{success,data,error,meta}` xác nhận tương thích D6 — 3/4 key khớp tuyệt đối, `meta.total_pages` lệch nhỏ (optional, không crash render — ứng viên polish 08-02). SC3 ROADMAP Phase 8 (replay/contract test) thoả qua đối chiếu tĩnh (Go đã teardown). 3 deviation Rule 1/3: fix UTF-8 console Windows + 2 bug regex/normalize parse `api.ts`. D6 tuân thủ tuyệt đối — không file `frontend/` bị sửa. Tiếp theo: Plan 08-02 (fix api-side). |
-| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-01`: executor sequential trên main tree. 2 task atomic — `2c8911e` (feat: contract_diff.py + __init__.py), `0ca55cf` (docs: 08-CONTRACT-DIFF.md envelope diff + SC3). ruff + mypy --strict PASS qua `uv run`; script exit 0; `git diff --diff-filter=D HEAD~2 HEAD` rỗng; không file `frontend/` thay đổi. |
+| Phase | **Phase 8 — Frontend E2E Smoke** 🔄 IN PROGRESS (2/4 plans) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
+| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01; DONE 2026-05-18). 08-02 ✅ (Wave 2: fix gap api-side — COMPAT-01; DONE 2026-05-18). 08-03/04 📋 chưa execute. |
+| Status | **Phase 8 Plan 08-02 COMPLETE — đóng gap api-side Frontend ↔ FastAPI (COMPAT-01).** Đóng 1 BLOCKER `POST /api/ai/chat` từ `08-CONTRACT-DIFF.md`: router `api/app/routers/ai_chat.py` proxy LLM tối giản cho GeminiAssistant (Dashboard golden path) — JWT bắt buộc, rate-limit 100/min, tái dùng `_resolve_llm_model()` hot-swap, lỗi LLM → envelope `LLM_FAILED` không leak trace; 5 unit test pure-Python PASS (1 `@pytest.mark.critical`). Port 8180 map ở `docker-compose.yml` (`8180:8080`) + Makefile target `dev` mới + `config.app_port` default + `.env.example` — frontend `api.ts` (hardcode 8180, Hyper-V excluded range) reach backend không sửa `frontend/`. CORS `localhost:5173` (Vite 6) có sẵn; validator `_no_lan_in_prod` giữ nguyên (P12). `docker compose config` parse OK 3-service không Go. 1 deviation Rule 3: Makefile chưa có target `dev` → thêm mới (plan đã lường trước). D6 tuân thủ tuyệt đối — không file `frontend/` bị sửa, không deletion. Tiếp theo: Plan 08-03 (test suite tự động golden path API). 2 FIX-API (`/documents/compose`, `/documents/{id}/file`) chưa xử lý — degrade hợp lệ, không golden path. |
+| Last activity | 2026-05-18 — `/gsd-execute-phase 8 plan 08-02`: executor sequential trên main tree. 3 commit atomic — `af70241` (fix: port 8180 compose+Makefile+config+env), `3434bac` (test: RED unit test /api/ai/chat), `a203092` (feat: GREEN router ai_chat.py + wire). ruff + mypy --strict PASS; 5 test PASS; route `/api/ai/chat` mounted trong `create_app()`; `git diff --diff-filter=D` rỗng; không file `frontend/` thay đổi. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · **5 Phase 7 DONE** — ASK-01/02/03/04/05 (Ask API citation + anti-injection + cross-hub + hot-swap LLM + usage logging; critical-path integration test verified) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 🔄 (1/4 plans done) |
 
-**Progress bar:** `[█████████░] 87% (Phase 8 🔄 IN PROGRESS — Plan 08-01 contract diff Frontend↔FastAPI: 36 MATCH / 1 BLOCKER / 2 FIX-API, COMPAT-01 done) · Next: Plan 08-02 fix api-side`
+**Progress bar:** `[█████████░] 89% (Phase 8 🔄 IN PROGRESS — Plan 08-02 đóng gap api-side: BLOCKER /api/ai/chat + port 8180, COMPAT-01 done) · Next: Plan 08-03 test suite tự động`
 
 ---
 
