@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: phase_complete
-last_updated: "2026-05-17T12:00:00Z"
+status: ready_to_execute
+last_updated: "2026-05-18T00:00:00Z"
 progress:
   total_phases: 10
   completed_phases: 4
@@ -13,10 +13,10 @@ progress:
 current_phase:
   number: 6
   name: Search API Single + Cross-Hub
-  plans_total: 0
+  plans_total: 4
   plans_complete: 0
-  status: not_started
-  waves: 0
+  status: ready_to_execute
+  waves: 4
 next_phase:
   number: 7
   name: Ask API + LiteLLM + Citation + Hot-Swap + Usage
