@@ -379,6 +379,11 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
 
     app.include_router(search_router)
 
+    # Mount usage router (Phase 7 ASK-05 — 3 endpoint GET token usage).
+    from app.routers import usage_router
+
+    app.include_router(usage_router)
+
     # Rate limiter (Phase 5 AUX-03 — slowapi). Plan 05-02 tạo module; wiring tại đây.
     # Endpoint Phase 5 decorate @limiter.limit = GET /api/audit-logs (Plan 05-05 W4).
     # search/ask 100/min Phase 6, upload 30/min Phase 4 — decoration defer.
