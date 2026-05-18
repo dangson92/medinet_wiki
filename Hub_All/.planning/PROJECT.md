@@ -186,4 +186,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-18 (Phase 7 COMPLETE — Ask API + LiteLLM + citation `[N]` + hot-swap provider + token usage, ASK-01..05 done; verify human_needed (latency/anti-injection LLM thật defer Phase 9). M2b tiến độ: Phase 5 + 6 + 7 done, tiếp theo Phase 8 Frontend E2E Smoke.)*
+*Last updated: 2026-05-19 (Phase 8 COMPLETE — Frontend E2E Smoke: contract diff frontend↔FastAPI, fix gap api-side (router `/api/ai/chat` + port 8180), test golden path + VN filename; COMPAT-01 lớp tĩnh/tự động ĐẠT, SC1/SC2-browser/SC5 defer `/gsd-verify-work 8`. M2b tiến độ: Phase 5/6/7/8 done, tiếp theo Phase 9 Eval Framework. M2a còn Phase 4 (cocoindex ingest) + M2a EXIT GATE.)*
