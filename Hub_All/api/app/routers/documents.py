@@ -66,9 +66,13 @@ MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
 
 
 def get_document_service(
+    request: Request,
     db: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> DocumentService:
-    return DocumentService(db=db)
+    # redis từ app.state — có thể None (fail-open). DocumentService dùng để
+    # publish hub:{hub_id}:invalidate sau create/delete (06-03 / D-12).
+    redis = getattr(request.app.state, "redis", None)
+    return DocumentService(db=db, redis=redis)
 
 
 @router.post("/upload")

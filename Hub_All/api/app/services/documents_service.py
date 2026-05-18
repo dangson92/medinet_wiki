@@ -55,6 +55,7 @@ from app.services.file_extract import (
     detect_scanned_pdf,
 )
 from app.services.file_store import FileStore
+from app.services.search_cache import publish_invalidate
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +105,13 @@ class DocumentService:
         self,
         db: AsyncSession,
         file_store: FileStore | None = None,
+        redis: Any = None,
     ) -> None:
         self.db = db
         self.file_store = file_store or FileStore()
+        # redis.asyncio client — Pub/Sub publish invalidate (06-03 / D-12).
+        # Có thể None (fail-open — publish_invalidate KHÔNG raise nếu None/down).
+        self.redis = redis
 
     async def create(
         self,
@@ -224,6 +229,11 @@ class DocumentService:
             original_filename,
             file_size,
         )
+
+        # 06-03 / D-12 — publish hub:{hub_id}:invalidate để subscriber xoá search
+        # cache của hub này (document mới → search lần kế tiếp KHÔNG trả stale).
+        # publish_invalidate best-effort fail-open — KHÔNG raise nếu redis None/down.
+        await publish_invalidate(self.redis, str(hub_id))
 
         # D6: trả full document shape (Go `Upload` cũ trả nguyên Document object).
         # Re-fetch trong cùng session — row vừa INSERT đã visible trước commit.
@@ -401,6 +411,12 @@ class DocumentService:
                 "request_id": request_id,
             },
         )
+
+        # 06-03 / D-12 — publish hub:{hub_id}:invalidate để subscriber xoá search
+        # cache của hub này (document bị xoá → search lần kế tiếp KHÔNG trả stale).
+        # publish_invalidate best-effort fail-open — KHÔNG raise nếu redis None/down.
+        if hub_id is not None:
+            await publish_invalidate(self.redis, str(hub_id))
 
         # 5) Best-effort xoá file vật lý (T-04-05-05 accept — orphaned file_store
         #    cleanup defer Phase 10 HARD-04 cron). KHÔNG raise nếu fail.

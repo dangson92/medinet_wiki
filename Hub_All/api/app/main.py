@@ -221,6 +221,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     except Exception as e:  # noqa: BLE001
         logger.warning("audit_flush_task_start_failed: %s", e)
 
+    # 9) Search cache invalidation subscriber (Phase 6 SEARCH-04 — D-12).
+    #    Lắng nghe Redis Pub/Sub hub:*:invalidate → xoá cache key của hub đó.
+    app.state.search_cache_task = None
+    if app.state.redis is not None:
+        try:
+            from app.services.search_cache import search_cache_subscriber
+
+            app.state.search_cache_task = asyncio.create_task(
+                search_cache_subscriber(app.state.redis)
+            )
+            logger.info("search_cache_subscriber_task_started")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("search_cache_subscriber_start_failed: %s", e)
+
     try:
         yield
     finally:
@@ -253,6 +267,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             except Exception as e:  # noqa: BLE001
                 logger.warning("audit_task_stop_failed: %s", e)
             app.state.audit_task = None
+        # Search cache subscriber task (Phase 6 SEARCH-04) — cancel TRƯỚC redis
+        # aclose (subscriber dùng redis connection). Đặt trước dispose_engine là
+        # an toàn vì redis aclose ở cuối shutdown.
+        if getattr(app.state, "search_cache_task", None) is not None:
+            app.state.search_cache_task.cancel()
+            try:
+                await app.state.search_cache_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("search_cache_task_stop_failed: %s", e)
+            app.state.search_cache_task = None
         try:
             from app.db.session import dispose_engine
 
