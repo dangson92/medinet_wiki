@@ -7,10 +7,26 @@ from app.schemas.documents import (
     DocumentStatus,
     progress_for_status,
 )
+from app.schemas.search import (
+    SearchFilters,
+    SearchRequest,
+    SearchResponse,
+    SearchResultItem,
+    SimilarMatch,
+    SimilarRequest,
+    SimilarResponse,
+)
 
 __all__ = [
     "DOCUMENT_STATUS_VALUES",
     "DocumentResponse",
     "DocumentStatus",
+    "SearchFilters",
+    "SearchRequest",
+    "SearchResponse",
+    "SearchResultItem",
+    "SimilarMatch",
+    "SimilarRequest",
+    "SimilarResponse",
     "progress_for_status",
 ]
