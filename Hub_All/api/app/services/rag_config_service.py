@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
+import re
 from typing import Any
 from uuid import UUID
 
@@ -24,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.pkg.crypto import decrypt_secret, encrypt_secret
-from app.schemas.rag_config import UpdateRagConfigRequest
+from app.schemas.rag_config import EmbeddingCostPreview, UpdateRagConfigRequest
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,18 @@ _DEFAULT_CHUNK_SIZE = 512
 _DEFAULT_CHUNK_OVERLAP = 64
 _DEFAULT_BATCH_SIZE = 32
 _DEFAULT_GEMINI_LLM_MODEL = "gemini-2.5-flash"
+
+# R7 / ASK-04 — dimension guard + cost preview cho embedding hot-swap.
+PINNED_DIM = 1536  # M2 pin dim 1536 cho cả OpenAI/Gemini (R1 pgvector HNSW limit).
+COST_PER_CHUNK_USD = 0.000013  # ≈ text-embedding-3-small $0.02/1M token, ~650 token/chunk.
+CHUNKS_PER_MINUTE = 450  # ~7-8 embed/s qua LiteLLM.
+
+
+def _embedding_dim_of(model: str) -> int:
+    """Dim từ model name — hậu tố '@<dim>' (vd 'gemini-embedding-001@3072')
+    → dim đó; không có hậu tố → 1536 (M2 pin). Quy ước M2 (D-07-03-A)."""
+    m = re.search(r"@(\d+)\s*$", model.strip())
+    return int(m.group(1)) if m else PINNED_DIM
 
 
 def mask_key(key: str | None) -> str:
@@ -182,6 +196,32 @@ class RagConfigService:
             "gemini_key_saved": bool(gemini_key),
         }
 
+    async def _embedding_cost_preview(self) -> dict[str, Any]:
+        """Cost preview re-embed toàn corpus khi swap embedding (D-07-03-B).
+
+        Echo cho UI WARNING modal — KHÔNG cần chính xác tuyệt đối. Query
+        `count(*)` bọc try/except → fallback n=0 nếu lỗi (T-07-03-04).
+        `est_cost_usd` LUÔN render 2 chữ số trong `message` (format `:.2f`).
+        """
+        try:
+            n = int(
+                (
+                    await self.db.execute(text("SELECT count(*) FROM chunks"))
+                ).scalar_one()
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort, fallback n=0
+            logger.warning("rag_config cost preview count(*) thất bại: %s", exc)
+            n = 0
+        cost = round(n * COST_PER_CHUNK_USD, 2)
+        minutes = max(1, math.ceil(n / CHUNKS_PER_MINUTE))
+        message = f"re-embed {n} chunks, est ${cost:.2f}, est {minutes} phút"
+        return EmbeddingCostPreview(
+            n_chunks=n,
+            est_cost_usd=cost,
+            est_minutes=minutes,
+            message=message,
+        ).model_dump()
+
     async def update_config(  # noqa: C901 — chuỗi if guard partial-update phẳng
         self, *, req: UpdateRagConfigRequest, updated_by: UUID
     ) -> dict[str, Any] | str:
@@ -193,6 +233,21 @@ class RagConfigService:
             return "embedding_provider không hợp lệ — chỉ chấp nhận: openai, gemini"
         if req.llm_provider and req.llm_provider not in _VALID_LLM_PROVIDERS:
             return "llm_provider không hợp lệ — chỉ chấp nhận: openai, gemini, auto"
+
+        # R7 / ASK-04 — dimension guard + cost preview cho embedding swap.
+        cost_preview: dict[str, Any] | None = None
+        if req.embedding_model:
+            new_dim = _embedding_dim_of(req.embedding_model)
+            current_dim = get_settings().rag_embedding_dim  # 1536 pin
+            if new_dim != current_dim:
+                # Cross-dim swap → REFUSE 400 (R7). str = error → router map 400.
+                return (
+                    "dimension mismatch — defer cross-dim swap v4.0 "
+                    f"(model yêu cầu dim {new_dim}, hệ thống pin dim {current_dim})"
+                )
+        # Within-dim swap: cho phép, tính cost preview WARNING khi đổi embedding.
+        if req.embedding_provider or req.embedding_model:
+            cost_preview = await self._embedding_cost_preview()
 
         if req.embedding_provider:
             await _set(
@@ -241,11 +296,20 @@ class RagConfigService:
         logger.info("rag_config_updated by=%s", updated_by)
 
         s = get_settings()
-        return {
+        result: dict[str, Any] = {
             "message": "config updated",
             "active_embedding": s.rag_embedding_provider,
             "active_llm_provider": s.rag_llm_provider,
         }
+        if cost_preview is not None:
+            # Within-dim embedding swap → WARNING + cost preview (R7).
+            result["warning"] = (
+                "Đổi embedding provider có thể giảm chất lượng vector hiện tại. "
+                "Vector cũ KHÔNG tự động re-embed — chỉ document upload mới dùng "
+                "provider mới. Cân nhắc re-embed thủ công."
+            )
+            result["cost_preview"] = cost_preview
+        return result
 
     async def get_provider_key(self, provider: str) -> str:
         """Plaintext API key của provider (gemini|openai) — dùng cho /test."""
