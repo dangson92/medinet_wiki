@@ -1,4 +1,4 @@
-# Roadmap — Medinet Wiki v2.0 (Full RAG Rewrite)
+﻿# Roadmap — Medinet Wiki v2.0 (Full RAG Rewrite)
 
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Created:** 2026-05-13 · **Last updated:** 2026-05-13
@@ -40,6 +40,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [x] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache ✓ (2026-05-18, 4 plans / 4 waves, 4/4 REQ-ID SEARCH-01..04; hub isolation E4 6/6 critical test PASS; verify human_needed — 4/6 SC verified, 4 human-UAT pending)
 - [x] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging ✓ (2026-05-18, 5 plans / 3 waves, 5/5 REQ-ID ASK-01..05; integration test 18 test / 11 critical PASS; verify human_needed — latency p95 + anti-injection LLM thật defer Phase 9, 07-HUMAN-UAT.md)
 - [x] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới ✓ (2026-05-19, 4 plans / 4 waves, COMPAT-01; verify human_needed — 8/11 auto-verified, regression 109/109 unit PASS, code review 0 Critical; SC1/SC2-browser/SC5 cần human UAT — 08-HUMAN-UAT.md)
+- [ ] **Phase 8.1: MCP Server — Expose Wiki Tools** *(INSERTED)* — MCP server theo Model Context Protocol expose tool `ask`/`search`/RAG cho AI client ngoài (Claude Desktop, ChatGPT, Cursor) kết nối vào — urgent insertion 2026-05-19
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
 
@@ -309,6 +310,29 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 ---
 
+### Phase 8.1: MCP Server — Expose Wiki Tools *(INSERTED 2026-05-19)*
+
+**Goal:** Dựng MCP server theo Model Context Protocol expose tool read-only cho AI client ngoài (Claude Desktop, Cursor) kết nối qua Streamable HTTP tại /mcp. Tái dùng service layer RAG sẵn có (Phase 6/7) — thuần backend Python, không đụng frontend/.
+
+**Depends on:** Phase 7 (AskService + SearchService + ApiKeyService tái dùng trực tiếp)
+**Parallel-able with:** Không (sequential sau Phase 8)
+**Requirements:** MCP-01, MCP-02 (vốn defer v4.0, kéo lên Phase 8.1)
+**Research flag:** DONE (08.1-RESEARCH.md — mcp==1.9.4 verified, combine_lifespans landmine documented)
+
+**Success Criteria** (what must be TRUE):
+  1. AI client kết nối http://localhost:8180/mcp với header X-API-Key và gọi tool list_hubs / search_wiki / ask_wiki thành công
+  2. Thiếu / sai API key: MCP error isError=true MCP_UNAUTHORIZED — KHÔNG để tool chạy (D-06)
+  3. search_wiki với hub ngoài phạm vi: ToolError HUB_ACCESS_DENIED (D-13 hub isolation)
+  4. ask_wiki trả AskAnswer(answer, citations) — answer giữ marker [N]; citations structured (D-11)
+  5. usage_events có row mới sau mỗi ask_wiki call thành công (D-14 non-blocking log)
+
+**Plans:** 3 plans (3 waves)
+
+- [ ] 08.1-01-PLAN.md — pyproject.toml mcp>=1.9.4 + mcp/schemas.py + mcp/auth.py authenticate_mcp_request (Wave 1, MCP-01/MCP-02)
+- [ ] 08.1-02-PLAN.md — mcp/server.py FastMCP + 3 tool + pool singleton + main.py combine_lifespans + mount /mcp (Wave 2, MCP-01/MCP-02)
+- [ ] 08.1-03-PLAN.md — Test suite: test_mcp_auth.py + test_mcp_tools.py + test_mcp_mount.py (Wave 3, MCP-01/MCP-02)
+
+---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
 
 **Goal:** Eval framework Python pytest-based đo retrieval quality trên 10 file VN medical thật + 12 query vàng; quality gate ≥75% top-3 PASS để chứng nhận M2 ship-ready.
@@ -371,11 +395,11 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 5. Hub + User + Audit + APIKey + Settings CRUD | 6/6 | ✓ Complete | 2026-05-17 |
 | 6. Search API Single + Cross-Hub | 4/4 | ✓ Complete | 2026-05-18 |
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 5/5 | ✓ Complete | 2026-05-18 |
-| 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 4/4 | ✓ Complete (verify human_needed) | 2026-05-19 |
+| 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 4/4 | ✓ Complete (verify human_needed) | 2026-05-19 |n| 8.1 MCP Server — Expose Wiki Tools | 0/3 | Planned 2026-05-19 | - |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
-**Tổng:** 7/10 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 4/6 — Phase 5/6/7/8 done)
+**Tổng:** 7/11 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 4/7 — Phase 5/6/7/8 done; Phase 8.1 planned)
 
 ---
 
