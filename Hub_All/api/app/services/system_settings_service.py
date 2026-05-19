@@ -5,7 +5,7 @@ Bảo mật / Thông báo" gọi GET/PUT `/api/system-settings`. Endpoint Go-era
 chưa được port → frontend nhận 404, load về giá trị mặc định, lưu thất bại.
 
 Persist key-value vào bảng `settings` (JSONB scalar) — DÙNG CHUNG bảng với
-`rag_config_service`, nên service này CHỈ thao tác whitelist 8 key của tab
+`rag_config_service`, nên service này CHỈ thao tác whitelist 9 key của tab
 hệ thống, KHÔNG đụng các key `RAG_*` / `LLM_*` / `*_API_KEY`.
 
 Khác `rag_config`: settings hệ thống thuần khai báo (tên, URL, toggle) → KHÔNG
@@ -34,6 +34,7 @@ _DEFAULTS: dict[str, str] = {
     "SECURITY_SESSION_TIMEOUT": "30",
     "NOTIFY_EMAIL_ENABLED": "true",
     "NOTIFY_TELEGRAM_ENABLED": "false",
+    "MCP_PUBLIC_URL": "https://mcp.medinet.vn",
 }
 _ALLOWED_KEYS = frozenset(_DEFAULTS)
 
@@ -49,13 +50,13 @@ def _parse_jsonb(raw: Any) -> Any:
 
 
 class SystemSettingsService:
-    """CRUD settings hệ thống qua bảng `settings` (whitelist 8 key)."""
+    """CRUD settings hệ thống qua bảng `settings` (whitelist 9 key)."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def get_settings(self) -> dict[str, str]:
-        """GET /api/system-settings — 8 key hiện tại, fallback default nếu DB rỗng."""
+        """GET /api/system-settings — 9 key hiện tại, fallback default nếu DB rỗng."""
         rows = (
             await self.db.execute(text("SELECT key, value FROM settings"))
         ).fetchall()
