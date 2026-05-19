@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
-status: Phase 08.3 IN PROGRESS
-last_updated: "2026-05-19T10:15:00Z"
+status: Ready to execute
+last_updated: "2026-05-19T10:04:43.041Z"
 progress:
-  total_phases: 12
-  completed_phases: 10
-  total_plans: 51
-  completed_plans: 51
+  total_phases: 13
+  completed_phases: 11
+  total_plans: 55
+  completed_plans: 55
   percent: 100
 ---
 
@@ -17,7 +17,7 @@ progress:
 **Mã dự án:** MEDWIKI
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Ngày tạo state:** 2026-05-13 (pivot lần 2 — M1 Docling abandoned)
-**Last updated:** 2026-05-19 (Phase 8.3 Plan 03 — đường danh tính OAuth token → downstream JWT: extract_oauth_token + ApiClient forward Bearer JWT + refresh_jwt; tool resolve credential + retry-on-401 refresh rotation; 78/78 test mcp_service PASS + 119 regression API)
+**Last updated:** 2026-05-19 (Phase 8.3 Plan 04 — deploy MCP Service public HTTPS: Dockerfile multi-stage uv non-root factory CMD + .dockerignore; Caddyfile reverse proxy auto-TLS forward nguyên host; docker-compose service mcp_service + caddy + 3 named volume; 08.3-HUMAN-UAT.md SC4. docker build + compose config PASS. Phase 8.3 4/4 plans code complete — SC4 chờ human UAT)
 
 ---
 
@@ -41,18 +41,23 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Current Position
 
-Phase: 08.3 (mcp-oauth-deploy-public-https) — 🔄 IN PROGRESS
-Plan: 3 of 4 (08.3-01 ✅ + 08.3-02 ✅ + 08.3-03 ✅ COMPLETE 2026-05-19) — tiếp theo 08.3-04
+Phase: 08.3 (mcp-oauth-deploy-public-https) — 🔄 IN PROGRESS (4/4 plans code complete — SC4 chờ human UAT)
+Plan: 4 of 4 (08.3-01 ✅ + 08.3-02 ✅ + 08.3-03 ✅ + 08.3-04 ✅ COMPLETE 2026-05-19)
+
+- 08.3-04 ✅: deploy MCP Service public HTTPS (SC2 — MCP-01/MCP-02 deploy-ready) — `mcp_service/Dockerfile` multi-stage `uv` (builder/runtime tách stage, non-root `mcpuser`, `EXPOSE 8190`, CMD `uvicorn mcp_app.server:build_asgi_app --factory` — `build_asgi_app` là factory Plan 02; bỏ alembic/migrations vì không DB chung; `mkdir+chown /app/.oauth` trước `USER`; HEALTHCHECK probe `/.well-known/oauth-authorization-server` — route tất định nhờ default issuer Plan 01 + SDK mount); `mcp_service/.dockerignore` loại `.venv`/cache/`tests`/`.env`/`*.db`/`.oauth`/`.git`; `Caddyfile` `reverse_proxy medinet-mcp:8190` forward nguyên host+path (KHÔNG `handle_path`/`uri strip` — well-known root không strip, Pitfall 7), domain qua biến `MCP_PUBLIC_DOMAIN`; `docker-compose.yml` thêm service `mcp_service` (gọi API qua docker network `http://python-api:8080`, OAuth state SQLite trên named volume `medinet_mcp_oauth_state`, KHÔNG map port host — chỉ Caddy expose) + service `caddy` (`caddy:2-alpine`, expose 80/443, volume cert ACME) + 3 named volume; `env_file mcp_service/.env` dùng `required:false` (Compose v2.24+) — chạy được khi chưa có `.env`; README section Phase 8.3 (kiến trúc đích, OAuth + X-API-Key song song, 4 biến `MCP_OAUTH_*`, Caddy auto-TLS + fallback Cloudflare Tunnel); `08.3-HUMAN-UAT.md` quy trình SC4 7 bước (`human_needed` — kết nối thật Claude web). `docker build` PASS + `docker run import` PASS + `docker compose config` PASS (5 service). 3 task. Decisions: `env_file required:false` gỡ blocking compose validate (mọi biến bắt buộc có default ở `environment:`); HEALTHCHECK probe well-known thay endpoint `/healthz` riêng; `mcp_service` không map port host (T-08.3-20).
 - 08.3-03 ✅: đường danh tính OAuth token → API Service (MCP-02, D-03/D-04) — `auth.extract_oauth_token` đọc `Authorization: Bearer <token>` từ MCP Context (song song `extract_api_key` — client local KHÔNG vỡ) + dataclass `Credential` (kind jwt/api_key + value + oauth_token); `ApiClient._request/get/post` nhận thêm param `jwt` → có jwt forward header `Authorization: Bearer <JWT>` thay `X-API-Key` (D-03), thiếu cả 2 credential → `ApiClientError`; `ApiClient.refresh_jwt` gọi `POST /api/auth/refresh` đổi JWT downstream mới (Pitfall 4 — JWT TTL 900s hết hạn giữa phiên OAuth dài), 401 → None, refresh có rotation (AUTH-02); `server._resolve_credential` ưu tiên OAuth token (verify `provider.load_access_token` → lấy downstream JWT đúng user từ store) fallback X-API-Key, token sai/thiếu → `ToolError` MCP_UNAUTHORIZED; `server._call_api` nhánh JWT gặp 401 → `refresh_jwt` → `update_downstream_jwt` lưu rotation CẢ access+refresh (Pitfall 5) → retry 1 lần, nhánh api_key gọi thẳng KHÔNG retry; 3 tool dùng `_resolve_credential`+`_call_api` thay `require_api_key` — body logic giữ nguyên. 78/78 test mcp_service PASS (63 cũ + 15 mới) + 119 regression API unit PASS, ruff clean, mypy đồng số baseline (không lỗi type mới). 2 task TDD RED→GREEN. Decisions: `Credential` dataclass đặt trong auth.py; helper `_jwt`/`_key` tách giá trị theo kind; nhánh api_key KHÔNG retry-on-401 (X-API-Key không refresh được).
 - 08.3-02 ✅: lớp OAuth Authorization Server cho MCP Service (lõi MCP-01) — `ApiClient.login()` gọi `POST /api/auth/login` xác thực credential Medinet (D-02, ủy thác Argon2 cho API Service, trả dict/None/raise); `MedinetOAuthProvider` kế thừa `OAuthAuthorizationServerProvider` SDK mcp 1.27 — đủ 9 method (get/register_client, authorize, load/exchange auth code, load/exchange refresh token, load_access_token, revoke) + bổ trợ `complete_authorization` (login callback gọi để phát code bind downstream JWT); token OAuth opaque, code single-use, refresh rotation; `oauth/login.py` route GET `/login` HTML form + POST `/login/callback` (credential sai → render lỗi, đúng → redirect 302 kèm code+state); `server.py` `build_asgi_app()` chuyển thành FACTORY (FastMCP mới mỗi lần gọi — session-manager .run() 1 lần/instance) + 3 tool tách sang `register_tools(mcp)` (body giữ nguyên), wired `auth_server_provider`+`AuthSettings` → SDK tự mount metadata/authorize/token/register; lifespan compose chạy `OAuthStore.init_schema()` lúc startup bảo toàn lifespan SDK. 63/63 test mcp_service PASS (43 cũ + 20 mới), ruff clean. 3 task TDD RED→GREEN. Decisions: build_asgi_app factory + register_tools (option b plan — fix RuntimeError session-manager .run() 1 lần).
 - 08.3-01 ✅: nền tảng lớp OAuth MCP Service — thêm `aiosqlite` 0.22.1 + `uvicorn` 0.47.0 vào `pyproject.toml` + sinh `uv.lock` (mcp pin giữ 1.27.x — P19); `Settings` mở rộng 4 field OAuth (`oauth_issuer_url` validated http/https có default an toàn, `oauth_state_db_path`, token TTL access 3600 / refresh 2592000); package `mcp_app/oauth/` mới với `OAuthStore` — persistence SQLite 4 bảng (`oauth_clients`/`oauth_auth_codes`/`oauth_tokens`/`oauth_pending`) CRUD roundtrip + `update_downstream_jwt` rotate cả 2 token (Pitfall 5) + `cleanup_expired`; query parametrized chống SQL injection, không log secret; conftest thêm fixture `oauth_store` (:memory:) + helper `fake_pending_authorize`; `test_oauth_store.py` 10 test (2 @critical). 43/43 test mcp_service PASS, ruff clean. 3 task. Decisions: OAuthStore giữ 1 connection xuyên suốt (để fixture :memory: chạy); `oauth_issuer_url` default an toàn cho HEALTHCHECK Plan 04; schema `oauth_pending` author ngay Plan 01.
 
 ### Phase 08.2 (mcp-service-standalone-process) — ✅ COMPLETE 2026-05-19
+
 Plan: 5 of 5 (08.2-01 ✅ + 08.2-02 ✅ + 08.2-03 ✅ + 08.2-04 ✅ + 08.2-05 ✅ COMPLETE 2026-05-19)
+
 - 08.2-05 ✅: test suite tích hợp MCP Service + đóng phase — conftest.py (fixture mock_ctx + reset ApiClient singleton + api_base_url); test_integration_tools.py 9 test gọi 3 tool thật qua respx mock API Service (verify request shape/body/header + envelope unwrap + map ToolError), khác test_server.py Plan 03 (mock tầng ApiClient) — Plan 05 mock tầng HTTP transport; README cập nhật 3 mục (Chạy test, Kiến trúc Phase 8.2, UAT thủ công SC4); marker `critical` khai báo pyproject.toml. SC5 đạt: 33 test mcp_service PASS + 119 regression API unit PASS, ruff clean. SC4 `human_needed` — UAT thủ công usage_events DB thật ghi README. 3 task.
 - 08.2-04 ✅: gỡ MCP server in-process khỏi API Service — main.py không còn `/mcp`, `_composed_lifespan`, `_mcp_app`, `mcp_set_pool` (dùng `FastAPI(lifespan=lifespan)` trực tiếp); xoá hẳn package `api/app/mcp/` (4 file) + test `api/tests/unit/mcp/` (4 file, 939 dòng); gỡ dependency `mcp>=1.27.0,<1.28` khỏi `pyproject.toml` (httpx giữ). Đảo D-04 hoàn tất ở tầng API Service — API Service không còn biết gì về MCP. SC1 phase đạt. 2 task, regression 119 unit PASS, `create_app()` 59 routes không còn route `/mcp`.
 - 08.2-03 ✅: lõi MCP Service — auth.py trích X-API-Key từ HTTP header (bỏ verify DB); server.py FastMCP + 3 tool (list_hubs/search_wiki/ask_wiki) gọi API Service qua HTTP bằng ApiClient, map 401/403/400/5xx → ToolError; entrypoint build_asgi_app()+main() chạy standalone qua `python -m mcp_app.server` port 8190. Đảo D-04 hoàn tất ở tầng tool. 3 task (TDD Task 1+2), 14 test mới PASS (5 auth + 9 server), tổng 24/24 test mcp_service PASS, ruff clean. MCP-02: expose 3 tool, list_documents/get_document DEFER (nợ kỹ thuật).
 - 08.2-02 ✅: mở auth API Service cho MCP Service — get_api_key_or_jwt_with_hubs (X-API-Key HOặC JWT → UserWithHubs); 4 endpoint search/ask + GET /api/hubs nhận X-API-Key; HubService.list_for_hubs scope non-admin. BLOCKER fix SC2/SC3/SC4. 3 task, 13 test PASS, regression 122 unit PASS.
+
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
