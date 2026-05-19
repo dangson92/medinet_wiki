@@ -1,14 +1,19 @@
 """Test cho api_client.py (ApiClient) — dùng respx mock httpx.
 
-Phủ 6 behavior:
+Phủ 6 behavior gốc + 3 behavior login() (Phase 8.3 — OAuth flow):
 - Test 1: 200 envelope success → trả data đã unwrap.
 - Test 2: 401 INVALID_API_KEY → raise ApiUnauthorizedError.
 - Test 3: 403 FORBIDDEN → raise ApiForbiddenError.
 - Test 4: 400 INVALID_QUERY → raise ApiBadRequestError mang message.
 - Test 5: 500 LLM_FAILED → raise ApiServerError.
 - Test 6: header X-API-Key gửi đúng giá trị truyền vào.
+- Test 7 (login_success): 200 envelope login → trả dict JWT pair đủ field.
+- Test 8 (login_wrong_credential): 401 → trả None (KHÔNG raise).
+- Test 9 (login_server_error): 500 → raise ApiServerError.
 """
 from __future__ import annotations
+
+import json
 
 import httpx
 import pytest
@@ -130,3 +135,81 @@ async def test_x_api_key_header_forwarded() -> None:
     assert route.called
     sent_request = route.calls.last.request
     assert sent_request.headers["X-API-Key"] == "secret-key-123"
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.3 — ApiClient.login() gọi POST /api/auth/login (D-02)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.critical
+@respx.mock
+async def test_login_success() -> None:
+    """Test 7: 200 envelope login → trả dict JWT pair đủ field + body đúng."""
+    route = respx.post(f"{BASE_URL}/api/auth/login").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "access_token": "jwt-access",
+                    "refresh_token": "jwt-refresh",
+                    "expires_at": 1234567890,
+                    "user": {"id": "u1", "email": "a@b.com", "role": "admin"},
+                },
+                "error": None,
+                "meta": None,
+            },
+        )
+    )
+    async with ApiClient(BASE_URL) as client:
+        data = await client.login("a@b.com", "pwd")
+
+    assert data is not None
+    assert data["access_token"] == "jwt-access"
+    assert data["refresh_token"] == "jwt-refresh"
+    assert data["expires_at"] == 1234567890
+    assert data["user"]["email"] == "a@b.com"
+    # Body request đúng {email, password}.
+    sent_body = json.loads(route.calls.last.request.content)
+    assert sent_body == {"email": "a@b.com", "password": "pwd"}
+
+
+@pytest.mark.critical
+@respx.mock
+async def test_login_wrong_credential() -> None:
+    """Test 8: 401 → login() trả None (KHÔNG raise — credential sai là kết quả hợp lệ)."""
+    respx.post(f"{BASE_URL}/api/auth/login").mock(
+        return_value=httpx.Response(
+            401,
+            json={
+                "success": False,
+                "data": None,
+                "error": {"code": "INVALID_CREDENTIALS", "message": "Sai"},
+                "meta": None,
+            },
+        )
+    )
+    async with ApiClient(BASE_URL) as client:
+        data = await client.login("a@b.com", "sai")
+
+    assert data is None
+
+
+@respx.mock
+async def test_login_server_error() -> None:
+    """Test 9: 500 → login() raise ApiServerError (lỗi hạ tầng, khác credential sai)."""
+    respx.post(f"{BASE_URL}/api/auth/login").mock(
+        return_value=httpx.Response(
+            500,
+            json={
+                "success": False,
+                "data": None,
+                "error": {"code": "INTERNAL", "message": "Lỗi server"},
+                "meta": None,
+            },
+        )
+    )
+    async with ApiClient(BASE_URL) as client:
+        with pytest.raises(ApiServerError):
+            await client.login("a@b.com", "pwd")
