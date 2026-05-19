@@ -34,7 +34,8 @@ _DEFAULTS: dict[str, str] = {
     "SECURITY_SESSION_TIMEOUT": "30",
     "NOTIFY_EMAIL_ENABLED": "true",
     "NOTIFY_TELEGRAM_ENABLED": "false",
-    "MCP_PUBLIC_URL": "https://mcp.medinet.vn",
+    # Rỗng = chưa cấu hình → frontend tự suy domain từ host thật của app.
+    "MCP_PUBLIC_URL": "",
 }
 _ALLOWED_KEYS = frozenset(_DEFAULTS)
 

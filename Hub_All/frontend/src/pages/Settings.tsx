@@ -25,6 +25,9 @@ import {
 import { cn } from '../lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
+// URL gốc MCP Service — mặc định suy ra từ host thật đang chạy app (giống API_URL),
+// override qua VITE_MCP_URL khi build. Admin sửa lại được trong tab MCP Connector.
+const MCP_URL = import.meta.env.VITE_MCP_URL || `http://${window.location.hostname}:8190`;
 
 // ─── Model metadata ───
 interface ModelInfo {
@@ -181,8 +184,9 @@ export default function Settings() {
   const [notifyTelegram, setNotifyTelegram] = useState(false);
 
   // ─── MCP Connector state ───
-  // Domain public HTTPS của MCP Service — admin nhập, URL connector tự sinh từ đây.
-  const [mcpPublicUrl, setMcpPublicUrl] = useState('https://mcp.medinet.vn');
+  // Domain MCP Service — mặc định suy ra từ host thật của app (MCP_URL);
+  // giá trị admin đã lưu trong DB sẽ override. URL connector tự sinh từ đây.
+  const [mcpPublicUrl, setMcpPublicUrl] = useState(MCP_URL);
   // copiedKey = fieldKey vừa được copy → đổi icon nút thành dấu check 2s.
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -709,7 +713,7 @@ export default function Settings() {
                     type="text"
                     value={mcpPublicUrl}
                     onChange={e => setMcpPublicUrl(e.target.value)}
-                    placeholder="https://mcp.medinet.vn"
+                    placeholder={MCP_URL}
                     className="input-field w-full font-mono text-sm"
                     spellCheck={false}
                   />
