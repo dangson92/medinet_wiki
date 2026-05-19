@@ -40,7 +40,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [x] **Phase 6: Search API Single + Cross-Hub** — vector search direct pgvector + iterative_scan + Redis cache ✓ (2026-05-18, 4 plans / 4 waves, 4/4 REQ-ID SEARCH-01..04; hub isolation E4 6/6 critical test PASS; verify human_needed — 4/6 SC verified, 4 human-UAT pending)
 - [x] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging ✓ (2026-05-18, 5 plans / 3 waves, 5/5 REQ-ID ASK-01..05; integration test 18 test / 11 critical PASS; verify human_needed — latency p95 + anti-injection LLM thật defer Phase 9, 07-HUMAN-UAT.md)
 - [x] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới ✓ (2026-05-19, 4 plans / 4 waves, COMPAT-01; verify human_needed — 8/11 auto-verified, regression 109/109 unit PASS, code review 0 Critical; SC1/SC2-browser/SC5 cần human UAT — 08-HUMAN-UAT.md)
-- [ ] **Phase 8.1: MCP Server — Expose Wiki Tools** *(INSERTED)* — MCP server theo Model Context Protocol expose tool `ask`/`search`/RAG cho AI client ngoài (Claude Desktop, ChatGPT, Cursor) kết nối vào — urgent insertion 2026-05-19
+- [x] **Phase 8.1: MCP Server — Expose Wiki Tools** *(INSERTED)* — MCP server Streamable HTTP tại `/mcp` expose 3 tool read-only (`search_wiki`/`ask_wiki`/`list_hubs`) cho AI client ngoài ✓ (2026-05-19, 3 plans / 3 waves; verify human_needed — 3/5 SC auto-verified, unit `tests/unit/mcp/` 9 PASS, regression 118 PASS, code review CR-01 đã vá; SC1/SC5 chờ human UAT — 08.1-HUMAN-UAT.md)
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
 
@@ -317,7 +317,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 **Depends on:** Phase 7 (AskService + SearchService + ApiKeyService tái dùng trực tiếp)
 **Parallel-able with:** Không (sequential sau Phase 8)
 **Requirements:** MCP-01, MCP-02 (vốn defer v4.0, kéo lên Phase 8.1)
-**Research flag:** DONE (08.1-RESEARCH.md — mcp==1.9.4 verified, combine_lifespans landmine documented)
+**Research flag:** DONE (08.1-RESEARCH.md — combine_lifespans landmine documented; `mcp` thực tế resolve 1.27.1, pin `>=1.27.0,<1.28`)
 
 **Success Criteria** (what must be TRUE):
   1. AI client kết nối http://localhost:8180/mcp với header X-API-Key và gọi tool list_hubs / search_wiki / ask_wiki thành công
@@ -328,9 +328,11 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 **Plans:** 3 plans (3 waves)
 
-- [ ] 08.1-01-PLAN.md — pyproject.toml mcp>=1.9.4 + mcp/schemas.py + mcp/auth.py authenticate_mcp_request (Wave 1, MCP-01/MCP-02)
-- [ ] 08.1-02-PLAN.md — mcp/server.py FastMCP + 3 tool + pool singleton + main.py combine_lifespans + mount /mcp (Wave 2, MCP-01/MCP-02)
-- [ ] 08.1-03-PLAN.md — Test suite: test_mcp_auth.py + test_mcp_tools.py + test_mcp_mount.py (Wave 3, MCP-01/MCP-02)
+- [x] 08.1-01-PLAN.md — pyproject.toml `mcp` + `mcp/schemas.py` + `mcp/auth.py` authenticate_mcp_request (Wave 1, MCP-01/MCP-02) ✓ 2026-05-19
+- [x] 08.1-02-PLAN.md — `mcp/server.py` FastMCP + 3 tool + pool singleton + `main.py` composed lifespan + mount /mcp (Wave 2, MCP-01/MCP-02) ✓ 2026-05-19
+- [x] 08.1-03-PLAN.md — Test suite: test_mcp_auth.py + test_mcp_tools.py + test_mcp_mount.py (Wave 3, MCP-01/MCP-02) ✓ 2026-05-19
+
+> **Phase 8.1 hoàn tất (2026-05-19):** MCP server Streamable HTTP mount `/mcp` cùng process FastAPI (D-02), 3 tool read-only gọi trực tiếp service layer (D-04), auth `X-API-Key` tái dùng `ApiKeyService.verify_key` (D-05), hub isolation enforce ở service layer (D-12/D-13). Deviation: `mcp` resolve `1.27.1` thay vì `1.9.4` — API khác (`streamable_http_app()`, `_composed_lifespan` tự viết vì không có `combine_lifespans`, header qua `ctx.request_context`); code adapt + pin `>=1.27.0,<1.28`. Code review 1 Critical (CR-01 usage-log drop âm thầm — đã vá `_spawn_usage_log`) + 4 Warning (WR-01/03/04 còn tồn — `08.1-REVIEW.md`). Verify `human_needed`: SC2/SC3/SC4 auto-verified, `tests/unit/mcp/` 9 PASS, regression 118 PASS; SC1 (kết nối AI client thật) + SC5 (usage_events DB thật) chờ human UAT — `08.1-HUMAN-UAT.md`.
 
 ---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
@@ -395,11 +397,12 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 5. Hub + User + Audit + APIKey + Settings CRUD | 6/6 | ✓ Complete | 2026-05-17 |
 | 6. Search API Single + Cross-Hub | 4/4 | ✓ Complete | 2026-05-18 |
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 5/5 | ✓ Complete | 2026-05-18 |
-| 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 4/4 | ✓ Complete (verify human_needed) | 2026-05-19 |n| 8.1 MCP Server — Expose Wiki Tools | 0/3 | Planned 2026-05-19 | - |
+| 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 4/4 | ✓ Complete (verify human_needed) | 2026-05-19 |
+| 8.1 MCP Server — Expose Wiki Tools | 3/3 | ✓ Complete (verify human_needed) | 2026-05-19 |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
-**Tổng:** 7/11 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 4/7 — Phase 5/6/7/8 done; Phase 8.1 planned)
+**Tổng:** 8/11 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 5/7 — Phase 5/6/7/8/8.1 done)
 
 ---
 

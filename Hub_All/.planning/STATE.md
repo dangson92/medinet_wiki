@@ -3,23 +3,23 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: in_progress
-last_updated: "2026-05-19T12:30:00Z"
+last_updated: "2026-05-19T13:10:00Z"
 progress:
   total_phases: 11
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 48
-  completed_plans: 45
-  percent: 88
+  completed_plans: 48
+  percent: 91
 current_phase:
-  number: 8.1
-  name: MCP Server — Expose Wiki Tools
-  plans_total: 3
-  plans_complete: 0
-  status: ready_to_execute
-  waves: 3
-next_phase:
   number: 9
   name: Eval Framework + Quality Gate ≥75% top-3
+  plans_total: 0
+  plans_complete: 0
+  status: not_started
+  waves: 0
+next_phase:
+  number: 10
+  name: Hardening + Observability + Docs
 ---
 
 # State — MEDWIKI
@@ -62,9 +62,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 ✓ (4/4 plans done) |
 
-**Progress bar:** `[████████░░] 88% (Phase 8.1 📋 READY TO EXECUTE — MCP Server 3 PLAN.md / 3 waves đã plan + verify PASSED; chèn khẩn cấp 2026-05-19) · Next: /gsd-execute-phase 8.1 → Phase 9 Eval Framework`
+**Progress bar:** `[█████████░] 91% (Phase 8.1 ✅ COMPLETE — MCP Server 3/3 plans; verify human_needed — SC1/SC5 chờ /gsd-verify-work 8.1) · Next: Phase 9 Eval Framework + Quality Gate ≥75% top-3`
 
-**Phase 8.1 — MCP Server (planned 2026-05-19):** Phase chèn khẩn (vốn defer v4.0 MCP-01/MCP-02, kéo lên). Research → pattern map → 3 plan → plan-checker `VERIFICATION PASSED` (12/12 dimension, threat model 3/3 plan, 0 high-severity unmitigated). Wave 1 `08.1-01` (pyproject `mcp>=1.9.4` + `mcp/schemas.py` + `mcp/auth.py`) → Wave 2 `08.1-02` (`mcp/server.py` 3 tool + `main.py` mount `/mcp` + lifespan `combine_lifespans`) → Wave 3 `08.1-03` (test suite unit MCP). Thuần backend, 0 file `frontend/` (D6).
+**Phase 8.1 — MCP Server ✅ COMPLETE (2026-05-19):** Phase chèn khẩn (defer v4.0 MCP-01/MCP-02 kéo lên). Research → pattern map → 3 plan → plan-checker `VERIFICATION PASSED` → execute 3 wave. MCP server Streamable HTTP mount `/mcp` cùng process FastAPI (D-02), 3 tool read-only `search_wiki`/`ask_wiki`/`list_hubs` gọi trực tiếp service layer (D-04), auth `X-API-Key` tái dùng `ApiKeyService.verify_key` (D-05), hub isolation enforce ở service layer (D-12/D-13), usage logging non-blocking (D-14). **Deviation:** `mcp` resolve `1.27.1` thay vì `1.9.4` research khuyến nghị — API khác (`streamable_http_app()`, `_composed_lifespan` tự viết, header qua `ctx.request_context`); code đã adapt, pin `>=1.27.0,<1.28`. **Code review:** 1 Critical CR-01 (`asyncio.create_task` usage-log drop âm thầm) ĐÃ VÁ — thêm `_spawn_usage_log` giữ strong reference + done-callback log lỗi; 4 Warning (WR-01/03/04 còn tồn — `08.1-REVIEW.md`). **Verify `human_needed`:** SC2/SC3/SC4 auto-verified, `tests/unit/mcp/` 9 PASS + regression 118 PASS, ruff clean; SC1 (kết nối AI client thật vào `/mcp`) + SC5 (`usage_events` ghi row với DB thật) chờ human UAT — `08.1-HUMAN-UAT.md` (status partial, 2 pending). Cùng pattern Phase 6/7/8.
 
 ---
 
