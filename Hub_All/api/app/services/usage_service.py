@@ -120,12 +120,16 @@ async def query_usage(
     clauses: list[str] = []
     params: list[Any] = []
 
+    # `::text::timestamptz` (KHÔNG `::timestamptz`): asyncpg suy kiểu `$N` trong
+    # `$N::timestamptz` thành timestamptz → ĐÒI `datetime`; `date_from`/`date_to`
+    # là str query-param → asyncpg raise `DataError` → 500. `::text` ép `$N`
+    # thành text (asyncpg gửi str OK), Postgres cast text→timestamptz lúc chạy.
     if date_from:
         params.append(date_from)
-        clauses.append(f"created_at >= ${len(params)}")
+        clauses.append(f"created_at >= ${len(params)}::text::timestamptz")
     if date_to:
         params.append(date_to)
-        clauses.append(f"created_at <= ${len(params)}")
+        clauses.append(f"created_at <= ${len(params)}::text::timestamptz")
     if model:
         params.append(model)
         clauses.append(f"model = ${len(params)}")
@@ -192,12 +196,15 @@ async def aggregate_usage(
     """
     clauses: list[str] = []
     params: list[Any] = []
+    # `::text::timestamptz` — xem chú thích `query_usage`: tránh asyncpg
+    # `DataError` khi `date_from`/`date_to` là str (asyncpg suy `$N::timestamptz`
+    # thành timestamptz → đòi `datetime`).
     if date_from:
         params.append(date_from)
-        clauses.append(f"created_at >= ${len(params)}")
+        clauses.append(f"created_at >= ${len(params)}::text::timestamptz")
     if date_to:
         params.append(date_to)
-        clauses.append(f"created_at <= ${len(params)}")
+        clauses.append(f"created_at <= ${len(params)}::text::timestamptz")
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
     async with pool.acquire() as conn:

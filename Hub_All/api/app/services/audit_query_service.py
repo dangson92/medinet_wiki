@@ -45,13 +45,21 @@ class AuditQueryService:
         Router cap per_page ≤ 100 — service KHÔNG cap.
         """
         # Build WHERE clauses + bind params (asyncpg parametrize an toàn).
+        # `CAST(CAST(:p AS text) AS timestamptz)`: date_from/date_to là str —
+        # asyncpg suy `:p` thành timestamptz sẽ ĐÒI datetime → DataError → 500.
+        # Cast qua `text` trước ép asyncpg gửi str, Postgres cast lúc chạy.
+        # (`:p::timestamptz` bị SQLAlchemy text() mis-parse → phải CAST() lồng.)
         where_clauses: list[str] = []
         params: dict[str, Any] = {}
         if date_from:
-            where_clauses.append("al.created_at >= :date_from")
+            where_clauses.append(
+                "al.created_at >= CAST(CAST(:date_from AS text) AS timestamptz)"
+            )
             params["date_from"] = date_from
         if date_to:
-            where_clauses.append("al.created_at <= :date_to")
+            where_clauses.append(
+                "al.created_at <= CAST(CAST(:date_to AS text) AS timestamptz)"
+            )
             params["date_to"] = date_to
         if action:
             where_clauses.append("al.action = :action")
