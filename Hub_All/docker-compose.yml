@@ -73,10 +73,66 @@ services:
         condition: service_healthy
     networks: [medinet_net]
 
+  # MCP Service — Phase 8.3. Process độc lập expose RAG tools qua MCP cho Claude
+  # web connector. KHÔNG map port host: chỉ Caddy expose public (mọi truy cập
+  # buộc đi qua TLS termination). Service nói HTTP nội bộ docker network.
+  mcp_service:
+    build:
+      context: ./mcp_service
+      dockerfile: Dockerfile
+    container_name: medinet-mcp
+    restart: unless-stopped
+    env_file:
+      # Optional — operator copy mcp_service/.env.example -> .env nếu cần override.
+      # Mọi biến bắt buộc đã có default ở environment: dưới đây nên thiếu .env vẫn chạy.
+      - path: ./mcp_service/.env
+        required: false
+    environment:
+      # Gọi API Service qua docker network — KHÔNG localhost.
+      MCP_API_BASE_URL: http://python-api:8080
+      # Issuer = domain public HTTPS. Operator set ở .env gốc compose:
+      #   MCP_OAUTH_ISSUER_URL=https://${MCP_PUBLIC_DOMAIN}  (prod).
+      # Đổi reverse proxy (Caddy <-> Cloudflare Tunnel) chỉ cần đổi biến này.
+      MCP_OAUTH_ISSUER_URL: ${MCP_OAUTH_ISSUER_URL:-http://localhost:8190}
+      # SQLite OAuth state — đường dẫn tuyệt đối trong named volume (sống sót restart).
+      MCP_OAUTH_STATE_DB_PATH: /app/.oauth/state.db
+    volumes:
+      - medinet_mcp_oauth_state:/app/.oauth
+    depends_on:
+      python-api:
+        condition: service_healthy
+    networks: [medinet_net]
+
+  # Reverse proxy auto-TLS — Phase 8.3. Caddy terminate TLS + forward nguyên
+  # host tới mcp_service:8190 (well-known route ở root KHÔNG bị strip).
+  # Operator set MCP_PUBLIC_DOMAIN ở .env gốc compose (vd mcp.medinet.vn).
+  # Fallback nếu không mở được port 80/443: thay service này bằng cloudflared.
+  caddy:
+    image: caddy:2-alpine
+    container_name: medinet-caddy
+    restart: unless-stopped
+    environment:
+      MCP_PUBLIC_DOMAIN: ${MCP_PUBLIC_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - medinet_caddy_data:/data
+      - medinet_caddy_config:/config
+    depends_on:
+      - mcp_service
+    networks: [medinet_net]
+
 volumes:
   medinet_pgdata:
   medinet_redis_data:
   medinet_cocoindex_state:
+  # Phase 8.3 — OAuth state SQLite (clients/codes/tokens/pending) sống sót restart.
+  medinet_mcp_oauth_state:
+  # Phase 8.3 — Caddy cert ACME + config (tránh xin lại cert mỗi lần restart).
+  medinet_caddy_data:
+  medinet_caddy_config:
 
 networks:
   medinet_net:

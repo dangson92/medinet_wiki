@@ -1,0 +1,20 @@
+# Caddyfile — MCP Service public HTTPS (Phase 8.3).
+#
+# Caddy đóng vai reverse proxy terminate TLS cho MCP Service. Caddy tự xin +
+# gia hạn cert Let's Encrypt (auto-TLS) — cần port 80 + 443 mở ra Internet.
+#
+# Domain truyền qua biến môi trường MCP_PUBLIC_DOMAIN (đọc từ .env của compose):
+#   - Prod: MCP_PUBLIC_DOMAIN=mcp.medinet.vn  → Caddy xin cert ACME thật.
+#   - Dev local không cert thật: dùng MCP_PUBLIC_DOMAIN=localhost (Caddy cấp cert
+#     nội bộ tự ký) hoặc MCP_PUBLIC_DOMAIN=:80 (HTTP thuần, chỉ để thử nội bộ).
+#
+# Đổi reverse proxy (Caddy <-> Cloudflare Tunnel) chỉ cần đổi service compose +
+# biến MCP_OAUTH_ISSUER_URL — KHÔNG đụng code mcp_app.
+
+{$MCP_PUBLIC_DOMAIN} {
+	# Forward NGUYÊN host + path tới MCP Service — KHÔNG strip prefix.
+	# Route OAuth discovery /.well-known/... phải ở root domain (Pitfall 7);
+	# SDK mcp đã mount sẵn well-known ở root của ASGI app. KHÔNG dùng
+	# handle_path / uri strip_prefix — sẽ làm discovery 404.
+	reverse_proxy medinet-mcp:8190
+}

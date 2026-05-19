@@ -26,6 +26,7 @@ api/*.egg-info/
 api/keys/
 api/keys/*.pem
 api/.env
+mcp_service/.env
 
 # File store (local uploads)
 file_store/
