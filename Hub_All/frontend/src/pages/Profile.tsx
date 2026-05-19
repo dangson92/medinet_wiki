@@ -124,7 +124,7 @@ export default function Profile() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Thông tin cá nhân</h1>
+        <h1 className="text-h1 font-bold text-slate-900 dark:text-white tracking-tight">Thông tin cá nhân</h1>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Cập nhật thông tin tài khoản quản trị của bạn</p>
       </div>
 
@@ -140,7 +140,7 @@ export default function Profile() {
             </button>
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{form.name}</h2>
+            <h2 className="text-h3 font-bold text-slate-900 dark:text-white">{form.name}</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">{form.email}</p>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-indigo/10 text-brand-indigo rounded-full text-[10px] font-semibold">

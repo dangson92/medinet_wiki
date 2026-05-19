@@ -253,7 +253,7 @@ const SyncReview = () => {
           <div className="flex-1 overflow-y-auto p-6 sm:p-10">
             <div className="max-w-3xl mx-auto space-y-8">
               <div className="space-y-4">
-                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">{activePage.title}</h2>
+                <h2 className="text-h2 font-bold text-slate-900 dark:text-white tracking-tight leading-tight">{activePage.title}</h2>
 
                 {/* File info badge */}
                 {(() => {

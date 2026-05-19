@@ -437,6 +437,12 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
 
     app.include_router(sync_router)
 
+    # Mount system-settings router — port endpoint Go-era /api/system-settings
+    # (D6 — Settings.tsx tab Chung/Bảo mật/Thông báo gọi GET/PUT endpoint này).
+    from app.routers import system_settings_router
+
+    app.include_router(system_settings_router)
+
     # Mount ai-chat router (Phase 8 COMPAT-01 — POST /api/ai/chat proxy LLM cho
     # GeminiAssistant; BLOCKER 08-CONTRACT-DIFF — frontend Dashboard golden path).
     from app.routers import ai_chat_router

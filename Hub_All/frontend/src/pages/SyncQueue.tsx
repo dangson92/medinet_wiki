@@ -147,7 +147,7 @@ const SyncQueue = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Hàng đợi Sync</h1>
+          <h1 className="text-h1 font-bold text-slate-900 dark:text-white tracking-tight">Hàng đợi Sync</h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý các yêu cầu đồng bộ tri thức từ Hub Dự Án</p>
         </div>
         <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-full text-xs text-slate-500 dark:text-slate-400">

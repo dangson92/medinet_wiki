@@ -94,7 +94,7 @@ const Layout = () => {
   const menuItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { type: 'group', groupLabel: 'Tri thức' },
-    { to: '/search', icon: Search, label: 'Tìm kiếm Cross-Hub' },
+    { to: '/search', icon: Search, label: 'Hỏi đáp AI' },
     { to: '/documents', icon: BookOpen, label: 'Danh sách tri thức' },
     { to: '/sync', icon: RefreshCw, label: 'Hàng đợi Sync', badge: '3' },
     { type: 'group', groupLabel: 'Quản trị' },
@@ -110,7 +110,7 @@ const Layout = () => {
   const getBreadcrumb = () => {
     const path = location.pathname;
     if (path === '/') return 'Dashboard';
-    if (path === '/search') return 'Tìm kiếm Cross-Hub';
+    if (path === '/search') return 'Hỏi đáp AI';
     if (path === '/documents') return 'Danh sách tri thức';
     if (path === '/users') return 'Quản lý User';
     if (path === '/registry') return 'Hub Registry';

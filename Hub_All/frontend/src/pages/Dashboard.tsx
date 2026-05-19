@@ -348,7 +348,7 @@ const Dashboard = () => {
       {/* Hub Overview */}
       <div className="glass-card overflow-hidden">
         <div className="p-5 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Tổng quan Hub</h2>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-white tracking-tight">Tổng quan Hub</h2>
           <Link to="/registry" className="btn-ghost">
             Xem Registry
           </Link>
@@ -450,7 +450,7 @@ const Dashboard = () => {
         <div className="glass-card flex flex-col">
           <div className="p-5 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Sync chờ duyệt</h2>
+              <h2 className="text-h2 font-semibold text-slate-900 dark:text-white tracking-tight">Sync chờ duyệt</h2>
               <span className="bg-brand-indigo/10 dark:bg-brand-indigo/20 text-brand-indigo text-[10px] font-bold px-2 py-0.5 rounded-full">
                 {stats.pendingBatches}
               </span>
@@ -483,7 +483,7 @@ const Dashboard = () => {
         {/* Hoạt động gần đây */}
         <div className="glass-card flex flex-col">
           <div className="p-5 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Hoạt động gần đây</h2>
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-white tracking-tight">Hoạt động gần đây</h2>
             <Link to="/logs" className="text-accent text-xs font-medium hover:underline flex items-center gap-1">
               Xem tất cả <ArrowRight size={14} />
             </Link>

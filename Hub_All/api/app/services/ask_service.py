@@ -86,10 +86,13 @@ class AskOutcome:
     """Kết quả `AskService.ask()`/`ask_cross_hub()` trả router.
 
     Router lấy `response` wrap envelope + dùng `usage` cho BackgroundTasks.
+    `chunks` — danh sách đoạn đã retrieve, để router `/api/search/answer` dựng
+    `sources` + `search_results` cho shape `SearchAnswerAPI` (frontend D6).
     """
 
     response: AskResponse
     usage: UsageRecord
+    chunks: list[_AskChunk]
 
 
 @dataclass
@@ -115,15 +118,21 @@ def _resolve_llm_model() -> tuple[str, str]:
     """Đọc settings → `(provider, model_for_litellm)`.
 
     ĐỌC `get_settings()` MỖI lần gọi → hot-swap (ASK-04) có hiệu lực ngay.
-    Provider `gemini` + model chưa có `/` → thêm prefix `gemini/` (cùng quy ước
-    `embedder.py` — Gemini API Google AI Studio cần prefix `gemini/`).
+
+    Model PHẢI chọn theo provider — `rag_llm_model` là model OpenAI,
+    `rag_gemini_llm_model` là model Gemini (2 field TÁCH BIỆT; rag-config UI chỉ
+    cho đổi model Gemini, model OpenAI cố định). Provider `gemini` → thêm prefix
+    `gemini/` nếu thiếu (Gemini API Google AI Studio cần prefix — cùng quy ước
+    `embedder.py`). Provider khác (`openai`/`auto`) → dùng model OpenAI.
     """
     s = get_settings()
     provider = s.rag_llm_provider
-    model = s.rag_llm_model
-    if provider == "gemini" and "/" not in model:
-        model = f"gemini/{model}"
-    return provider, model
+    if provider == "gemini":
+        model = s.rag_gemini_llm_model
+        if "/" not in model:
+            model = f"gemini/{model}"
+        return provider, model
+    return provider, s.rag_llm_model
 
 
 def _resolve_top_k(raw: int | None) -> int:
@@ -289,6 +298,7 @@ class AskService:
                 query_time_ms=query_time_ms,
             ),
             usage=usage,
+            chunks=chunks,
         )
 
     async def ask_cross_hub(self, *, body: AskRequest, user: Any) -> AskOutcome:
@@ -325,4 +335,5 @@ class AskService:
                 query_time_ms=query_time_ms,
             ),
             usage=usage,
+            chunks=chunks,
         )

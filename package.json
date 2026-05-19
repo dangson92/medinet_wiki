@@ -7,7 +7,8 @@
     "infra:down": "docker compose -f Hub_All/docker-compose.yml down",
     "migrate": "cd Hub_All/api && uv run alembic upgrade head",
     "backend": "cd Hub_All/api && uv run uvicorn app.main:app --port 8080",
-    "backend:reload": "cd Hub_All/api && uv run uvicorn app.main:app --port 8080 --reload --reload-exclude \"file_store/*\" --reload-exclude \"Hub_All/*\"",
+    "backend:reload": "cd Hub_All/api && uv run uvicorn app.main:app --port 8080 --reload --reload-exclude file_store --reload-exclude Hub_All",
+    "backend:down": "powershell -NoProfile -ExecutionPolicy Bypass -File Hub_All/api/scripts/stop_dev.ps1",
     "frontend": "npm --prefix Hub_All/frontend run dev",
     "dev": "echo Mo 2 terminal: chay \"npm run backend\" o terminal 1 va \"npm run frontend\" o terminal 2 (sau khi da \"npm run infra\")."
   }

@@ -219,7 +219,7 @@ const TokenUsage = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-h1 font-bold text-slate-900 dark:text-white tracking-tight">
             Token & API Usage
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -391,7 +391,7 @@ const TokenUsage = () => {
             {(() => {
               const max = Math.max(1, ...(stats?.daily ?? []).map(d => d.total_tokens));
               return (stats?.daily ?? []).map(d => (
-                <div key={d.date} className="flex-1 flex flex-col items-center group relative">
+                <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                   <div
                     className="w-full bg-brand-indigo/70 hover:bg-brand-indigo rounded-t transition-all"
                     style={{ height: `${Math.max(2, (d.total_tokens / max) * 100)}%` }}

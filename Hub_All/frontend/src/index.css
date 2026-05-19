@@ -44,8 +44,17 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased selection:bg-accent/20 selection:text-accent
+    @apply bg-slate-50 text-slate-900 text-base antialiased selection:bg-accent/20 selection:text-accent
       dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  /* Tailwind v4 bỏ cursor: pointer mặc định cho <button> — khôi phục con trỏ
+     tay cho mọi phần tử tương tác (button, icon button, role="button",
+     <summary>). Nút disabled giữ con trỏ mặc định. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary {
+    cursor: pointer;
   }
 
   /* Custom Scrollbar */
@@ -64,6 +73,14 @@
 }
 
 @layer components {
+  /* Thang typography — đồng bộ kích thước heading toàn hệ thống.
+     Áp theo vai trò: tiêu đề trang (h1) → section (h2) → sub-section (h3/h4).
+     Nhãn card & tiêu đề modal giữ kích thước riêng, KHÔNG dùng các class này. */
+  .text-h1 { font-size: 34px; line-height: 1.2; }
+  .text-h2 { font-size: 28px; line-height: 1.25; }
+  .text-h3 { font-size: 22px; line-height: 1.3; }
+  .text-h4 { font-size: 18px; line-height: 1.4; }
+
   .glass {
     @apply bg-white border border-slate-200/50
       dark:bg-slate-900 dark:border-slate-700/50;

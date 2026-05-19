@@ -1,29 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Globe,
-  Shield,
-  Bell,
   Cpu,
   Save,
   RefreshCw,
   Lock,
   Eye,
-  EyeOff,
   Mail,
   Smartphone,
   Info,
   CheckCircle2,
-  Key,
-  Zap,
   Database,
   Layers,
   ArrowRight,
   FileText,
   Check,
   AlertTriangle,
-  Wifi,
-  WifiOff,
+  Pencil,
+  X,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -88,53 +82,28 @@ const MODEL_CATALOG: ModelInfo[] = [
 
 const SEPARATORS = ['# ## ### ####', '```', '---', '\\n\\n', '\\n', '. ? ! ;', ',', 'space', 'hard cut'];
 
-// SectionHeader — numbered lifecycle banner used to group RAG cards.
-// Three colored tones so users can visually separate "credentials" vs
-// "ingest-time" vs "query-time" settings at a glance.
+// SectionHeader — numbered heading used to group RAG configuration cards.
 type SectionHeaderProps = {
-  step: string;
-  icon: React.ElementType;
+  number: string;
   title: string;
-  badgeText: string;
-  badgeTone: 'indigo' | 'purple' | 'emerald';
+  badgeText?: string;
   description: string;
 };
-const SectionHeader = ({ step, icon: Icon, title, badgeText, badgeTone, description }: SectionHeaderProps) => {
-  const tones = {
-    indigo: {
-      gradient: 'from-brand-indigo to-brand-purple',
-      badge: 'text-brand-indigo bg-brand-indigo/10',
-    },
-    purple: {
-      gradient: 'from-brand-purple to-accent',
-      badge: 'text-brand-purple bg-brand-purple/10',
-    },
-    emerald: {
-      gradient: 'from-emerald-500 to-brand-indigo',
-      badge: 'text-emerald-600 bg-emerald-500/10',
-    },
-  }[badgeTone];
-  return (
-    <div className="flex items-start gap-3 mb-4">
-      <div className={cn(
-        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-sm bg-gradient-to-br',
-        tones.gradient,
-      )}>
-        {step}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <Icon size={16} className="text-slate-700 dark:text-slate-300" />
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">{title}</h2>
-          <span className={cn('text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full', tones.badge)}>
-            {badgeText}
-          </span>
-        </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{description}</p>
-      </div>
+const SectionHeader = ({ number, title, badgeText, description }: SectionHeaderProps) => (
+  <div className="mb-5">
+    <div className="flex flex-wrap items-center gap-2">
+      <h2 className="text-h3 font-bold text-slate-900 dark:text-white">
+        {number}. {title}
+      </h2>
+      {badgeText && (
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded text-brand-indigo bg-brand-indigo/10">
+          {badgeText}
+        </span>
+      )}
     </div>
-  );
-};
+    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{description}</p>
+  </div>
+);
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('general');
@@ -173,12 +142,9 @@ export default function Settings() {
   const [openaiKey, setOpenaiKey] = useState('');
   const [geminiKeyMask, setGeminiKeyMask] = useState('');
   const [openaiKeyMask, setOpenaiKeyMask] = useState('');
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
-  // readOnly=true until user focuses — prevents browser/password-manager autofill
-  // on ALL browsers including Firefox (which ignores autoComplete="off" by design).
-  const [geminiReadonly, setGeminiReadonly] = useState(true);
-  const [openaiReadonly, setOpenaiReadonly] = useState(true);
+  // editing=true swaps the masked display for an editable input (pencil button).
+  const [editingGemini, setEditingGemini] = useState(false);
+  const [editingOpenai, setEditingOpenai] = useState(false);
 
   // Test connection state
   const [testingGemini, setTestingGemini] = useState(false);
@@ -273,10 +239,10 @@ export default function Settings() {
   };
 
   const tabs = [
-    { id: 'general', label: 'Cài đặt chung', icon: Globe },
-    { id: 'security', label: 'Bảo mật', icon: Shield },
-    { id: 'notifications', label: 'Thông báo', icon: Bell },
-    { id: 'rag', label: 'Cấu hình RAG', icon: Cpu },
+    { id: 'general', label: 'Cài đặt chung' },
+    { id: 'security', label: 'Bảo mật' },
+    { id: 'notifications', label: 'Thông báo' },
+    { id: 'rag', label: 'Cấu hình RAG' },
   ];
 
   const saveSystemSettings = async () => {
@@ -333,9 +299,11 @@ export default function Settings() {
       if (activeTab === 'rag') {
         res = await saveRAGConfig();
         if (res.ok) {
-          // Refresh masks + clear plain keys
+          // Refresh masks + clear plain keys + exit edit mode
           if (geminiKey) { setGeminiKeyMask(geminiKey.slice(0, 8) + '****' + geminiKey.slice(-4)); setGeminiKey(''); }
           if (openaiKey) { setOpenaiKeyMask(openaiKey.slice(0, 8) + '****' + openaiKey.slice(-4)); setOpenaiKey(''); }
+          setEditingGemini(false);
+          setEditingOpenai(false);
         }
       } else {
         // general / security / notifications all share the same system-settings endpoint
@@ -399,7 +367,7 @@ export default function Settings() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-[24px] font-semibold text-slate-900 dark:text-white">Cài đặt hệ thống</h1>
+          <h1 className="text-h1 font-semibold text-slate-900 dark:text-white">Cài đặt hệ thống</h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý cấu hình toàn cục của Medinet Wiki Hub</p>
         </div>
         <div className="flex items-center gap-3">
@@ -436,31 +404,30 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar Tabs */}
-        <div className="w-full lg:w-64 shrink-0 flex lg:flex-col gap-1 overflow-x-auto no-scrollbar pb-2 lg:pb-0">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex items-center gap-2 sm:gap-3 px-4 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap",
-                  activeTab === tab.id
-                    ? "bg-brand-indigo text-white shadow-lg shadow-primary"
-                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                )}
-              >
-                <Icon size={16} className="sm:w-[18px] sm:h-[18px]" />
-                {tab.label}
-              </button>
-            );
-          })}
+      <div className="flex flex-col gap-6">
+        {/* Tab bar — horizontal underline style */}
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "relative px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
+                activeTab === tab.id
+                  ? "text-brand-indigo"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              )}
+            >
+              {tab.label}
+              {activeTab === tab.id && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-indigo rounded-full" />
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0">
           {/* ═══════════ TAB: General ═══════════ */}
           {activeTab === 'general' && (
             <div className="glass-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
@@ -470,7 +437,7 @@ export default function Settings() {
                 className="space-y-8"
               >
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Thông tin hệ thống</h3>
+                  <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Thông tin hệ thống</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Tên hệ thống</label>
@@ -525,7 +492,7 @@ export default function Settings() {
                 className="space-y-8"
               >
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Chính sách bảo mật</h3>
+                  <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Chính sách bảo mật</h3>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
                       <div className="flex items-center gap-4">
@@ -583,7 +550,7 @@ export default function Settings() {
                 className="space-y-8"
               >
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Kênh thông báo</h3>
+                  <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Kênh thông báo</h3>
                   <div className="space-y-4">
                     {([
                       {
@@ -631,376 +598,174 @@ export default function Settings() {
             </div>
           )}
 
-          {/* ═══════════ TAB: RAG Config — redesigned with 3 lifecycle sections ═══════════ */}
+          {/* ═══════════ TAB: RAG Config ═══════════ */}
           {activeTab === 'rag' && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
-              className="space-y-10"
+              className="space-y-6"
             >
-              {/* ══════════════════════════════════════════════════ */}
-              {/* SECTION 1 · API KEYS · Credentials (run-once)       */}
-              {/* ══════════════════════════════════════════════════ */}
-              <section>
+              {/* ══ SECTION 1 · API KEYS ══ */}
+              <section className="glass-card p-5 sm:p-6">
                 <SectionHeader
-                  step="1"
-                  icon={Key}
+                  number="1"
                   title="API Keys"
-                  badgeText="CREDENTIALS"
-                  badgeTone="indigo"
-                  description="Mã hóa AES-256-GCM. Cả 2 key đều được lưu an toàn — key không được chọn sẽ không bao giờ bị gọi."
+                  description="Cấu hình API Keys cho các provider AI."
                 />
 
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                  className="glass-card p-5 sm:p-6 space-y-3"
-                >
+                <div className="space-y-3">
                   {([
                     {
                       id: 'gemini' as const,
                       label: 'Gemini API Key',
                       placeholder: 'AIzaSy...',
-                      hint: 'aistudio.google.com/app/apikey',
                       mask: geminiKeyMask,
                       value: geminiKey,
-                      show: showGeminiKey,
-                      readonly: geminiReadonly,
+                      editing: editingGemini,
                       testing: testingGemini,
                       result: geminiTestResult,
-                      color: 'blue',
                       setVal: setGeminiKey,
-                      setShow: setShowGeminiKey,
-                      setReadonly: setGeminiReadonly,
+                      setEditing: setEditingGemini,
                     },
                     {
                       id: 'openai' as const,
                       label: 'OpenAI API Key',
                       placeholder: 'sk-proj-...',
-                      hint: 'platform.openai.com/api-keys',
                       mask: openaiKeyMask,
                       value: openaiKey,
-                      show: showOpenaiKey,
-                      readonly: openaiReadonly,
+                      editing: editingOpenai,
                       testing: testingOpenai,
                       result: openaiTestResult,
-                      color: 'emerald',
                       setVal: setOpenaiKey,
-                      setShow: setShowOpenaiKey,
-                      setReadonly: setOpenaiReadonly,
+                      setEditing: setEditingOpenai,
                     },
-                  ] as const).map((k) => {
-                    const usedForEmbed = ragEmbeddingProvider === k.id;
-                    const usedForLLM = llmProvider === k.id || llmProvider === 'auto';
-                    return (
-                      <div
-                        key={k.id}
-                        className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 p-4"
-                      >
-                        {/* Header row: label + save status */}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={cn(
-                              "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0",
-                              k.color === 'blue'
-                                ? "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400"
-                                : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400"
-                            )}>
-                              {k.id === 'gemini' ? 'G' : 'O'}
-                            </div>
-                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{k.label}</span>
-                          </div>
-                          {k.mask ? (
-                            <span className="shrink-0 flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-2 py-0.5 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                              Đã lưu
-                            </span>
-                          ) : (
-                            <span className="shrink-0 flex items-center gap-1 text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-700 dark:text-slate-500 px-2 py-0.5 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
-                              Chưa có
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Key input + test button */}
-                        <div className="mt-3 flex gap-2">
-                          <div className="relative flex-1 min-w-0">
-                            <input
-                              type={k.show ? 'text' : 'password'}
-                              value={k.value}
-                              onChange={(e) => k.setVal(e.target.value)}
-                              placeholder={k.mask || k.placeholder}
-                              className="input-field w-full pr-10 font-mono text-sm"
-                              readOnly={k.readonly}
-                              onFocus={() => k.setReadonly(false)}
-                              autoComplete="new-password"
-                              data-lpignore="true"
-                              data-form-type="other"
-                              data-1p-ignore
-                              spellCheck={false}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => k.setShow(!k.show)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                            >
-                              {k.show ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                          </div>
-                          <button
-                            onClick={() => handleTestConnection(k.id)}
-                            disabled={k.testing || (!k.mask && !k.value)}
-                            className={cn(
-                              "btn-secondary shrink-0 gap-1.5 !px-3 min-h-[40px]",
-                              k.result === 'success' && '!border-success !text-success',
-                              k.result === 'error' && '!border-danger !text-danger',
-                            )}
-                          >
-                            {k.testing ? <RefreshCw size={14} className="animate-spin" />
-                              : k.result === 'success' ? <Wifi size={14} />
-                              : k.result === 'error' ? <WifiOff size={14} />
-                              : <Zap size={14} />}
-                            <span className="text-xs hidden sm:inline">
-                              {k.result === 'success' ? 'OK' : k.result === 'error' ? 'Lỗi' : 'Test'}
-                            </span>
-                          </button>
-                        </div>
-
-                        {/* Usage chips + hint */}
-                        <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
-                          <p className="text-[10px] text-slate-400 font-mono truncate">{k.hint}</p>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {usedForEmbed && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-purple bg-brand-purple/10 px-2 py-0.5 rounded-full">
-                                <Sparkles size={9} />
-                                Embedding
-                              </span>
-                            )}
-                            {usedForLLM && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                                <Cpu size={9} />
-                                LLM Chat
-                              </span>
-                            )}
-                            {!usedForEmbed && !usedForLLM && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-700 dark:text-slate-500 px-2 py-0.5 rounded-full">
-                                <Lock size={9} />
-                                Không dùng
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                  ] as const).map((k) => (
+                    <div
+                      key={k.id}
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20"
+                    >
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 sm:w-44 shrink-0">
+                        {k.label}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        {k.editing ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={k.value}
+                            onChange={(e) => k.setVal(e.target.value)}
+                            placeholder={`Nhập ${k.label} mới...`}
+                            className="input-field w-full font-mono text-sm"
+                            autoComplete="new-password"
+                            data-lpignore="true"
+                            data-form-type="other"
+                            data-1p-ignore
+                            spellCheck={false}
+                          />
+                        ) : (
+                          <span className="block truncate font-mono text-sm text-slate-500 dark:text-slate-400">
+                            {k.mask || <span className="italic text-slate-400">Chưa cấu hình</span>}
+                          </span>
+                        )}
                       </div>
-                    );
-                  })}
-
-                  {/* Warning when active embedding provider has no key */}
-                  {((ragEmbeddingProvider === 'gemini' && !geminiKeyMask && !geminiKey) ||
-                    (ragEmbeddingProvider === 'openai' && !openaiKeyMask && !openaiKey)) && (
-                    <div className="flex items-start gap-2.5 p-3 bg-warning/10 border border-warning/20 rounded-xl">
-                      <AlertTriangle size={14} className="text-warning shrink-0 mt-0.5" />
-                      <p className="text-xs text-warning font-medium leading-relaxed">
-                        Embedding đang chọn <strong>{ragEmbeddingProvider === 'gemini' ? 'Gemini' : 'OpenAI'}</strong> nhưng chưa có API key — tài liệu sẽ không được vector hóa.
-                      </p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {k.editing ? (
+                          <button
+                            type="button"
+                            onClick={() => { k.setEditing(false); k.setVal(''); }}
+                            title="Hủy"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => k.setEditing(true)}
+                            title="Sửa / đổi API key"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleTestConnection(k.id)}
+                          disabled={k.testing || (!k.mask && !k.value)}
+                          className={cn(
+                            "btn-secondary !px-4 min-h-[38px] text-xs",
+                            k.result === 'success' && '!border-success !text-success',
+                            k.result === 'error' && '!border-danger !text-danger',
+                          )}
+                        >
+                          {k.testing ? 'Đang test…'
+                            : k.result === 'success' ? 'OK'
+                            : k.result === 'error' ? 'Lỗi'
+                            : 'Test'}
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </motion.div>
+                  ))}
+                </div>
+
+                {/* Warning when active embedding provider has no key */}
+                {((ragEmbeddingProvider === 'gemini' && !geminiKeyMask && !geminiKey) ||
+                  (ragEmbeddingProvider === 'openai' && !openaiKeyMask && !openaiKey)) && (
+                  <div className="mt-3 flex items-start gap-2.5 p-3 bg-warning/10 border border-warning/20 rounded-xl">
+                    <AlertTriangle size={14} className="text-warning shrink-0 mt-0.5" />
+                    <p className="text-xs text-warning font-medium leading-relaxed">
+                      Embedding đang chọn <strong>{ragEmbeddingProvider === 'gemini' ? 'Gemini' : 'OpenAI'}</strong> nhưng chưa có API key — tài liệu sẽ không được vector hóa.
+                    </p>
+                  </div>
+                )}
               </section>
 
-              {/* ══════════════════════════════════════════════════ */}
-              {/* SECTION 2 · KHI NẠP TÀI LIỆU · Ingest-time          */}
-              {/* ══════════════════════════════════════════════════ */}
-              <section>
+              {/* ══ SECTION 2 · KHI NẠP TÀI LIỆU MỚI ══ */}
+              <section className="glass-card p-5 sm:p-6">
                 <SectionHeader
-                  step="2"
-                  icon={FileText}
+                  number="2"
                   title="Khi nạp tài liệu mới"
                   badgeText="INGEST-TIME"
-                  badgeTone="purple"
-                  description="Các tham số dưới áp dụng cho tài liệu nạp sau khi lưu. Tài liệu cũ giữ nguyên cấu hình cũ trừ khi re-embed."
+                  description="Cấu hình vector hóa (embedding) khi thêm tài liệu vào hệ thống."
                 />
 
                 <div className="space-y-4">
-                  {/* ── Card 2A: Embedding (Provider + Model + Batch) ── */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.08 }}
-                    className="glass-card p-5 sm:p-6"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                          <Sparkles size={18} className="text-accent" />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Vector hóa (Embedding)</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Biến text → vector. Cùng provider/model được dùng lại khi search để so khớp.</p>
-                        </div>
+                  {/* ── Embedding sub-card ── */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                      {/* Provider */}
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Provider</label>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Chọn provider</p>
+                        <select
+                          value={ragEmbeddingProvider}
+                          onChange={(e) => {
+                            const p = e.target.value;
+                            setRagEmbeddingProvider(p);
+                            setRagEmbeddingModel(selectedModelByProvider[p] || embeddingModels[p]?.[0] || '');
+                          }}
+                          className="input-field w-full"
+                        >
+                          <option value="gemini">Google Gemini</option>
+                          <option value="openai">OpenAI</option>
+                        </select>
                       </div>
-                      <span className="badge badge-accent flex items-center gap-1 shrink-0">
-                        <Database size={10} />
-                        ChromaDB
-                      </span>
-                    </div>
-
-                    {/* Provider picker */}
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
-                      Provider
-                    </p>
-                    <div className="flex gap-2.5 mb-5">
-                      {[
-                        { id: 'gemini', label: 'Google Gemini', sub: 'Miễn phí', color: 'blue' },
-                        { id: 'openai', label: 'OpenAI', sub: 'Trả phí', color: 'emerald' },
-                      ].map((prov) => {
-                        const active = ragEmbeddingProvider === prov.id;
-                        return (
-                          <button
-                            key={prov.id}
-                            onClick={() => {
-                              setRagEmbeddingProvider(prov.id);
-                              setRagEmbeddingModel(
-                                selectedModelByProvider[prov.id] || embeddingModels[prov.id]?.[0] || ''
-                              );
-                            }}
-                            className={cn(
-                              "relative flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all duration-200 text-left",
-                              active
-                                ? prov.color === 'blue'
-                                  ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                                  : "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20"
-                                : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30"
-                            )}
-                          >
-                            <div className={cn(
-                              "w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0",
-                              active
-                                ? prov.color === 'blue' ? "bg-blue-500 text-white" : "bg-emerald-500 text-white"
-                                : prov.color === 'blue' ? "bg-blue-100 text-blue-500 dark:bg-blue-900/30 dark:text-blue-400" : "bg-emerald-100 text-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            )}>
-                              {prov.id === 'gemini' ? 'G' : 'O'}
-                            </div>
-                            <div className="min-w-0">
-                              <p className={cn("text-sm font-semibold truncate", active ? "text-slate-900 dark:text-white" : "text-slate-700 dark:text-slate-300")}>{prov.label}</p>
-                              <p className="text-[11px] text-slate-400 dark:text-slate-500">{prov.sub}</p>
-                            </div>
-                            {active && (
-                              <div className={cn(
-                                "absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center",
-                                prov.color === 'blue' ? "bg-blue-500" : "bg-emerald-500"
-                              )}>
-                                <Check size={11} className="text-white" />
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Model picker */}
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                        Model
-                      </p>
-                      {typeof lockedDimension === 'number' && (
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Dimension đã khóa: <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">{lockedDimension}d</span>
-                        </span>
-                      )}
-                      {lockedDimension === 'mixed' && (
-                        <span className="text-[10px] font-semibold text-danger">
-                          ⚠ Các hub có dimension khác nhau
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                      {availableModels.map((model) => {
-                        const selected = ragEmbeddingModel === model.id;
-                        const mismatch = typeof lockedDimension === 'number' && model.dimension !== lockedDimension;
-                        return (
-                          <button
-                            key={model.id}
-                            onClick={() => {
-                              setRagEmbeddingModel(model.id);
-                              setSelectedModelByProvider(prev => ({ ...prev, [ragEmbeddingProvider]: model.id }));
-                            }}
-                            className={cn(
-                              "relative flex items-start gap-3 p-3.5 rounded-2xl border-2 transition-all duration-200 text-left",
-                              selected && mismatch
-                                ? "border-danger bg-danger/5 dark:bg-danger/10 shadow-sm"
-                                : selected
-                                ? "border-accent bg-accent/5 dark:bg-accent/10 shadow-sm"
-                                : mismatch
-                                ? "border-danger/30 bg-danger/[0.03] dark:bg-danger/5 opacity-70 hover:opacity-90"
-                                : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
-                            )}
-                          >
-                            {selected && (
-                              <div className={cn(
-                                "absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center",
-                                mismatch ? "bg-danger" : "bg-accent"
-                              )}>
-                                <Check size={12} className="text-white" />
-                              </div>
-                            )}
-                            <div className={cn(
-                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
-                              model.provider === 'gemini'
-                                ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                                : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            )}>
-                              {model.provider === 'gemini' ? 'G' : 'O'}
-                            </div>
-                            <div className="min-w-0 pr-5 flex-1">
-                              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{model.name}</p>
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono truncate">{model.id}</p>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                <span className={cn(
-                                  "text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded",
-                                  mismatch
-                                    ? "bg-danger/15 text-danger"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                )}>
-                                  {model.dimension}d
-                                </span>
-                                <span className={cn(
-                                  "text-[10px] font-medium px-1.5 py-0.5 rounded",
-                                  model.cost.startsWith('Miễn phí') ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
-                                )}>
-                                  {model.cost}
-                                </span>
-                                {mismatch && (
-                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-danger bg-danger/10 px-1.5 py-0.5 rounded">
-                                    <AlertTriangle size={9} />
-                                    Mismatch
-                                  </span>
-                                )}
-                              </div>
-                              {(model.freeTier || model.paidPrice) && (
-                                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/60 space-y-0.5">
-                                  {model.freeTier && (
-                                    <div className="flex items-start gap-1.5">
-                                      <span className="text-[10px] text-slate-400 dark:text-slate-500 w-10 shrink-0">Free</span>
-                                      <span className="text-[10px] text-slate-600 dark:text-slate-300">{model.freeTier}</span>
-                                    </div>
-                                  )}
-                                  {model.paidPrice && (
-                                    <div className="flex items-start gap-1.5">
-                                      <span className="text-[10px] text-slate-400 dark:text-slate-500 w-10 shrink-0">Paid</span>
-                                      <span className="text-[10px] font-mono text-slate-600 dark:text-slate-300">{model.paidPrice}</span>
-                                    </div>
-                                  )}
-                                  {model.notes && (
-                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 line-clamp-2">{model.notes}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
+                      {/* Model */}
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Model</label>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Chọn model</p>
+                        <select
+                          value={ragEmbeddingModel}
+                          onChange={(e) => {
+                            setRagEmbeddingModel(e.target.value);
+                            setSelectedModelByProvider(prev => ({ ...prev, [ragEmbeddingProvider]: e.target.value }));
+                          }}
+                          className="input-field w-full"
+                        >
+                          {availableModels.map((m) => (
+                            <option key={m.id} value={m.id}>{m.id}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {/* Active mismatch warning */}
@@ -1009,7 +774,7 @@ export default function Settings() {
                       if (!activeModel || activeModel.dimension === lockedDimension) return null;
                       const compatibleModels = MODEL_CATALOG.filter(m => m.dimension === lockedDimension).map(m => m.id);
                       return (
-                        <div className="mb-5 flex items-start gap-2 p-3 bg-danger/10 border border-danger/30 rounded-xl">
+                        <div className="mt-4 flex items-start gap-2 p-3 bg-danger/10 border border-danger/30 rounded-xl">
                           <AlertTriangle size={14} className="text-danger shrink-0 mt-0.5" />
                           <div className="space-y-1 min-w-0">
                             <p className="text-xs font-semibold text-danger">
@@ -1024,27 +789,28 @@ export default function Settings() {
                     })()}
 
                     {/* Batch size */}
-                    <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-700">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Batch Size</label>
-                        <span className="text-sm font-mono font-semibold text-accent">{ragBatchSize} chunks/call</span>
+                    <div className="space-y-1.5 mt-4 sm:mt-5">
+                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Batch Size</label>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Số chunks gửi mỗi lần gọi Embedding API</p>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={ragBatchSize}
+                          onChange={(e) => setRagBatchSize(Number(e.target.value))}
+                          className="input-field w-full pr-24"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500 pointer-events-none">
+                          chunks/call
+                        </span>
                       </div>
-                      <input
-                        type="range"
-                        min={10}
-                        max={500}
-                        step={10}
-                        value={ragBatchSize}
-                        onChange={(e) => setRagBatchSize(Number(e.target.value))}
-                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-accent"
-                      />
-                      <p className="text-[11px] text-slate-400">Số chunks gửi mỗi lần gọi Embedding API</p>
                     </div>
 
                     {/* Dimension warning */}
-                    <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl">
-                      <AlertTriangle size={13} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                    <div className="mt-4 flex items-start gap-2 p-3 bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl">
+                      <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
                         <strong>Cảnh báo dimension:</strong> ChromaDB khóa dimension vào lần đầu tiên lưu. Đổi provider/model sang vector khác chiều sẽ làm <strong>hỏng search</strong> trên tài liệu cũ — cần xóa collection rồi re-embed.
                       </p>
                     </div>
@@ -1134,21 +900,16 @@ export default function Settings() {
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </div>
 
-                  {/* ── Card 2B: Chunking ── */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.12 }}
-                    className="glass-card p-5 sm:p-6"
-                  >
+                  {/* ── Chunking sub-card ── */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
                     <div className="flex items-center gap-3 mb-5">
                       <div className="w-9 h-9 rounded-xl bg-brand-indigo/10 flex items-center justify-center shrink-0">
                         <Layers size={18} className="text-brand-indigo" />
                       </div>
                       <div>
-                        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Chia đoạn (Chunking)</h3>
+                        <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Chia đoạn (Chunking)</h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400">Cắt tài liệu thành từng đoạn để AI truy xuất chính xác.</p>
                       </div>
                     </div>
@@ -1230,35 +991,26 @@ export default function Settings() {
                         tiktoken cl100k_base (99% chính xác)
                       </p>
                     </div>
-                  </motion.div>
+                  </div>
                 </div>
               </section>
 
-              {/* ══════════════════════════════════════════════════ */}
-              {/* SECTION 3 · KHI TÌM KIẾM & TRẢ LỜI · Query-time    */}
-              {/* ══════════════════════════════════════════════════ */}
-              <section>
+              {/* ══ SECTION 3 · KHI TÌM KIẾM & TRẢ LỜI ══ */}
+              <section className="glass-card p-5 sm:p-6">
                 <SectionHeader
-                  step="3"
-                  icon={Sparkles}
+                  number="3"
                   title="Khi tìm kiếm & trả lời"
                   badgeText="QUERY-TIME"
-                  badgeTone="emerald"
                   description="Áp dụng ngay cho mọi search mới — hot-swap, không cần restart server."
                 />
 
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15 }}
-                  className="glass-card p-5 sm:p-6"
-                >
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
                   <div className="flex items-center gap-3 mb-5">
                     <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                       <Cpu size={18} className="text-emerald-600" />
                     </div>
                     <div>
-                      <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">LLM Chat Provider</h3>
+                      <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">LLM Chat Provider</h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">Mô hình AI sinh câu trả lời từ tài liệu đã tìm được.</p>
                     </div>
                   </div>
@@ -1337,7 +1089,7 @@ export default function Settings() {
                       LLM Chat <strong>độc lập</strong> với Embedding: bạn có thể embed bằng Gemini (miễn phí) và chat bằng OpenAI (chất lượng cao), hoặc ngược lại.
                     </p>
                   </div>
-                </motion.div>
+                </div>
               </section>
             </motion.div>
           )}

@@ -74,7 +74,12 @@ class Settings(BaseSettings):
     rag_embedding_model: str = "text-embedding-3-small"
     rag_embedding_dim: int = 1536
     rag_llm_provider: str = "openai"
+    # Model OpenAI — dùng khi rag_llm_provider != "gemini".
     rag_llm_model: str = "gpt-4o-mini"
+    # Model Gemini — field RIÊNG, dùng khi rag_llm_provider == "gemini".
+    # Tách khỏi rag_llm_model để rag-config đổi model Gemini KHÔNG ghi đè model
+    # OpenAI (xem rag_config_service._apply_runtime / load_persisted_into_runtime).
+    rag_gemini_llm_model: str = "gemini-2.5-flash"
 
     # External keys (Phase 7)
     openai_api_key: str = "sk-replace-me"

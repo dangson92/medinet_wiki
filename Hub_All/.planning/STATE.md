@@ -1,25 +1,15 @@
 ---
 gsd_state_version: 1.0
 milestone: v2.0
-milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-status: in_progress
-last_updated: "2026-05-19T13:10:00Z"
+milestone_name: milestone
+status: Ready to execute
+last_updated: "2026-05-19T07:14:35.998Z"
 progress:
-  total_phases: 11
-  completed_phases: 8
-  total_plans: 48
-  completed_plans: 48
-  percent: 91
-current_phase:
-  number: 9
-  name: Eval Framework + Quality Gate ≥75% top-3
-  plans_total: 0
-  plans_complete: 0
-  status: not_started
-  waves: 0
-next_phase:
-  number: 10
-  name: Hardening + Observability + Docs
+  total_phases: 12
+  completed_phases: 9
+  total_plans: 51
+  completed_plans: 46
+  percent: 90
 ---
 
 # State — MEDWIKI
@@ -42,6 +32,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 **Mode:** YOLO · **Granularity:** Large (10 phase — reconciled từ FEATURES 8 + ARCHITECTURE 12 trong SUMMARY.md) · **Phase numbering:** Reset về Phase 1 (`--reset-phase-numbers`)
 
 **M2a/M2b split (R3 anti-pivot fatigue mitigation):**
+
 - **M2a = Phase 1-4** (Infra + Schema + Auth + CocoIndex MVP) — Có thể ship standalone. Nếu user accept M2a → never pivot.
 - **M2b = Phase 5-10** (CRUD + Search + Ask + Frontend smoke + Eval + Hardening) — Pivot M2b OK nếu cocoindex critical fail.
 - 🚦 **M2a EXIT GATE** giữa Phase 4 và Phase 5 — demo upload DOCX → chunks pgvector → SELECT verify. User accept là điều kiện tiếp tục M2b.
@@ -125,6 +116,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 ### Roadmap Evolution
 
 - Phase 8.1 inserted after Phase 8: MCP Server — expose wiki tools `ask`/`search`/RAG cho AI client ngoài (Claude Desktop, ChatGPT, Cursor) qua Model Context Protocol (URGENT, 2026-05-19)
+- Phase 8.2 inserted after Phase 8.1: tách MCP Service thành process độc lập (`Hub_All/mcp_service/`, port riêng) gọi API qua HTTP — đảo decision D-04 của Phase 8.1 (URGENT, 2026-05-19)
 
 ### Weekly check-in calendar (R3 mitigation)
 
@@ -162,6 +154,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 ## Session Continuity
 
 **Last session (2026-05-18 — `/gsd-execute-phase 8 plan 08-04` — continuation sau checkpoint auto-approve):** continuation agent tiếp tục Plan 08-04 từ Task 2 (Task 1 đã xong commit `422243a` ở agent trước). Bối cảnh: plan có `checkpoint:human-verify` (gate blocking) — orchestrator chế độ `--auto` (`auto_advance:true`) AUTO-APPROVE checkpoint cơ học để giữ chuỗi chạy; KHÔNG có người thật boot stack hay click 11 trang React; `08-SMOKE-CHECKLIST.md` CHƯA điền.
+
 - Task 2 (`76afc02` — `docs(08-04)`): sinh `.planning/phases/08-frontend-e2e-smoke/08-HUMAN-UAT.md` từ cấu trúc `08-SMOKE-CHECKLIST.md` + 5 SC Phase 8, dùng UAT template chuẩn (mẫu `07-HUMAN-UAT.md`, frontmatter `status:partial`). KHÔNG fabricate PASS: SC1 (11 trang React render) / SC2 (golden path browser + citation `[1]` clickable) / SC5 (docker compose 3-service healthy) đánh `result:[pending]` — cần mắt người; SC3 (08-01 đối chiếu tĩnh contract, artifact `08-CONTRACT-DIFF.md`) + SC4 (08-03 `test_vietnamese_filename.py` critical PASS) đánh `passed` vì có artifact thật. Summary: total 5 / passed 2 / pending 3. Verdict UAT = PARTIAL; COMPAT-01 = PARTIAL.
 - Deviation: [Continuation - Quy trình] KHÔNG ghi PASS cho SC1/SC2/SC5 — auto-approve cơ học không tương đương human verification; ghi PASS giả sẽ làm sai lệch trạng thái Phase 8.
 - `08-04-SUMMARY.md` tạo xong — ghi rõ checkpoint auto-approved, human-UAT pending. STATE.md + ROADMAP.md cập nhật: 08-04 ✅ artifact, Phase 8 status `human_uat_pending`, COMPAT-01 PARTIAL.
@@ -169,6 +162,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - D6 tuân thủ tuyệt đối — chỉ thêm file `.planning/.../08-HUMAN-UAT.md` + `08-04-SUMMARY.md`; KHÔNG file nào trong `frontend/` bị sửa; không deletion.
 
 **Last session (2026-05-17 — Plan 05-05 execute):** `/gsd-execute-phase 5 plan 05-05` → executor agent (sequential) thực thi 3 task atomic:
+
 - Task 01 (`b3d97f8`): `pkg/crypto.py` — AES-256-GCM helper: `_load_key` (đọc `settings.aes_key`, base64url-decode, validate 32-byte → ValueError), `encrypt_secret` (nonce 12B random prepend ciphertext → base64url token), `decrypt_secret` (tách nonce decrypt). `schemas/api_keys.py` — 4 Pydantic v2 schema: `CreateApiKeyRequest`/`UpdateApiKeyRequest`/`ApiKeyResponse` (= APIKeyAPI — status derive is_active; requests_today/7d/bandwidth_used=0, allowed_rag_configs=[] hằng)/`ApiKeyWithPlaintext(ApiKeyResponse)` (+plain_key — POST create only). `schemas/audit.py` — `AuditLogResponse` (= AuditLogAPI; is_ai=False, ip/user_agent/duration_ms=None hằng). `pyproject.toml` thêm `cryptography`. `.env.example` AES_KEY documented placeholder.
 - Task 02 (`06c3a8f`): `services/api_key_service.py` — `ApiKeyService` 6 method: `create` (plaintext `mdk_<token_urlsafe(32)>`, key_prefix 8 ký tự, key_hash=encrypt_secret, INSERT JSONB cast → ApiKeyWithPlaintext), `get`/`list` (KHÔNG plaintext), `update` (SET động JSONB cast), `revoke` (soft `is_active=FALSE` + RETURNING id — D-07, KHÔNG DELETE), `verify_key` (BLOCKER 1 canonical name — SELECT WHERE key_prefix + is_active=TRUE, decrypt loop so khớp exact, UPDATE last_used_at, return principal dict). `services/audit_query_service.py` — `AuditQueryService.list` WHERE-builder filter date/action/hub_id + LEFT JOIN users/hubs; actor_type bỏ qua (không có cột).
 - Task 03 (`a7a3571`): `routers/api_keys.py` 5 endpoint admin-only — GET list (cap≤100), POST create→201 (data có plain_key), GET/:id, PUT/:id update, POST/:id/revoke soft; UUID validate→400 INVALID_API_KEY_ID. `routers/audit_logs.py` GET /api/audit-logs admin-only + `@limiter.limit(AUDIT_LOGS_LIMIT)` (W4 AUX-03 — endpoint function có `request: Request` param). `auth/dependencies.py` thêm `get_api_key_or_jwt` (X-API-Key Header alias HOẶC Bearer JWT — gọi `ApiKeyService.verify_key`, Phase 6/7 scaffolding). `auth/__init__.py` re-export.
@@ -178,6 +172,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **AUX-01 + AUX-02 + AUX-03 requirements — API key CRUD + AES-GCM encrypt-at-rest + soft revoke + X-API-Key dependency + audit-logs query + @limiter.limit hoàn tất (router mount + integration test E4 defer Wave 4 Plan 05-06).**
 
 **Previous session (2026-05-17 — Plan 05-04 execute):** `/gsd-execute-phase 5 plan 05-04` → executor agent (sequential) thực thi 3 task atomic:
+
 - Task 01 (`00ff3b4`): `schemas/users.py` — 10 Pydantic v2 schema: `CreateUserRequest` (email EmailStr + name/password min_length + hub_id + role), `UpdateUserRequest`/`UpdateProfileRequest` (name/phone/department optional — D-07 tách khỏi role/status), `ChangeUserRoleRequest`/`ChangeUserStatusRequest`, `ChangePasswordRequest` (old min_length=1 + new min_length=8), `UserResponse` (= UserAPI — KHÔNG `password_hash` T-05-04-03, `name` map `full_name`, `failed_login_count` hằng 0), `RoleAssignment`, `UserWithRolesResponse`. `UserRole`/`UserStatus` Literal khớp CHECK constraint.
 - Task 02 (`31b6ea5`): `services/user_service.py` — `UserService` 9 method: `create` (hash argon2 + INSERT users + INSERT user_hubs + enqueue audit `user.create` payload chỉ email+role, IntegrityError→`UserConflictError`), `_build_user_with_roles`/`get` (SELECT user + user_hubs join), `list` (WHERE-builder filter role/status/search ILIKE + hub_id subquery + COUNT + LIMIT/OFFSET), `update`/`update_profile`/`_update_fields` (SET clause động — D-07), `change_role` (UPDATE role + upsert user_hubs ON CONFLICT DO NOTHING), `change_status`, `reset_password` (`secrets.token_urlsafe(32)` + Redis ex=3600 + log-only USER-02 — KHÔNG trả token), `change_password_self` (verify_password old → 3-state None/False/True). Raw SQL parametrized, timestamp NOW().
 - Task 03 (`4192f22`): `routers/users.py` 7 endpoint admin-only (`require_role("admin")` mọi endpoint) — list cap per_page≤100 + filter, create→201 conflict→409 EMAIL_CONFLICT, get, PUT update profile (D-07), PATCH role + PATCH status riêng (D-07), POST reset-password (message generic KHÔNG token T-05-04-04). UUID validate→400 INVALID_USER_ID. `routers/profile.py` 3 endpoint self-scoped `get_current_user` (KHÔNG `require_role`, KHÔNG `:id` param — T-05-04-02 viewer chỉ truy cập profile chính mình); change_password 3-state → 404/400 INVALID_PASSWORD/200.
@@ -186,6 +181,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **USER-01 + USER-02 + USER-03 requirements — user CRUD + reset-password + profile self-scoped router/service/schema hoàn tất (router mount defer Wave 4 Plan 05-06).**
 
 **Previous session (2026-05-17 — Plan 05-02 execute):** `/gsd-execute-phase 5 plan 05-02` → executor agent (sequential) thực thi 2 task atomic:
+
 - Task 01 (`3710b00`): `repositories/hub_isolation.py` — `HubIsolationError` (lưu `resource_hub_id` cho audit), `hub_filter_clause(role, hub_ids, param_prefix)` sinh SQL fragment `WHERE hub_id IN (...)` (admin → `("", {})` bypass; hub_ids rỗng → `"hub_id IN (NULL)"` luôn-false; editor/viewer có hub → placeholders + params), `verify_hub_access(role, user_hub_ids, resource_hub_id)` raise `HubIsolationError` khi cross-hub. `repositories/__init__.py` package docstring. `auth/dependencies.py` thêm `UserWithHubs` class + `get_current_user_with_hubs` dependency (hub_ids từ `user_hubs` DB — KHÔNG payload). `auth/__init__.py` re-export 2 symbol. `tests/unit/test_hub_isolation.py` — 14 unit test pure-Python phủ E4 (TDD RED→GREEN: ModuleNotFoundError → 14 passed). Defense in depth 3 lớp documented.
 - Task 02 (`a42e3d4`): `middleware/rate_limit.py` — slowapi `Limiter` key_func `_rate_limit_key` (user_id từ JWT `sub`, fallback `get_remote_address`, bọc try/except KHÔNG raise), Redis storage `settings.redis_url`; `rate_limit_exceeded_handler` map `RateLimitExceeded` → `resp.too_many_requests` envelope 429 `RATE_LIMIT_EXCEEDED`; constant `SEARCH_LIMIT`/`UPLOAD_LIMIT`/`AUDIT_LOGS_LIMIT` cho router decorator. `middleware/__init__.py` re-export `limiter` + handler + 3 constant. `pyproject.toml` thêm `slowapi==0.1.9` (uv add). Wiring main.py defer Plan 05-06.
 - Verification: `ruff check app` exit 0 (toàn bộ app); `mypy --strict app/repositories app/middleware/rate_limit.py app/auth/dependencies.py` exit 0 (4 source); `pytest tests/unit/test_hub_isolation.py` 14 passed; smoke test logic + import OK; `grep RATE_LIMIT_EXCEEDED` match.
@@ -194,6 +190,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **HUB-02 + AUX-03 requirements — hạ tầng isolation helper + rate-limit module hoàn tất (enforce + wiring ở Wave 3-4).**
 
 **Previous session (2026-05-17 — Plan 05-01 execute):** `/gsd-execute-phase 5 plan 05-01` → executor agent thực thi 4 task atomic:
+
 - Task 01 (`769e0d4`): Migration 0003 `0003_phase5_schema_reconcile.py` — additive 10 cột: hubs (code/subdomain/status), users (phone/department/avatar_url/status), api_keys (permissions/allowed_hub_ids/rate_limit). server_default backfill existing rows → alter_column drop default cho code/subdomain. CheckConstraint hub_status_enum + user_status_enum + uq_hubs_code. downgrade đảo ngược clean. Cập nhật model Hub/User/ApiKey khớp. D-05 KHÔNG thêm field di sản Go. W1: hubs giữ cả slug (legacy NOT NULL mirror) + code (contract frontend). Alembic round-trip upgrade→downgrade→upgrade PASS clean trên DB `medinet_mig0003_test` sạch, chỉ 1 head.
 - Task 02 (`4e3de9b`): `audit_service.py` — AuditEntry dataclass, enqueue_audit non-blocking (drop+warning khi QueueFull, KHÔNG raise — T-05-01-03), audit_flush_loop batch INSERT 2s/128 qua get_engine() executemany, flush_pending drain shutdown, AUDIT_ACTIONS frozenset gồm security.hub_isolation_violation, reset_queue test helper. config.py thêm audit knobs + rate_limit_*_per_minute.
 - Task 03 (`f122b74`): wire audit_flush_loop vào main.py lifespan — startup step 8 create_task; shutdown flush_pending + cancel TRƯỚC dispose_engine.
@@ -203,6 +200,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **HUB-01 + AUX-01 requirements partial — schema + audit infra hoàn tất (CRUD endpoint Wave 3).**
 
 **Previous session (2026-05-14 — Plan 03-05 execute — PHASE 3 COMPLETE):** `/gsd-execute-phase 3 plan 03-05` → executor agent thực thi 6 task atomic:
+
 - Task 01 (`010c8a1`): replace `app/auth/dependencies.py::require_role` stub NotImplementedError → implementation đầy đủ. ValueError gate empty roles (security gate — tránh route mở cho mọi role). `allowed = set(roles)` + `user.role in allowed` check → raise HTTPException 403 `{code:FORBIDDEN, message:...}`. Thêm `@app.exception_handler(HTTPException)` trong `app/main.py::create_app()` map `exc.detail` dict {code, message} → envelope `{success:false, data:null, error:{code, message}, meta:null}`. Plan 03-01 ErrorHandlerMiddleware pass-through StarletteHTTPException → handler này render envelope đúng cho mọi 401/403 từ get_current_user + require_role. 5 unit test test_require_role.py PASS.
 - Task 02 (`29d4edf`): extend `tests/integration/conftest.py` với 10 fixture Plan 03-05: `redis_container` (scope=module, redis:7-alpine), `auth_env` (legacy backward-compat), `app_with_auth` (alembic upgrade + lifespan), `auth_client` (httpx ASGITransport), `admin_user/editor_user/viewer_user` (INSERT users qua engine với Go seed hash), `admin_token/editor_token/viewer_token` (POST /login), `admin_token_pair` (cả access+refresh cho AC5). pyproject.toml bump `testcontainers[postgres]` → `testcontainers[postgres,redis]`. uv sync install redis extra. docker pull redis:7-alpine prerequisite.
 - Task 03 (`a01b7d1`): tests/integration/test_auth_login.py — 5 critical test AC1: happy admin Go-seed hash → 200 envelope; wrong password → 401 INVALID_CREDENTIALS; unknown email → 401 same shape (anti-timing oracle); bad email → 422; envelope keys EXACTLY {success, data, error, meta}. **Rule 3 fix**: alembic.command.upgrade trong async fixture → asyncio.to_thread. **Rule 1 fix**: postgres_container scope=module → TRUNCATE users/refresh_tokens/user_hubs RESTART IDENTITY CASCADE per-test. 5/5 PASS.
@@ -214,6 +212,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **5/5 ROADMAP success criteria VERIFIED end-to-end**: AC1 (login envelope) + AC2 (JWT decode + PKCS#8) + AC3 (RBAC 403/200) + AC4 (Argon2 cross-compat regression) + AC5 (concurrent refresh race). **6/6 AUTH requirements complete**. Phase 3 hoàn tất.
 
 **Previous session (2026-05-14 — Plan 03-04 execute):** `/gsd-execute-phase 3 plan 03-04` → executor agent thực thi 5 task atomic:
+
 - Task 01 (`c165c4d`): tạo `app/auth/schemas.py` — 5 Pydantic v2 model (LoginRequest, LoginResponse, UserPublic, RefreshRequest, LogoutRequest). LoginRequest.email: EmailStr + password min/max length. UserPublic.hub_assignments: list[str] (USER-03). role Literal["admin","editor","viewer"] match Go enum. Rule 3 deviation: pyproject `pydantic>=2.7.0,<3` → `pydantic[email]>=2.7.0,<3` + uv sync install email-validator 2.3.0 + dnspython 2.8.0 cho EmailStr (plan đã anticipate trong task 01 lưu ý).
 - Task 02 (`6b7d8a6`): tạo `app/auth/service.py` — AuthService class với 4 async method (login/refresh/logout/get_current_user_info). AuthError(code, message) exception class. _hash_refresh_token SHA-256 64-char (T-02-03). Constructor injection: db, redis, jwt_manager, dummy_password_hash. Anti-timing oracle: login luôn gọi verify_password kể cả user None với dummy hash. P16 SETNX: refresh dùng redis.set(lock:refresh:<jti>, nx=True, ex=30) → fail → AuthError REFRESH_RACE. Blacklist old jti + UPDATE refresh_tokens.revoked_at + INSERT new hash. 5 error code Go-compat (INVALID_CREDENTIALS, INVALID_REFRESH_TOKEN, REFRESH_RACE, TOKEN_REVOKED, USER_DISABLED).
 - Task 03 (`31d54fd`): tạo `app/auth/dependencies.py` — 5 FastAPI dependency + oauth2_scheme + require_role stub. OAuth2PasswordBearer(tokenUrl=/api/auth/login, auto_error=False). get_current_user reject 5 case 401: MISSING_AUTHORIZATION (rỗng) / INVALID_TOKEN (decode fail) / TOKEN_REVOKED (Redis blacklist exists) / USER_DISABLED (user None hoặc is_active False). require_role raise NotImplementedError — Plan 03-05 implement. Rule 3 deviation: noqa B008 cho 4 Depends() default (FastAPI pattern, false positive).
@@ -223,6 +222,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-04-SUMMARY.md` tạo với 5 commit hash + threat model 7 entry (6 mitigated + 1 accepted Redis fail-open Phase 3) + forward links cho Plan 03-05 (RBAC require_role + integration test) + Phase 5 (CRUD endpoint với get_current_user).
 
 **Previous session (2026-05-14 — Plan 03-03 execute):** `/gsd-execute-phase 3 plan 03-03` → executor agent thực thi 3 task atomic:
+
 - Task 01 (`e205920`): tạo `app/auth/password.py` wrap `pwdlib.PasswordHash` + `pwdlib.hashers.argon2.Argon2Hasher` với params LẤY TỪ GO SOURCE (`backend/internal/pkg/hash/argon2.go` line 13-19): `memory_cost=65_536, time_cost=3, parallelism=4, salt_len=16, hash_len=32`. Expose 2 helper `hash_password(plain) -> str` + `verify_password(plain, hash) -> bool`. verify_password wrap try/except để KHÔNG raise UnknownHashError — trả False. Extend `app/auth/__init__.py` re-export 7 symbol (hash_password, verify_password + 5 ARGON2_* constants). Docstring document DOC-BUG explicit. Pre-implementation verify pwdlib API qua `inspect.signature(Argon2Hasher.__init__)` — defaults match Go source nguyên xi.
 - Task 02 (`a4f5203`): tests/unit/test_password.py — 6 unit test pure Python (KHÔNG cần Postgres): hash prefix Go-compat / round-trip Tiếng Việt / reject wrong / garbage hash → False / salt random / params constants regression guard. 6/6 PASS in 0.61s.
 - Task 03 (`b68e4d9`): tests/integration/test_argon2_cross_compat.py — 4 critical R6 mitigation test với fixture hash thật từ `Hub_All/backend/scripts/seed.sql` line 13 (admin@medinet.vn, plaintext "Admin@123"). All 4 test marker `@pytest.mark.critical + @pytest.mark.integration` cho CI gate HARD-03. Test 1: pwdlib verify Go-generated hash production → True (R6 CORE proof). Test 2: phản chứng wrong password / case-sensitive / empty → False. Test 3: 5 Python plaintext sample round-trip. Test 4: hash format byte-identical Go (split $ → 6 segment với parts[3]='m=65536,t=3,p=4'). 4/4 PASS in 1.39s.
@@ -232,6 +232,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - SUMMARY.md `.planning/phases/03-auth-port-rbac-response-envelope/03-03-SUMMARY.md` tạo với 3 commit hash + threat model 5 entry (1 partial T-03-pw-timing chờ Plan 03-04 dummy compare + 2 accepted + 2 mitigated) + forward links cho Plan 03-04/03-05.
 
 **2026-05-14 (TEARDOWN-01 PULL-IN — ngoài lịch):** User quyết định xoá `Hub_All/backend/` Go toàn bộ NGAY (sớm hơn Phase 8) để chuyển 100% sang Python + cocoindex. Backup: `git tag m1-go-archived` (commit `72f18ef`). 147 file Go xoá khỏi working tree. Hệ luỵ:
+
 - D6 vẫn giữ — frontend KHÔNG sửa, Python `api/` phải mimic surface Go khi port Phase 5/6/7. Reference Go: `git show m1-go-archived:Hub_All/backend/internal/router/<file>.go`.
 - Phase 8 SC3 (replay test live Go vs FastAPI) → REVISED: dùng router signature từ git tag + frontend types làm contract reference (không còn Go runtime A/B test).
 - ⚠️ R3 / E1 safety net giảm: nếu cocoindex critical fail thì không còn rollback Go runtime, chỉ pivot lần 3. User accept risk.
@@ -239,6 +240,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - TEARDOWN-01 trong Phase 8 ✓ done. Còn lại Phase 8 chỉ là frontend E2E smoke.
 
 **Last session (2026-05-18 — `/gsd-execute-phase 7 plan 07-04`):** executor agent sequential trên main working tree thực thi 2 task atomic của Plan 07-04 (Wave 2 — Ask API lắp ráp đầy đủ, ASK-01/02/03/05 + AUX-03):
+
 - BƯỚC 0 (P19 mid-phase drift guard): xác nhận LiteLLM version TRƯỚC khi code — `litellm` đã pin `litellm>=1.82,<2` trong `pyproject.toml`; version resolve thực tế **1.83.14**; `litellm.acompletion(model=..., messages=...)` + `litellm.completion_cost(completion_response=...)` tồn tại + chữ ký khớp `<interfaces>` nguyên xi → không drift, không pin lại.
 - Task 1 (`74bf598`): `services/ask_service.py` — `AskError`/`UsageRecord`/`AskOutcome`/`_AskChunk` dataclass; `_resolve_llm_model()` đọc `get_settings()` mỗi lần (hot-swap ASK-04, prefix `gemini/` khi provider gemini); `_resolve_top_k()` clamp [1,12]. `AskService.ask()`/`ask_cross_hub()`: `_retrieve()` gọi `SearchService.search`/`search_cross_hub` Phase 6 rồi bù `document_id` qua `SELECT id, document_id FROM chunks WHERE id = ANY($1::uuid[])` (D-07-04-C — search Phase 6 không trả field này), bọc `_AskChunk`; `_call_llm()` gọi `litellm.acompletion` non-streaming bọc lỗi provider → `AskError` (D-07-04-F); `_extract_usage()` token an toàn `getattr` None + `completion_cost` bọc try/except None. Service KHÔNG tự ghi `usage_events` (D-07-04-D). Log `ask_completed` KHÔNG ghi query/answer (PII).
 - Task 2 (`f998b62`): `routers/ask.py` — `APIRouter` KHÔNG prefix, 3 endpoint POST `/api/ask` (ASK-01) + `/api/ask/cross-hub` (ASK-03) + alias `/api/search/answer` (D-07-04-A frontend `searchAnswer()`); helper `_run_ask()` dùng chung map `ValueError`→400 `INVALID_QUERY` / `EmbedderError`→500 `EMBEDDING_FAILED` / `AskError`→500 `LLM_FAILED` (D-07-04-F — `resp` không có helper `bad_gateway`); cả 3 `limiter.limit(SEARCH_LIMIT)` 100/min (AUX-03); usage log `background_tasks.add_task(log_usage_event, pool, **usage)` sau response, `request_id` từ `request.state.request_id`. `routers/__init__.py` re-export `ask_router`; `main.py create_app()` mount cạnh `usage_router`.
@@ -248,6 +250,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **ASK-01/02/03/05 + AUX-03 — Ask API lắp ráp đầy đủ (AskService + 3 endpoint POST + rate-limit + usage BackgroundTasks). ROADMAP SC1 (citation map) / SC5 (10-ask usage_events) verify end-to-end + anti-injection critical test thuộc Plan 07-05.** Note: `gsd-sdk query` state handlers vẫn không khả dụng — STATE/ROADMAP cập nhật thủ công.
 
 **Previous session (2026-05-18 — `/gsd-execute-phase 7 plan 07-03`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-03 (Wave 1 — rag-config dimension guard + cost preview, ASK-04 / R7):
+
 - Task 1 (`789bc0d`): `schemas/rag_config.py` — thêm model `EmbeddingCostPreview` (n_chunks/est_cost_usd/est_minutes/message) mô tả shape cost preview within-dim swap. `UpdateRagConfigRequest` GIỮ NGUYÊN — request không đổi. Service build nội dung rồi `.model_dump()` ghép vào response dict raw (contract D6).
 - Task 2 (`2752d0b`): `services/rag_config_service.py` — hằng `PINNED_DIM=1536`/`COST_PER_CHUNK_USD=0.000013`/`CHUNKS_PER_MINUTE=450` + import math/re. Helper `_embedding_dim_of(model)` regex `@(\d+)\s*$` parse hậu tố dim, fallback 1536 (D-07-03-A). Method `_embedding_cost_preview()` count(*) chunks bọc try/except fallback n=0 (T-07-03-04), message format `:.2f` cost luôn 2 chữ số. `update_config()` chèn dimension guard sau validate provider name — cross-dim → trả str (router map 400 "dimension mismatch — defer cross-dim swap v4.0"), within-dim embedding swap → tính cost_preview; return dict thêm `warning`+`cost_preview`.
 - Task 3 (`29a11db`): `tests/unit/test_rag_config_dim_guard.py` — 6 unit test pure-Python (1 `@pytest.mark.critical` nhánh refuse cross-dim): phủ `_embedding_dim_of` no-suffix/within/cross-dim + cost formula + message 2 chữ số thập phân (n=7692 → cost 0.10 trailing-zero case, khớp regex `est \$\d+\.\d{2},` — ROADMAP SC4).
@@ -256,6 +259,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **ASK-04 / R7 dimension guard + cost preview hoàn tất — cross-dim swap refuse 400, within-dim swap cho phép kèm WARNING cost preview. Endpoint `/api/rag-config` đầy đủ. Note: `gsd-sdk query` state handlers vẫn không khả dụng — STATE/ROADMAP cập nhật thủ công.**
 
 **Previous session (2026-05-18 — `/gsd-execute-phase 7 plan 07-02`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-02 (Wave 1 — token usage write + read path, ASK-05):
+
 - Task 1 (`12c3a2d` TDD RED → `476b8d7` GREEN): `schemas/usage.py` — 6 model Pydantic v2 (`UsageEventResponse`/`UsageGroup`/`UsageDailyPoint`/`UsageStats`/`UsageRealtimePoint`/`UsageRealtime`) khớp 1:1 contract D6 `api.ts` (`TokenUsageAPI`/`TokenUsageStatsAPI`/`TokenUsageRealtimeAPI`). `test_usage_schema.py` 3 unit test pure-Python (RED `ModuleNotFoundError` → GREEN 3/3 pass).
 - Task 2 (`cf3a522`): `services/usage_service.py` — tách write path `log_usage_event()` (ghi 1 row `usage_events` best-effort, bọc try/except KHÔNG raise — gọi từ BackgroundTasks Plan 07-04; PII-safe by schema T-07-02-PII) khỏi read path `query_usage()` (list filter date/model/hub/provider, cap per_page 100) + `aggregate_usage()` (by_model/by_provider/by_operation/daily — phục vụ cả `/stats` và `?group_by=`) + `realtime_usage()` (window 60 phút group theo phút). Toàn bộ query asyncpg parametrized `$N` — KHÔNG nối chuỗi (T-07-02-03).
 - Task 3 (`634114f`): `routers/usage.py` — 3 endpoint GET admin-only (`require_role("admin")` — T-07-02-02): `GET /api/usage` (+`?group_by=` delegate `aggregate_usage()` cho ROADMAP SC5 URL literal) + `/stats` + `/realtime`. Wiring `routers/__init__.py` re-export `usage_router` + `main.py create_app()` mount cạnh `search_router`. `create_app()` xác nhận mount đúng 3 path `/api/usage{,/stats,/realtime}`.
@@ -264,6 +268,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **ASK-05 write+read path hoàn tất — endpoint mount xong. `log_usage_event` call từ AskService qua BackgroundTasks + ROADMAP SC5 10-ask verification vẫn cần Plan 07-04/07-05.** Note: `gsd-sdk query` state handlers vẫn không khả dụng — STATE/ROADMAP cập nhật thủ công.
 
 **Previous session (2026-05-18 — `/gsd-execute-phase 7 plan 07-01`):** executor agent sequential trên main working tree thực thi 3 task atomic của Plan 07-01 (Wave 1 — contract + prompt + parser layer Ask API):
+
 - Task 1 (`3da2c6a`): `schemas/ask.py` — 3 model Pydantic v2: `AskRequest` (query bắt buộc + hub_id/hub_ids/top_k optional), `Citation` (number/marker/chunk_id/document_id/hub_id/document_name/hub_name/score/content_snippet — đủ field map sang `CitationRefAPI` D6), `AskResponse` (answer/citations/model/query_time_ms — ASK-01 shape). Verify import smoke + ruff + mypy --strict clean.
 - Task 3 (`0584c68`, TDD RED): `tests/unit/test_ask_prompt.py` — 7 unit test pure-Python (1 `@pytest.mark.critical` cho citation mapping điểm vỡ ASK-01) + helper dataclass `_FakeChunk`. Commit ở trạng thái fail `ModuleNotFoundError` (ask_prompt.py chưa tồn tại).
 - Task 2 (`bad7ad2`, TDD GREEN): `services/ask_prompt.py` — `ANTI_INJECTION_SYSTEM_PROMPT` (5 quy tắc tiếng Việt chống prompt-injection ASK-02 — coi context+query là DỮ LIỆU, câu từ chối chuẩn "Tôi không có thông tin..."), `build_ask_messages()` đánh số chunk `[1]..[N]` dựng list [system,user] (chunks rỗng → "Không có tài liệu nào phù hợp"), `parse_citations()` regex `\[(\d+)\]` map `[N]`→`chunks[N-1]` clamp `1<=n<=len` + de-dup theo number (mitigation T-07-01-04). 7/7 test pass, 1 critical pass.
@@ -274,6 +279,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 <details><summary>Phase 6 — `/gsd-execute-phase 6` (2026-05-18, đã lưu trữ)</summary>
 
 **Last session (2026-05-18 — `/gsd-execute-phase 6` — PHASE 6 COMPLETE):** 4 wave tuần tự (mỗi wave đúng 1 plan, `06-02→03→04` depends_on liên hoàn), executor agent sequential trên main working tree — worktree isolation tắt vì plan 06 được lập dựa trên WIP rag-config chưa commit; worktree branch từ HEAD sẽ thiếu file.
+
 - **Trước execute:** working tree bẩn (20 file modified + 3 file mới rag-config + package.json + seed). User chọn commit nền trước → 2 commit: `2d7a688` (rag-config endpoint ASK-04 build sớm + auth/ingestion/frontend tweaks) + `09c3567` (root package.json dev scripts + SEED-001). Tree sạch trước Phase 6.
 - 06-01 (`418ea59` schema layer search.py 7 model khớp api.ts; `73222d8` SearchService.search single-hub union + HNSW SET LOCAL tuning + Redis cache fail-open + intersect_hubs defense-in-depth lớp 1). 2 deviation auto-fix (Rule 1 gỡ bare re-raise dead code; Rule 3 docstring tránh false-positive grep).
 - 06-02 (`6e5f1c9` search_cross_hub fan-out asyncio.gather + re-rank score desc + find_similar; `00cb5c9` routers/search.py 3 endpoint POST @limiter.limit + mount create_app). 1 deviation (Rule 3 noqa C901).
@@ -288,6 +294,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 <details><summary>Phase 5 — Plan 05-06 (2026-05-17, đã lưu trữ)</summary>
 
 **Last session (2026-05-17 — Plan 05-06 execute — PHASE 5 PLANS COMPLETE):** `/gsd-execute-phase 5 plan 05-06` → executor agent (sequential) thực thi 3 task atomic:
+
 - Task 01 (`d9e59e2`): `routers/__init__.py` export 6 router. `main.py` `create_app()` mount 5 router Phase 5 (hubs/users/profile/api_keys/audit_logs — tổng 7 router) + wire slowapi (`app.state.limiter = limiter` + `add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)` → 429 envelope) + `@app.exception_handler(HubIsolationError)` → 403 envelope. `auth/api_key.py` mới — `require_api_key` X-API-Key dependency (thiếu header → 401 API_KEY_MISSING; key sai → 401 API_KEY_INVALID; gọi `ApiKeyService.verify_key` — BLOCKER 1). `auth/__init__.py` re-export.
 - Task 02 (`e32af03`): `documents_service.delete()` retrofit hub isolation — signature `deleted_by:UUID` → `actor:User` + `actor_hub_ids:Sequence[str]`; gọi `verify_hub_access` (hub_id load TỪ DB row — T-05-06-02 KHÔNG payload); cross-hub reject → `enqueue_audit(security.hub_isolation_violation)` TẠI điểm reject TRƯỚC raise (T-05-06-03); admin bypass. `documents.py` DELETE endpoint auth `require_role("admin")` → `get_current_user_with_hubs` (editor-eligible); viewer reject 403 trước service; `HubIsolationError` → 403 envelope.
 - Task 03 (`5f5bfea`): `conftest.py` TRUNCATE mở rộng (hubs/audit_logs/api_keys/documents/chunks) + helper `_insert_hub`/`_assign_user_hub` + AES_KEY test deterministic. `test_hub_isolation.py` 6 critical test E4 (editor cross-hub 403 + document tồn tại, audit logged, admin bypass 204, editor own-hub 204, viewer 403, verify_hub_access unit). `test_rate_limit.py` 4 test (429 envelope shape, under-limit pass, X-API-Key 401, auth/me không limit). Fix DEF-05-02 leftover (`_create_hub` test_documents_upload + test_ingest_e2e) + DEF-05-01 leftover (`_spawn_rbac_app` COCOINDEX_SKIP_SETUP + reset_queue).

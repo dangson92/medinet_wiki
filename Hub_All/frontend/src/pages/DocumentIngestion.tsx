@@ -509,7 +509,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl sm:text-[24px] font-semibold text-slate-900 dark:text-white">Danh sách tri thức</h1>
+              <h1 className="text-h1 font-semibold text-slate-900 dark:text-white">Danh sách tri thức</h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                 {IS_HUB_TONG
                   ? 'Quản lý và duyệt tri thức được đồng bộ từ các Hub con'
@@ -822,7 +822,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
         // Hub tổng không có chức năng nạp tri thức mới, redirect về danh sách
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <BookOpen size={48} className="text-slate-300 dark:text-slate-600 mb-4" />
-          <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">Chức năng tạm ẩn</h2>
+          <h2 className="text-h3 font-semibold text-slate-700 dark:text-slate-200 mb-2">Chức năng tạm ẩn</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Hub tổng chỉ nhận và duyệt tri thức từ các Hub con.</p>
           <button onClick={() => navigate('/documents')} className="btn-secondary">
             <ArrowLeft size={16} />
@@ -839,7 +839,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h1 className="text-[24px] font-semibold text-slate-900 dark:text-white">Nạp tri thức mới</h1>
+              <h1 className="text-h1 font-semibold text-slate-900 dark:text-white">Nạp tri thức mới</h1>
               <p className="text-slate-500 dark:text-slate-400">Chọn phương thức nạp tri thức vào kho dữ liệu Hub Tổng</p>
             </div>
           </div>
@@ -895,7 +895,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                             <Upload className="text-slate-400 dark:text-slate-500" size={40} />
                           )}
                         </div>
-                        <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">
+                        <h3 className="text-h3 font-semibold text-slate-800 dark:text-slate-100 mb-2">
                           {isUploading ? "Đang xử lý tri thức..." : "Kéo thả tệp tin vào đây"}
                         </h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm">
@@ -976,7 +976,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                           <Globe className="text-slate-400 dark:text-slate-500" size={40} />
                         </div>
                         <div className="text-center space-y-2">
-                          <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Trích xuất từ địa chỉ Web</h3>
+                          <h3 className="text-h3 font-semibold text-slate-800 dark:text-slate-100">Trích xuất từ địa chỉ Web</h3>
                           <p className="text-slate-500 dark:text-slate-400">
                             Nhập URL của bài viết hoặc tri thức trực tuyến, hệ thống sẽ tự động làm sạch và trích xuất văn bản.
                           </p>

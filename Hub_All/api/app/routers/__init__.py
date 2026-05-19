@@ -9,6 +9,10 @@ Phase 7 thêm usage_router (ASK-05 — 3 endpoint GET token usage) +
 ask_router (ASK-01/02/03 — POST /api/ask + /cross-hub + alias /api/search/answer).
 Phase 8 thêm ai_chat_router (COMPAT-01 — POST /api/ai/chat proxy LLM cho
 GeminiAssistant, BLOCKER 08-CONTRACT-DIFF).
+sync_router — compat stub cho endpoint Go-era /api/sync/* (D6 — frontend React
+chưa sửa vẫn gọi; M2 không port feature sync queue).
+system_settings_router — port endpoint Go-era /api/system-settings (D6 —
+Settings.tsx tab Chung/Bảo mật/Thông báo gọi; persist key-value bảng settings).
 """
 from __future__ import annotations
 
@@ -21,6 +25,8 @@ from app.routers.hubs import router as hubs_router
 from app.routers.profile import router as profile_router
 from app.routers.rag_config import router as rag_config_router
 from app.routers.search import router as search_router
+from app.routers.sync import router as sync_router
+from app.routers.system_settings import router as system_settings_router
 from app.routers.usage import router as usage_router
 from app.routers.users import router as users_router
 
@@ -34,6 +40,8 @@ __all__ = [
     "profile_router",
     "rag_config_router",
     "search_router",
+    "sync_router",
+    "system_settings_router",
     "usage_router",
     "users_router",
 ]
