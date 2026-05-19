@@ -3,23 +3,23 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: in_progress
-last_updated: "2026-05-19T08:50:00Z"
+last_updated: "2026-05-19T12:30:00Z"
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 7
-  total_plans: 45
+  total_plans: 48
   completed_plans: 45
-  percent: 93
+  percent: 88
 current_phase:
+  number: 8.1
+  name: MCP Server — Expose Wiki Tools
+  plans_total: 3
+  plans_complete: 0
+  status: ready_to_execute
+  waves: 3
+next_phase:
   number: 9
   name: Eval Framework + Quality Gate ≥75% top-3
-  plans_total: 0
-  plans_complete: 0
-  status: not_started
-  waves: 0
-next_phase:
-  number: 10
-  name: Hardening + Observability + Docs
 ---
 
 # State — MEDWIKI
@@ -62,7 +62,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
 | Auth branch | 3 ✓ (5/5 plans done) → 5 ✓ (6/6 plans done) → 8 ✓ (4/4 plans done) |
 
-**Progress bar:** `[█████████░] 93% (Phase 8 ✅ COMPLETE — Frontend E2E Smoke 4/4 plans; 3 mục human-UAT defer /gsd-verify-work 8) · Next: Phase 9 Eval Framework + Quality Gate ≥75% top-3`
+**Progress bar:** `[████████░░] 88% (Phase 8.1 📋 READY TO EXECUTE — MCP Server 3 PLAN.md / 3 waves đã plan + verify PASSED; chèn khẩn cấp 2026-05-19) · Next: /gsd-execute-phase 8.1 → Phase 9 Eval Framework`
+
+**Phase 8.1 — MCP Server (planned 2026-05-19):** Phase chèn khẩn (vốn defer v4.0 MCP-01/MCP-02, kéo lên). Research → pattern map → 3 plan → plan-checker `VERIFICATION PASSED` (12/12 dimension, threat model 3/3 plan, 0 high-severity unmitigated). Wave 1 `08.1-01` (pyproject `mcp>=1.9.4` + `mcp/schemas.py` + `mcp/auth.py`) → Wave 2 `08.1-02` (`mcp/server.py` 3 tool + `main.py` mount `/mcp` + lifespan `combine_lifespans`) → Wave 3 `08.1-03` (test suite unit MCP). Thuần backend, 0 file `frontend/` (D6).
 
 ---
 
@@ -119,6 +121,10 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 | E3 | Phase 1-3 vượt 21 ngày calendar | STOP, scope review |
 | E4 | Hub isolation bug không fixable trong 7 ngày | STOP, security review |
 | E5 | Quality gate fail <60% top-3 dù iterate 3 vòng | Stop M2b, ship M2a standalone |
+
+### Roadmap Evolution
+
+- Phase 8.1 inserted after Phase 8: MCP Server — expose wiki tools `ask`/`search`/RAG cho AI client ngoài (Claude Desktop, ChatGPT, Cursor) qua Model Context Protocol (URGENT, 2026-05-19)
 
 ### Weekly check-in calendar (R3 mitigation)
 
