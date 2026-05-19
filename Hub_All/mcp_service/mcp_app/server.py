@@ -17,9 +17,15 @@ tự mount route metadata/`/authorize`/`/token`/`/register`. Thêm route login f
 (`/login`). OAuthStore schema khởi tạo trong lifespan startup của Starlette app
 (compose với lifespan session-manager của SDK — KHÔNG ghi đè).
 
-Auth: client gửi `X-API-Key` qua header MCP → `require_api_key` trích → forward
-xuống API Service; API Service verify (trả 401 nếu sai). OAuth token (8.3) do SDK
-verify qua `load_access_token` mỗi tool call.
+Phase 8.3 Plan 03 (MCP-02, D-03/D-04): mỗi tool call resolve credential qua
+`_resolve_credential` — ưu tiên OAuth Bearer token (verify qua
+`provider.load_access_token` → lấy downstream JWT của đúng user từ OAuthStore),
+fallback X-API-Key cho client local. `_call_api` forward credential xuống API
+Service: nhánh JWT gặp 401 → refresh JWT (`/api/auth/refresh`) → lưu rotation
+vào store (Pitfall 5) → retry 1 lần. Hub isolation enforce API-side mỗi call.
+
+Auth: client OAuth gửi `Authorization: Bearer <token>`; client local gửi
+`X-API-Key` — cả hai song song. OAuth token verify qua `load_access_token`.
 
 Transport: Streamable HTTP, stateless_http=True.
 """
@@ -47,7 +53,7 @@ from mcp_app.api_client import (
     ApiServerError,
     ApiUnauthorizedError,
 )
-from mcp_app.auth import require_api_key
+from mcp_app.auth import Credential, extract_api_key, extract_oauth_token
 from mcp_app.config import get_settings
 from mcp_app.oauth import MedinetOAuthProvider, OAuthStore
 from mcp_app.oauth.login import get_login_routes
@@ -137,6 +143,107 @@ def _map_api_error(e: ApiClientError) -> ToolError:
     return ToolError("API_ERROR: lỗi không xác định khi gọi API Service")
 
 
+async def _resolve_credential(ctx: Context) -> Credential:  # type: ignore[type-arg]
+    """Resolve credential cho tool call — ưu tiên OAuth token, fallback X-API-Key.
+
+    Phase 8.3 Plan 03 (D-03):
+    - Có `Authorization: Bearer <token>` → verify qua `provider.load_access_token`
+      (SDK kiểm `expires_at` — T-08.3-11). Hợp lệ → đọc downstream JWT của đúng
+      user từ OAuthStore → `Credential(kind="jwt", ...)`. Token sai/hết hạn →
+      raise ToolError MCP_UNAUTHORIZED (tool KHÔNG chạy logic).
+    - Không có OAuth token → thử `X-API-Key` → `Credential(kind="api_key", ...)`
+      (client local Claude Code/Desktop không vỡ).
+    - Không có cả hai → raise ToolError MCP_UNAUTHORIZED.
+
+    Bảo mật: KHÔNG log giá trị token/JWT — chỉ log `kind`.
+    """
+    oauth_token = extract_oauth_token(ctx)
+    if oauth_token is not None:
+        access = await _get_oauth_provider().load_access_token(oauth_token)
+        if access is None:
+            raise ToolError(
+                "MCP_UNAUTHORIZED: token OAuth thiếu, sai hoặc hết hạn "
+                "— kết nối lại connector"
+            )
+        record = await _get_oauth_store().load_token(oauth_token)
+        if record is None:
+            # load_access_token đã pass nhưng record biến mất — phòng vệ.
+            raise ToolError(
+                "MCP_UNAUTHORIZED: phiên OAuth không hợp lệ — kết nối lại connector"
+            )
+        logger.info("Tool call resolve credential: kind=jwt")
+        return Credential(
+            kind="jwt", value=record["downstream_jwt"], oauth_token=oauth_token
+        )
+
+    api_key = extract_api_key(ctx)
+    if api_key:
+        logger.info("Tool call resolve credential: kind=api_key")
+        return Credential(kind="api_key", value=api_key, oauth_token=None)
+
+    raise ToolError(
+        "MCP_UNAUTHORIZED: thiếu header Authorization Bearer hoặc X-API-Key"
+    )
+
+
+async def _call_api(
+    cred: Credential,
+    method: str,
+    path: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+) -> Any:
+    """Gọi API Service với credential đã resolve. Nhánh JWT: 401 → refresh → retry.
+
+    - `kind == "api_key"` → gọi thẳng, KHÔNG retry (X-API-Key không refresh được).
+    - `kind == "jwt"` → gọi với JWT; gặp `ApiUnauthorizedError` lần đầu → refresh
+      JWT downstream qua `/api/auth/refresh` → lưu rotation CẢ access + refresh
+      vào store (Pitfall 5) → retry 1 lần với JWT mới. Refresh fail (None) →
+      re-raise `ApiUnauthorizedError` (tool map ToolError MCP_UNAUTHORIZED).
+    """
+    client = _get_client()
+
+    async def _do(credential_value: str) -> Any:
+        if method == "GET":
+            return await client.get(path, jwt=_jwt(cred, credential_value), api_key=_key(cred, credential_value), params=params)
+        return await client.post(path, jwt=_jwt(cred, credential_value), api_key=_key(cred, credential_value), json_body=json_body)
+
+    if cred.kind == "api_key":
+        return await _do(cred.value)
+
+    # kind == "jwt": thử với JWT hiện tại, 401 → refresh → retry 1 lần.
+    try:
+        return await _do(cred.value)
+    except ApiUnauthorizedError:
+        logger.info("Downstream JWT 401 — thử refresh JWT rồi retry")
+        store = _get_oauth_store()
+        record = await store.load_token(cred.oauth_token or "")
+        if record is None:
+            raise
+        new_pair = await client.refresh_jwt(record["downstream_refresh_token"])
+        if new_pair is None:
+            # Refresh token cũng hết hạn → user phải re-connect.
+            raise
+        # Pitfall 5 — lưu đè CẢ downstream JWT + refresh token mới.
+        await store.update_downstream_jwt(
+            cred.oauth_token or "",
+            new_pair["access_token"],
+            new_pair["refresh_token"],
+        )
+        return await _do(new_pair["access_token"])
+
+
+def _jwt(cred: Credential, value: str) -> str | None:
+    """Trả `value` làm JWT nếu credential là nhánh jwt, ngược lại None."""
+    return value if cred.kind == "jwt" else None
+
+
+def _key(cred: Credential, value: str) -> str | None:
+    """Trả `value` làm api_key nếu credential là nhánh api_key, ngược lại None."""
+    return value if cred.kind == "api_key" else None
+
+
 def _to_citations(raw: list[dict[str, Any]], *, cross_hub: bool) -> list[CitationItem]:
     """Chuyển danh sách citation thô từ API sang CitationItem.
 
@@ -180,10 +287,10 @@ async def list_hubs(ctx: Context) -> HubList:  # type: ignore[type-arg]
     Returns:
         hubs: Danh sách Hub (id, name, description) mà user của API key được phép.
     """
-    api_key = require_api_key(ctx)
+    cred = await _resolve_credential(ctx)
     try:
-        data = await _get_client().get(
-            "/api/hubs", api_key=api_key, params={"per_page": 100}
+        data = await _call_api(
+            cred, "GET", "/api/hubs", params={"per_page": 100}
         )
     except ApiClientError as e:
         raise _map_api_error(e) from e
@@ -221,7 +328,7 @@ async def search_wiki(  # type: ignore[type-arg]
         results: Danh sách chunk phù hợp (content, score, document_name, hub_name).
         total: Tổng số kết quả trả về.
     """
-    api_key = require_api_key(ctx)
+    cred = await _resolve_credential(ctx)
     top_k = max(1, min(top_k, 20))  # clamp [1, 20]
 
     if hub_id:
@@ -234,7 +341,7 @@ async def search_wiki(  # type: ignore[type-arg]
         body = {"query": query, "hub_ids": None, "top_k": top_k}
 
     try:
-        data = await _get_client().post(path, api_key=api_key, json_body=body)
+        data = await _call_api(cred, "POST", path, json_body=body)
     except ApiClientError as e:
         raise _map_api_error(e) from e
 
@@ -276,7 +383,7 @@ async def ask_wiki(  # type: ignore[type-arg]
     — tool không can thiệp text answer, citations vẫn structured để client attribute.
     KHÔNG tự ghi usage_events — /api/ask đã ghi qua BackgroundTasks (D-14).
     """
-    api_key = require_api_key(ctx)
+    cred = await _resolve_credential(ctx)
     cross_hub = hub_id is None
 
     if cross_hub:
@@ -289,7 +396,7 @@ async def ask_wiki(  # type: ignore[type-arg]
         body = {"query": query, "hub_id": hub_id}
 
     try:
-        data = await _get_client().post(path, api_key=api_key, json_body=body)
+        data = await _call_api(cred, "POST", path, json_body=body)
     except ApiClientError as e:
         raise _map_api_error(e) from e
 

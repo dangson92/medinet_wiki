@@ -226,7 +226,7 @@ async def _seed_oauth_token(
     access_token: str,
     downstream_jwt: str,
     downstream_refresh: str = "ds-refresh",
-) -> "object":
+) -> object:
     """Tạo OAuthStore :memory:, seed 1 OAuth token, wire vào provider+store singleton.
 
     Trả store để test inspect sau (vd verify downstream JWT đã rotate).

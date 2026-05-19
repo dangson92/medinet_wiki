@@ -17,7 +17,28 @@ Bảo mật: KHÔNG bao giờ log giá trị `key` hay OAuth token (T-08.2-03-I2
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from mcp.server.fastmcp.exceptions import ToolError
+
+
+@dataclass(frozen=True)
+class Credential:
+    """Credential đã resolve cho một tool call (Phase 8.3 Plan 03).
+
+    - `kind`: "jwt" (downstream JWT từ OAuth token) hoặc "api_key" (X-API-Key local).
+    - `value`: giá trị JWT hoặc API key để forward xuống API Service.
+    - `oauth_token`: OAuth access token của request — chỉ có ở nhánh "jwt"
+      (cần để cập nhật store khi refresh-rotation downstream JWT). None ở nhánh
+      "api_key" (X-API-Key không refresh được).
+
+    Bảo mật: dataclass này giữ secret — KHÔNG log instance.
+    """
+
+    kind: Literal["jwt", "api_key"]
+    value: str
+    oauth_token: str | None = None
 
 
 def extract_api_key(ctx: object) -> str | None:
