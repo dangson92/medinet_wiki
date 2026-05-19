@@ -75,6 +75,30 @@ def _get_redis() -> Any:
     return _redis
 
 
+# Giữ strong reference tới background task usage-logging. asyncio chỉ giữ
+# weak reference tới task → nếu không lưu handle, task có thể bị GC giữa chừng
+# và bị drop âm thầm (CR-01). Set này giữ task sống đến khi hoàn tất.
+_background_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _spawn_usage_log(coro: Any) -> None:
+    """Chạy log_usage_event non-blocking (D-14) nhưng KHÔNG drop âm thầm.
+
+    Giữ reference trong _background_tasks + done-callback log exception nếu có.
+    Khác asyncio.create_task trần: task không bị GC giữa chừng, lỗi được log.
+    """
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+
+    def _on_done(t: asyncio.Task[Any]) -> None:
+        _background_tasks.discard(t)
+        exc = t.exception() if not t.cancelled() else None
+        if exc is not None:
+            logger.error("mcp_usage_log_failed: %s", exc)
+
+    task.add_done_callback(_on_done)
+
+
 # ---------------------------------------------------------------------------
 # FastMCP instance
 # mcp==1.27.1: stateless_http=True đặt trong constructor (không phải http_app())
@@ -235,10 +259,9 @@ async def ask_wiki(  # type: ignore[type-arg]
         logger.error("ask_wiki_error: %s", e)
         raise ToolError(f"Lỗi nội bộ: {e}") from e
 
-    # D-14: log usage_events non-blocking
-    # asyncio.create_task (không có BackgroundTasks trong MCP tool — tham chiếu
-    # ask.py dùng background_tasks.add_task; MCP dùng asyncio.create_task tương đương)
-    asyncio.create_task(  # noqa: RUF006
+    # D-14: log usage_events non-blocking — qua _spawn_usage_log (giữ reference
+    # + log lỗi) thay vì asyncio.create_task trần để tránh drop âm thầm (CR-01).
+    _spawn_usage_log(
         log_usage_event(
             pool,
             user_id=str(user.user.id),
