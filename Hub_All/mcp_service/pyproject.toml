@@ -48,3 +48,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-ra --strict-markers"
+markers = [
+    "critical: test path quan trọng — auth fail / hub isolation / happy path lõi",
+]
