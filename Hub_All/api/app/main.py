@@ -90,16 +90,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     except Exception as e:  # noqa: BLE001 — Phase 1 không crash.
         logger.warning("redis_init_failed: %s", e)
 
-    # Phase 8.1 MCP — inject pool + redis vào module singleton sau bước 2
-    # Đặt sau redis init để inject cả redis (SearchService/AskService cache).
-    # set_pool import ở TOP create_app để tránh circular import (local import trong
-    # lifespan cũng được — cả hai cách đều an toàn vì server.py không import main.py).
-    if app.state.db_pool is not None:
-        from app.mcp.server import set_pool as mcp_set_pool  # noqa: PLC0415
-
-        mcp_set_pool(app.state.db_pool, app.state.redis)
-        logger.info("mcp_pool_injected")
-
     # 2.5) RAG config — load settings DB đã persist → apply os.environ + singleton.
     #      PHẢI chạy TRƯỚC setup_cocoindex (step 3): initial backfill embed mọi
     #      pending document và CẦN đúng provider/model admin đã lưu. Nếu load sau,
@@ -327,43 +317,13 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     """Factory tạo FastAPI app — gọi 1 lần ở module-level và trong unit test."""
     settings = get_settings()
 
-    # Phase 8.1 MCP — tạo ASGI sub-app TRƯỚC FastAPI init (thứ tự khai báo quan trọng)
-    # CRITICAL: stateless_http=True đặt trong FastMCP constructor (mcp==1.27.1 khác
-    # 1.9.4 — không có http_app(stateless_http=...) method).
-    # path "/" KHÔNG phải "/mcp" — tránh double-prefix (Cạm bẫy 2 RESEARCH.md):
-    #   app.mount("/mcp", _mcp_app) → _mcp_app nhận request đã stripped prefix /mcp
-    #   → FastMCP route "/" khớp đúng endpoint mcp trong Starlette sub-app.
-    # Import local để tránh circular import (server.py import app.* nhưng KHÔNG
-    # import app.main → safe).
-    from app.mcp.server import mcp as _mcp_server  # noqa: PLC0415
-
-    _mcp_app = _mcp_server.streamable_http_app()
-
-    # Compose lifespans: mcp==1.27.1 KHÔNG có combine_lifespans utility.
-    # Viết tay: lifespan cha chạy TRƯỚC (startup) / SAU (shutdown) lifespan MCP.
-    # _mcp_app.router.lifespan_context = lambda app: session_manager.run()
-    # → đây là async context manager khởi động StreamableHTTPSessionManager task group.
-    # CRITICAL: nếu KHÔNG compose → "Task group is not initialized" khi client gọi
-    # (Cạm bẫy 1 RESEARCH.md Pattern 1).
-    _mcp_lifespan = _mcp_app.router.lifespan_context
-
-    @asynccontextmanager
-    async def _composed_lifespan(app: FastAPI) -> AsyncIterator[None]:
-        """Compose lifespan FastAPI (bước 1-9) + lifespan MCP session manager.
-
-        Thứ tự: lifespan cha startup → MCP startup → yield → MCP shutdown → lifespan cha shutdown.
-        combine_lifespans không có trong mcp==1.27.1 → implement tương đương thủ công.
-        """
-        async with lifespan(app):
-            async with _mcp_lifespan(app):
-                yield
-
+    # Phase 8.2 (đảo D-04): MCP server KHÔNG còn mount in-process. MCP là process
+    # độc lập (`mcp_service/`) gọi API Service qua HTTP. App dùng trực tiếp
+    # `lifespan` module-level — không còn compose lifespan MCP.
     app = FastAPI(
         title="Medinet Wiki API",
         version="0.1.0",
-        # CRITICAL: _composed_lifespan BẮT BUỘC — chỉ app.mount() sẽ gây
-        # "Task group is not initialized" khi client gọi (Cạm bẫy 1 RESEARCH.md)
-        lifespan=_composed_lifespan,
+        lifespan=lifespan,
     )
 
     # Middleware order — P11 PITFALL (FastAPI executes last-added FIRST cho
@@ -579,11 +539,6 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         return resp.service_unavailable(
             message=f"Dịch vụ chưa sẵn sàng: {checks}"
         )
-
-    # Phase 8.1 MCP — mount ASGI sub-app tại /mcp (D-02)
-    # PHẢI đặt SAU tất cả include_router + exception_handler để tránh route conflict.
-    # _mcp_app là Starlette app handle Streamable HTTP JSON-RPC tại /mcp.
-    app.mount("/mcp", _mcp_app)
 
     return app
 
