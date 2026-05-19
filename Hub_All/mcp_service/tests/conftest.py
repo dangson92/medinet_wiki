@@ -1,10 +1,12 @@
-"""Fixture chung cho test MCP Service — Phase 8.2 Plan 05.
+"""Fixture chung cho test MCP Service — Phase 8.2 Plan 05 + Phase 8.3 Plan 01.
 
 Cung cấp:
 - `mock_ctx`     — factory tạo `ctx` MCP giả với (hoặc không có) header X-API-Key.
 - `reset_api_client` — autouse, reset singleton `_api_client` của server trước/sau
   mỗi test để base_url không leak giữa các test.
 - `api_base_url` — base URL dùng cho respx mock + override config qua env MCP_API_BASE_URL.
+- `oauth_store`  — (Phase 8.3) OAuthStore tạm trên SQLite :memory:, schema sẵn sàng.
+- `fake_pending_authorize` — (Phase 8.3) helper seed bản ghi oauth_pending cho Plan 02/03.
 """
 from __future__ import annotations
 
@@ -67,3 +69,50 @@ def api_base_url(monkeypatch: pytest.MonkeyPatch) -> str:
     get_settings.cache_clear()
     yield _API_BASE_URL
     get_settings.cache_clear()
+
+
+@pytest.fixture
+async def oauth_store():
+    """OAuthStore tạm trên SQLite :memory: — schema khởi tạo sẵn.
+
+    OAuthStore giữ một connection mở sau init_schema() → :memory: hoạt động
+    (DB sống cùng connection). Đóng store ở teardown.
+    """
+    from mcp_app.oauth.store import OAuthStore
+
+    store = OAuthStore(db_path=":memory:")
+    await store.init_schema()
+    yield store
+    await store.aclose()
+
+
+async def fake_pending_authorize(
+    store,
+    *,
+    txn: str = "txn-test",
+    client_id: str = "client-test",
+    redirect_uri: str = "https://claude.ai/api/mcp/auth_callback",
+    code_challenge: str = "challenge-test",
+    code_challenge_method: str = "S256",
+    client_state: str | None = "client-state-test",
+    scopes: list[str] | None = None,
+    created_at: int | None = None,
+) -> str:
+    """Seed 1 bản ghi oauth_pending để test login callback nối lại flow.
+
+    Trả về `txn` đã seed. Dùng ở Plan 02 Task 3 (test_login_callback_success_redirects)
+    và bất kỳ test nào cần pending-authorize params có sẵn trong store.
+    """
+    import time
+
+    await store.save_pending(
+        txn=txn,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
+        client_state=client_state,
+        scopes=scopes or ["wiki"],
+        created_at=created_at if created_at is not None else int(time.time()),
+    )
+    return txn
