@@ -53,9 +53,14 @@ services:
       FILE_STORE_DIR: /file_store
       APP_ENV: ${APP_ENV:-dev}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Gap SC5: ép cocoindex LMDB state vào thư mục tuyệt đối writable trong container.
+      # environment: thắng env_file → host (native) vẫn dùng .cocoindex/ tương đối.
+      COCOINDEX_DB: /app/.cocoindex/state.lmdb
+      COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
       - ./api/keys:/keys:ro
       - ./file_store:/file_store
+      - medinet_cocoindex_state:/app/.cocoindex
     # Host 8180 → container 8080. Frontend `api.ts` hardcode port 8180
     # (Hyper-V excluded range 8038-8137 trên Windows). Container nội bộ +
     # Dockerfile EXPOSE/uvicorn vẫn 8080 — chỉ map ở compose (D6: KHÔNG sửa frontend).
@@ -71,6 +76,7 @@ services:
 volumes:
   medinet_pgdata:
   medinet_redis_data:
+  medinet_cocoindex_state:
 
 networks:
   medinet_net:
