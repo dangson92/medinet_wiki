@@ -22,6 +22,11 @@ RUN groupadd --system --gid 1000 apiuser \
 WORKDIR /app
 COPY --from=builder --chown=apiuser:apiuser /app/.venv /app/.venv
 COPY --chown=apiuser:apiuser app ./app
+# Gap SC5: alembic.ini + migrations/ vào image để `alembic upgrade head` chạy
+# được trong container (boot_stack.sh bước 4/6). Thiếu 2 file này → alembic
+# báo "No 'script_location' key found".
+COPY --chown=apiuser:apiuser alembic.ini ./alembic.ini
+COPY --chown=apiuser:apiuser migrations ./migrations
 # Gap SC5: tạo sẵn thư mục cocoindex LMDB state + chown apiuser TRƯỚC khi hạ quyền.
 # /app do root sở hữu nên apiuser không tạo được thư mục con lúc runtime.
 RUN mkdir -p /app/.cocoindex && chown apiuser:apiuser /app/.cocoindex
