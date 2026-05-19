@@ -42,6 +42,10 @@ logger = logging.getLogger(__name__)
 # TTL (giây) của authorization code — ngắn, single-use (RFC 6749 §10.5).
 _AUTH_CODE_TTL = 600
 
+# TTL (giây) của pending-authorize transaction — khớp mốc 600s trong
+# OAuthStore.cleanup_expired. WR-02: complete_authorization phải kiểm hạn.
+_PENDING_TTL = 600
+
 
 class MedinetOAuthProvider(
     OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]
@@ -149,8 +153,16 @@ class MedinetOAuthProvider(
             OAuthStoreError: nếu `txn` không tồn tại / đã dùng / hết hạn.
         """
         pending = await self._store.load_pending(txn)
-        if pending is None:
+        if pending is None or pending["created_at"] < self._now() - _PENDING_TTL:
             raise OAuthStoreError("Phiên authorize hết hạn hoặc không hợp lệ")
+
+        required = ("access_token", "refresh_token", "user")
+        if not isinstance(login_data, dict) or not all(
+            login_data.get(k) for k in required
+        ):
+            raise OAuthStoreError(
+                "Phản hồi login từ API Service thiếu trường bắt buộc"
+            )
 
         code = self._new_opaque()
         code_payload = {
@@ -208,9 +220,18 @@ class MedinetOAuthProvider(
         Code single-use — xoá khỏi store sau exchange (RFC 6749 §10.5). Token mới
         bind downstream JWT/refresh + user payload từ record của code.
         """
-        record = await self._store.load_auth_code(authorization_code.code)
+        record = await self._store.claim_auth_code(authorization_code.code)
         if record is None:
-            raise OAuthStoreError("Authorization code không tồn tại hoặc đã dùng")
+            raise OAuthStoreError(
+                "Authorization code không tồn tại hoặc đã dùng"
+            )
+        # Code đã bị xoá nguyên tử — nếu save_token lỗi, code KHÔNG còn để replay.
+        # Kiểm hạn TẠI exchange: load_authorization_code đã kiểm expires_at,
+        # nhưng exchange_authorization_code có thể bị gọi trực tiếp (bỏ qua
+        # load_authorization_code) — claim_auth_code KHÔNG kiểm hạn. Vì vậy
+        # phải tự reject code hết hạn ở đây (RFC 6749 §10.5).
+        if record["expires_at"] < self._now():
+            raise OAuthStoreError("Authorization code đã hết hạn")
 
         access_token = self._new_opaque()
         refresh_token = self._new_opaque()
@@ -225,7 +246,6 @@ class MedinetOAuthProvider(
             user_payload=record["user_payload"],
             expires_at=self._now() + self._access_token_ttl,
         )
-        await self._store.delete_auth_code(authorization_code.code)
         logger.info(
             "MedinetOAuthProvider exchange code -> token, client_id=%s",
             record["client_id"],
@@ -270,12 +290,21 @@ class MedinetOAuthProvider(
 
         new_access = self._new_opaque()
         new_refresh = self._new_opaque()
-        await self._store.update_oauth_token(
-            old_access_token=record["access_token"],
+        ok = await self._store.rotate_token(
+            old_refresh_token=refresh_token.token,
             new_access_token=new_access,
             new_refresh_token=new_refresh,
             expires_at=self._now() + self._access_token_ttl,
         )
+        if not ok:
+            # rowcount != 1 — refresh token đã bị dùng/rotate (reuse detected).
+            logger.info(
+                "MedinetOAuthProvider refresh token reuse — client_id=%s",
+                record["client_id"],
+            )
+            raise OAuthStoreError(
+                "Refresh token đã dùng — vui lòng kết nối lại"
+            )
         result_scopes = scopes or record["scopes"]
         logger.info(
             "MedinetOAuthProvider rotate refresh token, client_id=%s",
@@ -319,8 +348,10 @@ class MedinetOAuthProvider(
         """
         if isinstance(token, RefreshToken):
             record = await self._store.load_token_by_refresh(token.token)
-            if record is not None:
-                await self._store.delete_token(record["access_token"])
         else:
-            await self._store.delete_token(token.token)
-        logger.info("MedinetOAuthProvider revoke token, client_id=%s", token.client_id)
+            record = await self._store.load_token(token.token)
+        if record is not None:
+            await self._store.delete_token(record["access_token"])
+        logger.info(
+            "MedinetOAuthProvider revoke token, client_id=%s", token.client_id
+        )
