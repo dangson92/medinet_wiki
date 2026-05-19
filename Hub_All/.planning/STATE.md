@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: Phase 08.3 IN PROGRESS
-last_updated: "2026-05-19T09:41:00Z"
+last_updated: "2026-05-19T10:15:00Z"
 progress:
   total_phases: 12
   completed_phases: 10
@@ -17,7 +17,7 @@ progress:
 **Mã dự án:** MEDWIKI
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Ngày tạo state:** 2026-05-13 (pivot lần 2 — M1 Docling abandoned)
-**Last updated:** 2026-05-19 (Phase 8.3 Plan 02 — lớp OAuth Authorization Server MCP Service: MedinetOAuthProvider 9 method + login form Medinet + wire FastMCP auth_server_provider + lifespan init_schema; 63/63 test mcp_service PASS)
+**Last updated:** 2026-05-19 (Phase 8.3 Plan 03 — đường danh tính OAuth token → downstream JWT: extract_oauth_token + ApiClient forward Bearer JWT + refresh_jwt; tool resolve credential + retry-on-401 refresh rotation; 78/78 test mcp_service PASS + 119 regression API)
 
 ---
 
@@ -42,7 +42,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 ## Current Position
 
 Phase: 08.3 (mcp-oauth-deploy-public-https) — 🔄 IN PROGRESS
-Plan: 2 of 4 (08.3-01 ✅ + 08.3-02 ✅ COMPLETE 2026-05-19) — tiếp theo 08.3-03
+Plan: 3 of 4 (08.3-01 ✅ + 08.3-02 ✅ + 08.3-03 ✅ COMPLETE 2026-05-19) — tiếp theo 08.3-04
+- 08.3-03 ✅: đường danh tính OAuth token → API Service (MCP-02, D-03/D-04) — `auth.extract_oauth_token` đọc `Authorization: Bearer <token>` từ MCP Context (song song `extract_api_key` — client local KHÔNG vỡ) + dataclass `Credential` (kind jwt/api_key + value + oauth_token); `ApiClient._request/get/post` nhận thêm param `jwt` → có jwt forward header `Authorization: Bearer <JWT>` thay `X-API-Key` (D-03), thiếu cả 2 credential → `ApiClientError`; `ApiClient.refresh_jwt` gọi `POST /api/auth/refresh` đổi JWT downstream mới (Pitfall 4 — JWT TTL 900s hết hạn giữa phiên OAuth dài), 401 → None, refresh có rotation (AUTH-02); `server._resolve_credential` ưu tiên OAuth token (verify `provider.load_access_token` → lấy downstream JWT đúng user từ store) fallback X-API-Key, token sai/thiếu → `ToolError` MCP_UNAUTHORIZED; `server._call_api` nhánh JWT gặp 401 → `refresh_jwt` → `update_downstream_jwt` lưu rotation CẢ access+refresh (Pitfall 5) → retry 1 lần, nhánh api_key gọi thẳng KHÔNG retry; 3 tool dùng `_resolve_credential`+`_call_api` thay `require_api_key` — body logic giữ nguyên. 78/78 test mcp_service PASS (63 cũ + 15 mới) + 119 regression API unit PASS, ruff clean, mypy đồng số baseline (không lỗi type mới). 2 task TDD RED→GREEN. Decisions: `Credential` dataclass đặt trong auth.py; helper `_jwt`/`_key` tách giá trị theo kind; nhánh api_key KHÔNG retry-on-401 (X-API-Key không refresh được).
 - 08.3-02 ✅: lớp OAuth Authorization Server cho MCP Service (lõi MCP-01) — `ApiClient.login()` gọi `POST /api/auth/login` xác thực credential Medinet (D-02, ủy thác Argon2 cho API Service, trả dict/None/raise); `MedinetOAuthProvider` kế thừa `OAuthAuthorizationServerProvider` SDK mcp 1.27 — đủ 9 method (get/register_client, authorize, load/exchange auth code, load/exchange refresh token, load_access_token, revoke) + bổ trợ `complete_authorization` (login callback gọi để phát code bind downstream JWT); token OAuth opaque, code single-use, refresh rotation; `oauth/login.py` route GET `/login` HTML form + POST `/login/callback` (credential sai → render lỗi, đúng → redirect 302 kèm code+state); `server.py` `build_asgi_app()` chuyển thành FACTORY (FastMCP mới mỗi lần gọi — session-manager .run() 1 lần/instance) + 3 tool tách sang `register_tools(mcp)` (body giữ nguyên), wired `auth_server_provider`+`AuthSettings` → SDK tự mount metadata/authorize/token/register; lifespan compose chạy `OAuthStore.init_schema()` lúc startup bảo toàn lifespan SDK. 63/63 test mcp_service PASS (43 cũ + 20 mới), ruff clean. 3 task TDD RED→GREEN. Decisions: build_asgi_app factory + register_tools (option b plan — fix RuntimeError session-manager .run() 1 lần).
 - 08.3-01 ✅: nền tảng lớp OAuth MCP Service — thêm `aiosqlite` 0.22.1 + `uvicorn` 0.47.0 vào `pyproject.toml` + sinh `uv.lock` (mcp pin giữ 1.27.x — P19); `Settings` mở rộng 4 field OAuth (`oauth_issuer_url` validated http/https có default an toàn, `oauth_state_db_path`, token TTL access 3600 / refresh 2592000); package `mcp_app/oauth/` mới với `OAuthStore` — persistence SQLite 4 bảng (`oauth_clients`/`oauth_auth_codes`/`oauth_tokens`/`oauth_pending`) CRUD roundtrip + `update_downstream_jwt` rotate cả 2 token (Pitfall 5) + `cleanup_expired`; query parametrized chống SQL injection, không log secret; conftest thêm fixture `oauth_store` (:memory:) + helper `fake_pending_authorize`; `test_oauth_store.py` 10 test (2 @critical). 43/43 test mcp_service PASS, ruff clean. 3 task. Decisions: OAuthStore giữ 1 connection xuyên suốt (để fixture :memory: chạy); `oauth_issuer_url` default an toàn cho HEALTHCHECK Plan 04; schema `oauth_pending` author ngay Plan 01.
 
