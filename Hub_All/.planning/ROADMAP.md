@@ -364,7 +364,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 - [x] 08.2-01-PLAN.md — Khung package mcp_service/ + config + schemas + ApiClient httpx (Wave 1, MCP-01/MCP-02) ✅ 2026-05-19
 - [x] 08.2-02-PLAN.md — get_api_key_or_jwt_with_hubs + 4 endpoint search/ask + GET /api/hubs nhận X-API-Key, scope theo role (Wave 1, MCP-01/MCP-02) ✅ 2026-05-19
-- [ ] 08.2-03-PLAN.md — FastMCP server + 3 tool gọi API qua HTTP + entrypoint standalone (Wave 2, MCP-01/MCP-02)
+- [x] 08.2-03-PLAN.md — FastMCP server + 3 tool gọi API qua HTTP + entrypoint standalone (Wave 2, MCP-01/MCP-02) ✅ 2026-05-19
 - [ ] 08.2-04-PLAN.md — Gỡ mount /mcp + _composed_lifespan khỏi api/main.py, xoá app/mcp/ + dep mcp (Wave 3, MCP-01/MCP-02)
 - [ ] 08.2-05-PLAN.md — Test suite mcp_service/ respx mock API + regression API (Wave 4, MCP-01/MCP-02)
 

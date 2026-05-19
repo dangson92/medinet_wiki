@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: Executing Phase 08.2
-last_updated: "2026-05-19T07:45:00Z"
+last_updated: "2026-05-19T09:30:00Z"
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 51
-  completed_plans: 48
-  percent: 94
+  completed_plans: 49
+  percent: 96
 ---
 
 # State — MEDWIKI
@@ -17,7 +17,7 @@ progress:
 **Mã dự án:** MEDWIKI
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Ngày tạo state:** 2026-05-13 (pivot lần 2 — M1 Docling abandoned)
-**Last updated:** 2026-05-19 (Phase 8 gap closure 08-05 — đóng gap SC5 cocoindex LMDB Permission denied; boot_stack.sh 6/6 PASS)
+**Last updated:** 2026-05-19 (Phase 8.2 Plan 03 — lõi MCP Service standalone: FastMCP + 3 tool gọi API qua HTTP + entrypoint; 24/24 test PASS)
 
 ---
 
@@ -42,7 +42,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 ## Current Position
 
 Phase: 08.2 (mcp-service-standalone-process) — EXECUTING
-Plan: 3 of 5 (08.2-01 ✅ + 08.2-02 ✅ COMPLETE 2026-05-19)
+Plan: 4 of 5 (08.2-01 ✅ + 08.2-02 ✅ + 08.2-03 ✅ COMPLETE 2026-05-19)
+- 08.2-03 ✅: lõi MCP Service — auth.py trích X-API-Key từ HTTP header (bỏ verify DB); server.py FastMCP + 3 tool (list_hubs/search_wiki/ask_wiki) gọi API Service qua HTTP bằng ApiClient, map 401/403/400/5xx → ToolError; entrypoint build_asgi_app()+main() chạy standalone qua `python -m mcp_app.server` port 8190. Đảo D-04 hoàn tất ở tầng tool. 3 task (TDD Task 1+2), 14 test mới PASS (5 auth + 9 server), tổng 24/24 test mcp_service PASS, ruff clean. MCP-02: expose 3 tool, list_documents/get_document DEFER (nợ kỹ thuật).
 - 08.2-02 ✅: mở auth API Service cho MCP Service — get_api_key_or_jwt_with_hubs (X-API-Key HOặC JWT → UserWithHubs); 4 endpoint search/ask + GET /api/hubs nhận X-API-Key; HubService.list_for_hubs scope non-admin. BLOCKER fix SC2/SC3/SC4. 3 task, 13 test PASS, regression 122 unit PASS.
 | Field | Value |
 |---|---|
@@ -50,7 +51,7 @@ Plan: 3 of 5 (08.2-01 ✅ + 08.2-02 ✅ COMPLETE 2026-05-19)
 | Phase | **Phase 8 — Frontend E2E Smoke** ✅ COMPLETE (4/4 plans, 2026-05-19) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
 | Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01). 08-02 ✅ (Wave 2: fix gap api-side router /api/ai/chat + port 8180 — COMPAT-01). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01). 08-04 ✅ (Wave 4: boot stack + checklist + biên bản UAT — COMPAT-01). 08-05 ✅ (Wave 5: gap closure SC5 — fix cocoindex LMDB Permission denied; `boot_stack.sh` 6/6 PASS). Tất cả 2026-05-19. |
 | Status | **Phase 8 COMPLETE — user accept đóng phase 2026-05-19.** Frontend E2E Smoke verify-only, KHÔNG sửa frontend (D6 tôn trọng tuyệt đối — 0 file `frontend/` toàn phase). 08-01 đối chiếu contract 54 endpoint `api.ts` ↔ router FastAPI ↔ Go signature `m1-go-archived` → `08-CONTRACT-DIFF.md` (SC3). 08-02 fix gap api-side: router `POST /api/ai/chat` proxy LiteLLM + port mapping `8180:8080` + CORS dev (SC1/SC5). 08-03 test integration golden path API + VN filename UTF-8 (SC2/SC4 — 2 test critical PASS per-file). 08-04 `boot_stack.sh` + `08-SMOKE-CHECKLIST.md` + checkpoint human-verify (auto-approve `--auto`). Verify `human_needed`: 8/11 must-have auto-verified, regression 109/109 unit PASS, code review 0 Critical/3 Warning/5 Info (`08-REVIEW.md`). 3 mục cần con người (SC1 render 11 trang React, SC2-browser citation `[1]` clickable, SC5 docker compose healthy) defer sang `/gsd-verify-work 8` — lưu `08-HUMAN-UAT.md` (status partial, 2 passed / 3 pending) — cùng pattern Phase 6/7. ⚠️ Khôi phục: `ROADMAP.md` bị gsd-planner cắt cụt 464→10 dòng ở commit `15cbb22`, đã restore đầy đủ từ git `6040c46`. Khuyến nghị verify Phase 8 thật + chạy `/gsd-secure-phase 8` (security gate). |
-| Last activity | 2026-05-19 — `/gsd-execute-phase 8.2`: thực thi 08.2-02 — mở auth API Service cho MCP Service. Thêm `get_api_key_or_jwt_with_hubs` (`dependencies.py` — verify X-API-Key HOặC JWT → load hub_ids từ user_hubs → UserWithHubs); đổi 4 endpoint search/ask (+`/api/ask/cross-hub` đồng bộ) sang dependency mới; nới `GET /api/hubs` sang `get_api_key_or_jwt` + scope theo role qua `HubService.list_for_hubs` (5 endpoint hubs mutate GIỮ admin-only). BLOCKER fix SC2/SC3/SC4 — điều kiện tiên quyết Plan 03. 3 task (TDD Task 1+3), 13 test mới PASS (7 auth dependency/endpoint + 3 hub scope + 3 search/ask), regression 122 unit PASS, ruff clean. Trước đó 08.2-01 (Wave 1) — dựng nền móng `mcp_service/` độc lập. |
+| Last activity | 2026-05-19 — `/gsd-execute-phase 8.2`: thực thi 08.2-03 (Wave 2) — lõi MCP Service standalone. Tạo `mcp_service/mcp_app/auth.py` (`extract_api_key`/`require_api_key` trích `X-API-Key` từ `ctx.request_context.request.headers` — bỏ verify DB, verify chuyển sang API Service) + `server.py` (FastMCP `stateless_http=True` + 3 tool `list_hubs`/`search_wiki`/`ask_wiki` gọi API Service qua HTTP bằng `ApiClient`; `_map_api_error` map 401→MCP_UNAUTHORIZED, 403→HUB_ACCESS_DENIED, 400→INVALID_QUERY, 5xx→API_ERROR message sạch; KHÔNG import service layer, KHÔNG tự ghi usage_events) + entrypoint `build_asgi_app()`+`main()` chạy standalone `python -m mcp_app.server` port 8190. Đảo D-04 hoàn tất ở tầng tool. 3 task (TDD Task 1+2), 14 test mới PASS, tổng 24/24 test `mcp_service` PASS, ruff clean, ASGI app build OK. **MCP-02:** Phase 8.2 expose 3 tool; `list_documents`/`get_document` DEFER — nợ kỹ thuật. Trước đó 08.2-02 — mở auth API Service cho MCP Service. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7/8 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · 5 Phase 7 (ASK-01..05) · **COMPAT-01 Phase 8** — lớp tĩnh/tự động ĐẠT (SC3/SC4 + regression); SC1/SC2-browser/SC5 chờ human UAT (`/gsd-verify-work 8`) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
