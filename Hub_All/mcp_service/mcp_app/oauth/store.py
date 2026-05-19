@@ -76,6 +76,10 @@ _SCHEMA_STATEMENTS = (
         created_at INTEGER NOT NULL
     )
     """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_tokens_refresh
+        ON oauth_tokens(refresh_token)
+    """,
 )
 
 
@@ -208,6 +212,35 @@ class OAuthStore:
             "expires_at": row[5],
         }
 
+    async def claim_auth_code(self, code: str) -> dict | None:
+        """Đọc + xoá authorization code trong MỘT bước nguyên tử (DELETE ... RETURNING).
+
+        Khác load_auth_code: claim_auth_code XOÁ code ngay khi đọc — nếu thao tác
+        save_token kế tiếp lỗi, code KHÔNG còn trong store để replay (CR-01,
+        RFC 6749 §10.5). Trả None nếu code không tồn tại (đã bị claim trước đó).
+        Lưu ý: claim_auth_code KHÔNG kiểm expires_at — caller (provider) tự kiểm
+        hạn sau khi claim.
+        """
+        conn = self._require_conn()
+        async with conn.execute(
+            "DELETE FROM oauth_auth_codes WHERE code = ? RETURNING "
+            "client_id, code_payload, downstream_jwt, "
+            "downstream_refresh_token, user_payload, expires_at",
+            (code,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        await conn.commit()
+        if row is None:
+            return None
+        return {
+            "client_id": row[0],
+            "code_payload": json.loads(row[1]),
+            "downstream_jwt": row[2],
+            "downstream_refresh_token": row[3],
+            "user_payload": json.loads(row[4]),
+            "expires_at": row[5],
+        }
+
     async def delete_auth_code(self, code: str) -> None:
         """Xoá authorization code (single-use sau khi exchange)."""
         conn = self._require_conn()
@@ -318,6 +351,29 @@ class OAuthStore:
             (new_access_token, new_refresh_token, expires_at, old_access_token),
         )
         await conn.commit()
+
+    async def rotate_token(
+        self,
+        old_refresh_token: str,
+        new_access_token: str,
+        new_refresh_token: str,
+        expires_at: int,
+    ) -> bool:
+        """Rotate token OAuth định vị theo refresh_token (giá trị caller cầm).
+
+        Trả True nếu UPDATE khớp đúng 1 dòng; False nếu refresh token đã bị dùng/
+        rotate (rowcount != 1) — caller PHẢI coi đây là refresh-token reuse và từ
+        chối (CR-02, RFC 6749 §10.4). Khác update_oauth_token: định vị theo
+        refresh_token + kiểm rowcount thay vì WHERE access_token đã hết hạn.
+        """
+        conn = self._require_conn()
+        cursor = await conn.execute(
+            "UPDATE oauth_tokens SET access_token = ?, refresh_token = ?, "
+            "expires_at = ? WHERE refresh_token = ?",
+            (new_access_token, new_refresh_token, expires_at, old_refresh_token),
+        )
+        await conn.commit()
+        return cursor.rowcount == 1
 
     async def delete_token(self, access_token: str) -> None:
         """Xoá OAuth token (hỗ trợ revoke)."""
