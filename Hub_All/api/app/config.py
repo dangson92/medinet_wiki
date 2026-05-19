@@ -49,7 +49,10 @@ class Settings(BaseSettings):
     # Cocoindex 1.0.3 LMDB path (Q5 — replace COCOINDEX_DATABASE_URL Postgres
     # cocoindex 0.x assumption sai). Cocoindex internal state (memo cache,
     # fingerprint, lineage) lưu LMDB local filesystem. Default tương đối project root.
-    cocoindex_lmdb_path: Path = Path("Hub_All/.cocoindex/state.lmdb")
+    # Default TƯƠNG ĐỐI `.cocoindex/` (không tiền tố `Hub_All/`) — writable trong
+    # mọi cwd: chạy native uvicorn (cwd `api/`) hoặc container override env tuyệt đối.
+    # Gap SC5 fix — Hub_All/ prefix gây Permission denied trong container.
+    cocoindex_lmdb_path: Path = Path(".cocoindex/state.lmdb")
 
     # Watchdog timeout — Plan 04-05 REVISION 2 NEW (INGEST-06, P8 mitigation).
     # 5 phút headroom cho `cocoindex_app.update_blocking()` documents lớn (DOCX 50

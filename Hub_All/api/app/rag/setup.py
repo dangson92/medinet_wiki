@@ -61,7 +61,10 @@ def setup_cocoindex(settings: Settings) -> None:
     """
     # 1) Set COCOINDEX_DB (LMDB path) — Q5.
     #    Cocoindex 1.0.3 đọc env tại default_env() init time — set trước import flow.
-    os.environ.setdefault("COCOINDEX_DB", str(settings.cocoindex_lmdb_path))
+    #    GÁN trực tiếp (không setdefault) để Settings.cocoindex_lmdb_path là single
+    #    source of truth — `.env` COCOINDEX_DB chỉ còn vai trò feed pydantic-settings,
+    #    không bypass. Gap SC5 fix.
+    os.environ["COCOINDEX_DB"] = str(settings.cocoindex_lmdb_path)
     logger.info(
         "cocoindex_setup_start: lmdb=%s asyncpg_dsn=%s",
         settings.cocoindex_lmdb_path,
