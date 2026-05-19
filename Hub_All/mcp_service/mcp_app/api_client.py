@@ -9,6 +9,10 @@ thay vì import service layer in-process. `ApiClient`:
 
 Bảo mật (T-08.2-01-I): KHÔNG bao giờ log `api_key`, header, hay URL kèm query string.
 Khi log lỗi chỉ log `method`, `path`, `status_code`, `error.code`.
+
+Phase 8.3 (MCP-01, D-02): thêm method `login()` gọi `POST /api/auth/login` để bước
+login của OAuth flow xác thực bằng tài khoản Medinet — credential ủy thác hoàn toàn
+API Service (Argon2), MCP Service KHÔNG tự verify password và KHÔNG log email/password.
 """
 from __future__ import annotations
 
@@ -141,3 +145,54 @@ class ApiClient:
     ) -> Any:
         """Gọi POST tới API Service."""
         return await self._request("POST", path, api_key=api_key, json_body=json_body)
+
+    async def login(self, email: str, password: str) -> dict | None:
+        """Xác thực credential Medinet qua API Service (D-02). None nếu credential sai.
+
+        Gọi POST /api/auth/login. KHÔNG verify password tại MCP Service — ủy thác
+        hoàn toàn API Service (Argon2). Bảo mật: KHÔNG log email/password.
+
+        Returns:
+            - dict `{access_token, refresh_token, expires_at, user}` khi login OK.
+            - `None` khi credential sai (HTTP 401) — kết quả hợp lệ của login form.
+
+        Raises:
+            ApiServerError: lỗi hạ tầng (network, 5xx, response không hợp lệ) — KHÁC
+                credential sai; login form sẽ render lỗi hệ thống chung.
+        """
+        try:
+            resp = await self._client.post(
+                "/api/auth/login", json={"email": email, "password": password}
+            )
+        except httpx.RequestError as e:
+            logger.error("API Service không phản hồi khi login: %s", type(e).__name__)
+            raise ApiServerError(
+                f"Không kết nối được API Service: {type(e).__name__}"
+            ) from e
+
+        try:
+            envelope = resp.json()
+        except ValueError as e:
+            logger.error(
+                "API Service trả response login không hợp lệ: status_code=%s",
+                resp.status_code,
+            )
+            raise ApiServerError(
+                f"API Service trả response không hợp lệ (status {resp.status_code})"
+            ) from e
+
+        if resp.status_code == 200 and envelope.get("success") is True:
+            return envelope.get("data")  # {access_token, refresh_token, expires_at, user}
+        if resp.status_code == 401:
+            logger.info("Login thất bại — credential sai (status 401)")
+            return None
+
+        err = envelope.get("error") or {}
+        code = err.get("code", "ERROR")
+        message = err.get("message", "lỗi không xác định")
+        logger.error(
+            "API Service trả lỗi khi login: status_code=%s error_code=%s",
+            resp.status_code,
+            code,
+        )
+        raise ApiServerError(f"{code}: {message}")
