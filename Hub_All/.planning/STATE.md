@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
-status: Ready to execute
-last_updated: "2026-05-19T07:14:35.998Z"
+status: Executing Phase 08.2
+last_updated: "2026-05-19T07:25:28Z"
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 51
-  completed_plans: 46
-  percent: 90
+  completed_plans: 47
+  percent: 92
 ---
 
 # State — MEDWIKI
@@ -27,7 +27,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 **Core value:** Ingestion tri thức của Medinet phải tái hiện trung thực cấu trúc tài liệu nguồn (heading, bảng, ảnh có chú thích, công thức, OCR tiếng Việt cho scanned PDF — defer trong M2 vì D4) — biến mọi tài liệu y tế / dược / HCNS thành chunk semantic giàu metadata, để top-3 retrieval đạt ≥ 75% trên eval set thật.
 
-**Current focus:** M2 = Full RAG Rewrite. Pivot lần 2 ngày 2026-05-13 từ "RAG Quality with Docling" sang "Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)". M1 cũ abandoned (28 plans code complete nhưng chưa runtime verify) — phases archive vào `.planning/milestones/v1.0-docling-rag/`.
+**Current focus:** Phase 08.2 — mcp-service-standalone-process
 
 **Mode:** YOLO · **Granularity:** Large (10 phase — reconciled từ FEATURES 8 + ARCHITECTURE 12 trong SUMMARY.md) · **Phase numbering:** Reset về Phase 1 (`--reset-phase-numbers`)
 
@@ -41,13 +41,15 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 
 ## Current Position
 
+Phase: 08.2 (mcp-service-standalone-process) — EXECUTING
+Plan: 2 of 5 (08.2-01 ✅ COMPLETE 2026-05-19 — nền móng mcp_service/ độc lập)
 | Field | Value |
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
 | Phase | **Phase 8 — Frontend E2E Smoke** ✅ COMPLETE (4/4 plans, 2026-05-19) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
 | Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01). 08-02 ✅ (Wave 2: fix gap api-side router /api/ai/chat + port 8180 — COMPAT-01). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01). 08-04 ✅ (Wave 4: boot stack + checklist + biên bản UAT — COMPAT-01). 08-05 ✅ (Wave 5: gap closure SC5 — fix cocoindex LMDB Permission denied; `boot_stack.sh` 6/6 PASS). Tất cả 2026-05-19. |
 | Status | **Phase 8 COMPLETE — user accept đóng phase 2026-05-19.** Frontend E2E Smoke verify-only, KHÔNG sửa frontend (D6 tôn trọng tuyệt đối — 0 file `frontend/` toàn phase). 08-01 đối chiếu contract 54 endpoint `api.ts` ↔ router FastAPI ↔ Go signature `m1-go-archived` → `08-CONTRACT-DIFF.md` (SC3). 08-02 fix gap api-side: router `POST /api/ai/chat` proxy LiteLLM + port mapping `8180:8080` + CORS dev (SC1/SC5). 08-03 test integration golden path API + VN filename UTF-8 (SC2/SC4 — 2 test critical PASS per-file). 08-04 `boot_stack.sh` + `08-SMOKE-CHECKLIST.md` + checkpoint human-verify (auto-approve `--auto`). Verify `human_needed`: 8/11 must-have auto-verified, regression 109/109 unit PASS, code review 0 Critical/3 Warning/5 Info (`08-REVIEW.md`). 3 mục cần con người (SC1 render 11 trang React, SC2-browser citation `[1]` clickable, SC5 docker compose healthy) defer sang `/gsd-verify-work 8` — lưu `08-HUMAN-UAT.md` (status partial, 2 passed / 3 pending) — cùng pattern Phase 6/7. ⚠️ Khôi phục: `ROADMAP.md` bị gsd-planner cắt cụt 464→10 dòng ở commit `15cbb22`, đã restore đầy đủ từ git `6040c46`. Khuyến nghị verify Phase 8 thật + chạy `/gsd-secure-phase 8` (security gate). |
-| Last activity | 2026-05-19 — `/gsd-execute-phase 8 --gaps-only`: thực thi 08-05 gap closure SC5 (cocoindex LMDB Permission denied). 3 task auto + 1 task bổ sung (COPY alembic.ini/migrations vào image) + checkpoint human-verify approved. `boot_stack.sh` (6/6) PASS, 3-service healthy. Dọn 3 documents + 65 chunks data dev rác. |
+| Last activity | 2026-05-19 — `/gsd-execute-phase 8.2`: thực thi 08.2-01 (Wave 1) — dựng nền móng MCP Service độc lập. Tạo package `Hub_All/mcp_service/` (Python package độc lập, dependency tối thiểu mcp/httpx/pydantic/pydantic-settings — KHÔNG import app.*), 3 module nền: config.py (Settings validate base URL chống SSRF), schemas.py (6 Pydantic output model port từ Phase 8.1), api_client.py (ApiClient httpx unwrap envelope + forward X-API-Key + map exception). 3 task auto, 10/10 test PASS, ruff clean. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7/8 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · 5 Phase 7 (ASK-01..05) · **COMPAT-01 Phase 8** — lớp tĩnh/tự động ĐẠT (SC3/SC4 + regression); SC1/SC2-browser/SC5 chờ human UAT (`/gsd-verify-work 8`) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
