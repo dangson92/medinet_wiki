@@ -42,6 +42,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [x] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới ✓ (2026-05-19, 4 plans / 4 waves, COMPAT-01; verify human_needed — 8/11 auto-verified, regression 109/109 unit PASS, code review 0 Critical; SC1/SC2-browser/SC5 cần human UAT — 08-HUMAN-UAT.md)
 - [x] **Phase 8.1: MCP Server — Expose Wiki Tools** *(INSERTED)* — MCP server Streamable HTTP tại `/mcp` expose 3 tool read-only (`search_wiki`/`ask_wiki`/`list_hubs`) cho AI client ngoài ✓ (2026-05-19, 3 plans / 3 waves; verify human_needed — 3/5 SC auto-verified, unit `tests/unit/mcp/` 9 PASS, regression 118 PASS, code review CR-01 đã vá; SC1/SC5 chờ human UAT — 08.1-HUMAN-UAT.md)
 - [ ] **Phase 8.2: MCP Service — Tách Thành Process Độc Lập** *(INSERTED)* — tách MCP khỏi process FastAPI thành service riêng `Hub_All/mcp_service/` gọi API qua HTTP (đảo decision D-04 của Phase 8.1)
+- [ ] **Phase 8.3: MCP OAuth 2.0 + Deploy Public HTTPS** *(INSERTED)* — thêm lớp OAuth 2.0 + public HTTPS cho MCP Service để Claude web "Add custom connector" kết nối được tới MeWiki MCP
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
 
@@ -369,6 +370,36 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 08.2-05-PLAN.md — Test suite mcp_service/ respx mock API + regression API (Wave 4, MCP-01/MCP-02) ✅ 2026-05-19
 
 **Phase 8.2 ✅ COMPLETE (2026-05-19)** — 5/5 plans / 4 waves. MCP Service tách thành process độc lập gọi API qua HTTP (đảo D-04 Phase 8.1). SC1/SC2/SC3/SC5 auto-verified; SC4 (`usage_events`) `human_needed` — UAT thủ công ghi README. 33 test mcp_service/ PASS + 119 regression API unit PASS, ruff clean.
+
+---
+### Phase 8.3: MCP OAuth 2.0 + Deploy Public HTTPS *(INSERTED 2026-05-19)*
+
+**Goal:** Cho phép Claude web "Add custom connector" kết nối tới MeWiki MCP Service. Hiện MCP Service (`Hub_All/mcp_service/`, port 8190) chỉ chạy HTTP localhost và xác thực bằng header `X-API-Key` — dialog connector của Claude web chỉ chấp nhận URL public HTTPS + OAuth 2.0, không gửi được custom header. Phase này thêm lớp OAuth 2.0 cho MCP Service và đưa service ra public qua HTTPS. Kiến trúc đích: Claude web ─(OAuth)─► MCP Service (public HTTPS) ─(JWT RS256 nội bộ theo user)─► API Service.
+
+**Depends on:** Phase 8.2 (MCP Service standalone process tồn tại — phase này bọc thêm auth + deploy)
+**Parallel-able with:** Phase 9 (eval) — độc lập task
+**Requirements:** MCP-01, MCP-02 (mở rộng auth surface — chốt REQ-ID mới ở /gsd-discuss-phase nếu cần)
+**Research flag:** **MEDIUM** — MCP authorization spec (OAuth 2.0 + Dynamic Client Registration / Protected Resource Metadata) còn mới; cần xác minh FastMCP hỗ trợ tới đâu và Claude web yêu cầu flow nào. Quyết định gray-area: tự implement OAuth provider vs đặt MCP sau gateway/IdP có sẵn.
+
+**Bối cảnh quyết định (chốt ở /gsd-discuss-phase):**
+- OAuth: tự implement OAuth 2.0 trong MCP Service (theo MCP auth spec — authorization server metadata + DCR) HAY đặt sau một IdP/gateway xử lý OAuth rồi map sang `X-API-Key` nội bộ.
+- Public HTTPS: viết Dockerfile cho `mcp_service/`, đặt sau reverse proxy có TLS (Caddy/nginx/Traefik), cấp domain.
+- Mapping danh tính: token OAuth của Claude web → API key / hub scope nào của API Service (giữ hub isolation API-side).
+- `X-API-Key` local (Claude Code / Desktop) vẫn dùng được song song hay thay thế hoàn toàn.
+
+**Success Criteria** (draft — chốt ở /gsd-discuss-phase):
+  1. MCP Service expose endpoint OAuth 2.0 đúng MCP authorization spec (authorization server metadata / protected resource metadata); Claude web "Add custom connector" hoàn tất được OAuth flow
+  2. MCP Service chạy public qua HTTPS (Dockerfile + reverse proxy TLS + domain), không còn chỉ localhost HTTP
+  3. Token OAuth hợp lệ → MCP tool gọi API Service với danh tính/hub scope đúng; token thiếu/sai → từ chối, hub isolation vẫn enforce API-side
+  4. Kết nối thật từ Claude web: 3 tool `list_hubs`/`search_wiki`/`ask_wiki` gọi được qua connector
+  5. Test suite phủ OAuth flow (token hợp lệ/hết hạn/sai scope); regression `mcp_service/` + API không vỡ
+
+**Plans:** 4 plans (4 waves)
+
+- [ ] 08.3-01-PLAN.md — Nền tảng: deps aiosqlite/uvicorn + config OAuth + OAuthStore SQLite + Wave 0 test scaffolding (Wave 1, MCP-01)
+- [ ] 08.3-02-PLAN.md — MedinetOAuthProvider 9 method + login form xác thực Medinet + wire FastMCP auth_server_provider (Wave 2, MCP-01)
+- [ ] 08.3-03-PLAN.md — extract_oauth_token + forward Bearer JWT downstream + refresh-on-401 + tool resolve OAuth token (Wave 3, MCP-02)
+- [ ] 08.3-04-PLAN.md — Dockerfile mcp_service + Caddy reverse proxy auto-TLS + docker-compose + 08.3-HUMAN-UAT.md SC4 (Wave 4, MCP-01/MCP-02)
 
 ---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
