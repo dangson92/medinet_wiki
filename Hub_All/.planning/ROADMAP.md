@@ -231,7 +231,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Redis cache hoạt động: 2 lần gọi `GET /api/search?q=...` giống nhau trong 5 phút → lần 2 hit cache (latency <50ms); upload document mới trong hub → cache invalidate qua Pub/Sub channel `hub:{hub_id}:invalidate`
   5. Recall sanity check trên 50 query VN sample: top-3 với hub filter trả ≥1 chunk relevant cho mỗi query (manual review) — chuẩn bị data cho Phase 9 eval gate ≥75%
 
-**Plans:** 4 plans (4 waves) — 4/4 complete
+**Plans:** 5 plans (5 waves) — 4/4 complete + 1 gap closure (08-05)
 
 > **Phase 6 hoàn tất (2026-05-18):** 3 endpoint search reachable (`POST /api/search`, `/api/search/cross-hub`, `/api/search/similar` — D-02 dùng POST + body `query` thay vì GET `?q=`). Hub isolation E4 verified — `test_search_hub_isolation.py` 6/6 critical test PASS (viewer Hub A explicit `hub_ids:[A,B]` chỉ thấy chunk A; cross-hub A+B request `[A,B,C]` chỉ A,B). Code review 0 Critical / 4 Warning / 5 Info. Verify status `human_needed`: 4/6 SC verified qua code + test; 4 mục cần dữ liệu thật defer (latency p95 single/cross-hub, recall 50 query VN — Phase 9, cache invalidation E2E test) — lưu `06-HUMAN-UAT.md`.
 
@@ -295,7 +295,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Vietnamese filename test PASS: upload "Khám bệnh đa khoa.docx" → response trả `filename` chính xác UTF-8 (không mojibake); GET document detail hiển thị tên file đúng
   5. ~~Xóa backend/ + tag m1-go-archived~~ ĐÃ THỰC HIỆN 2026-05-14 (commit `72f18ef` parent). Còn lại: verify `docker compose up` lên healthy 3-service (postgres + redis + python-api) không reference Go.
 
-**Plans:** 4 plans (4 waves) — 4/4 complete
+**Plans:** 5 plans (5 waves) — 4/4 complete + 1 gap closure (08-05)
 
 > **Phase 8 hoàn tất (2026-05-19):** Frontend E2E Smoke verify-only — KHÔNG sửa frontend (D6 tôn trọng tuyệt đối, 0 file `frontend/`). 08-01 đối chiếu contract 54 endpoint `api.ts` ↔ router FastAPI ↔ Go signature `m1-go-archived` (36 MATCH / 1 BLOCKER / 15 EXCLUDED / 2 FIX-API) → `08-CONTRACT-DIFF.md` (SC3). 08-02 fix gap api-side: router `POST /api/ai/chat` proxy LiteLLM cho GeminiAssistant + port mapping `8180:8080` docker-compose + CORS dev origin (SC1/SC5). 08-03 test integration tự động golden path API + Vietnamese filename UTF-8 (SC2/SC4 — 2 test critical PASS per-file). 08-04 `boot_stack.sh` + `08-SMOKE-CHECKLIST.md` + checkpoint human-verify. Verify status `human_needed`: 8/11 must-have auto-verified, regression 109/109 unit PASS, code review 0 Critical/3 Warning/5 Info; SC1 (11 trang React render) + SC2-browser (citation `[1]` clickable) + SC5 (docker compose healthy) cần human UAT — lưu `08-HUMAN-UAT.md`.
 
@@ -303,6 +303,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 08-02-PLAN.md — Fix gap api-side: router `/api/ai/chat` + port mapping 8180 + CORS dev (Wave 2, COMPAT-01) ✓ 2026-05-19
 - [x] 08-03-PLAN.md — Test suite golden path API + Vietnamese filename UTF-8 (Wave 3, COMPAT-01) ✓ 2026-05-19
 - [x] 08-04-PLAN.md — Boot stack script + checklist + checkpoint human-verify (Wave 4, COMPAT-01) ✓ 2026-05-19
+- [ ] 08-05-PLAN.md — Gap closure SC5: fix cocoindex LMDB Permission denied (config.py + Dockerfile + docker-compose.yml) (Wave 5, COMPAT-01)
 
 **UI hint:** yes
 
