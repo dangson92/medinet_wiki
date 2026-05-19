@@ -12,10 +12,25 @@ Test phủ behavior:
 - test_exchange_authorization_code: code -> OAuthToken có refresh, code xoá sau exchange.
 - test_exchange_refresh_token_rotates: refresh -> token mới, refresh cũ không dùng lại.
 - test_revoke_token: revoke -> load_access_token trả None.
+
+Phase 8.3 Plan 06 (gap closure SC3 — token lifecycle) thêm test phủ đường
+replay / đồng thời / code hết hạn / PKCE cho các vá lỗi Plan 05:
+- test_exchange_code_replay_rejected: dùng lại code đã exchange -> raise (CR-01).
+- test_exchange_code_save_token_failure_no_replay: save_token lỗi -> code không
+  còn để replay (CR-01).
+- test_exchange_refresh_token_reuse_rejected: dùng lại refresh đã rotate -> raise
+  (CR-02).
+- test_complete_authorization_pending_expired: pending quá _PENDING_TTL -> raise.
+- test_exchange_code_expired_rejected: code hết hạn -> raise (issue 3).
+- test_pkce_challenge_persisted: code_challenge đi nguyên vẹn pending -> code (WR-01).
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import secrets
 import time
+from unittest.mock import patch
 
 import pytest
 from mcp.server.auth.provider import (
@@ -241,3 +256,113 @@ async def test_revoke_token(oauth_store) -> None:
     assert token is not None
     await provider.revoke_token(token)
     assert await provider.load_access_token("oauth-access-revoke") is None
+
+
+async def test_exchange_code_replay_rejected(oauth_store) -> None:
+    """Dùng lại authorization code đã exchange → raise OAuthStoreError (CR-01)."""
+    provider = _make_provider(oauth_store)
+    txn = await fake_pending_authorize(oauth_store, txn="txn-replay")
+    code, _r, _s = await provider.complete_authorization(txn, _login_data())
+    auth_code = await provider.load_authorization_code(_client_info(), code)
+    await provider.exchange_authorization_code(_client_info(), auth_code)
+    # Lần 2 cùng code — code đã bị claim nguyên tử.
+    with pytest.raises(OAuthStoreError):
+        await provider.exchange_authorization_code(_client_info(), auth_code)
+
+
+async def test_exchange_code_save_token_failure_no_replay(oauth_store) -> None:
+    """save_token lỗi giữa chừng → code đã bị claim, KHÔNG replay được (CR-01)."""
+    provider = _make_provider(oauth_store)
+    txn = await fake_pending_authorize(oauth_store, txn="txn-savefail")
+    code, _r, _s = await provider.complete_authorization(txn, _login_data())
+    auth_code = await provider.load_authorization_code(_client_info(), code)
+
+    async def _boom(*args, **kwargs):
+        raise OAuthStoreError("save_token lỗi mô phỏng")
+
+    with patch.object(oauth_store, "save_token", side_effect=_boom):
+        with pytest.raises(OAuthStoreError):
+            await provider.exchange_authorization_code(_client_info(), auth_code)
+    # Code đã bị claim_auth_code xoá TRƯỚC save_token — không còn để replay.
+    assert await oauth_store.load_auth_code(code) is None
+    with pytest.raises(OAuthStoreError):
+        await provider.exchange_authorization_code(_client_info(), auth_code)
+
+
+async def test_exchange_refresh_token_reuse_rejected(oauth_store) -> None:
+    """Dùng lại refresh token đã rotate → raise OAuthStoreError reuse (CR-02)."""
+    provider = _make_provider(oauth_store)
+    txn = await fake_pending_authorize(oauth_store, txn="txn-reuse")
+    code, _r, _s = await provider.complete_authorization(txn, _login_data())
+    auth_code = await provider.load_authorization_code(_client_info(), code)
+    first = await provider.exchange_authorization_code(_client_info(), auth_code)
+    refresh_obj = await provider.load_refresh_token(
+        _client_info(), first.refresh_token
+    )
+    # Rotate lần 1 — OK.
+    await provider.exchange_refresh_token(_client_info(), refresh_obj, ["wiki"])
+    # Rotate lần 2 với refresh_obj CŨ — reuse, phải raise.
+    with pytest.raises(OAuthStoreError):
+        await provider.exchange_refresh_token(_client_info(), refresh_obj, ["wiki"])
+
+
+async def test_complete_authorization_pending_expired(oauth_store) -> None:
+    """Pending transaction quá _PENDING_TTL → complete_authorization từ chối (WR-02)."""
+    provider = _make_provider(oauth_store)
+    txn = await fake_pending_authorize(
+        oauth_store, txn="txn-expired", created_at=int(time.time()) - 700
+    )
+    with pytest.raises(OAuthStoreError):
+        await provider.complete_authorization(txn, _login_data())
+
+
+async def test_exchange_code_expired_rejected(oauth_store) -> None:
+    """Authorization code hết hạn → exchange_authorization_code raise (issue 3)."""
+    provider = _make_provider(oauth_store)
+    expired_at = int(time.time()) - 10
+    await oauth_store.save_auth_code(
+        code="code-expired",
+        client_id="client-test",
+        code_payload={
+            "scopes": ["wiki"],
+            "redirect_uri": REDIRECT,
+            "code_challenge": "challenge-test",
+            "code_challenge_method": "S256",
+        },
+        downstream_jwt="jwt-a",
+        downstream_refresh_token="jwt-r",
+        user_payload={"id": 1, "email": "u@medinet.vn"},
+        expires_at=expired_at,
+    )
+    auth_code = AuthorizationCode(
+        code="code-expired",
+        scopes=["wiki"],
+        expires_at=float(expired_at),
+        client_id="client-test",
+        code_challenge="challenge-test",
+        redirect_uri=AnyUrl(REDIRECT),
+        redirect_uri_provided_explicitly=True,
+    )
+    with pytest.raises(OAuthStoreError):
+        await provider.exchange_authorization_code(_client_info(), auth_code)
+
+
+async def test_pkce_challenge_persisted(oauth_store) -> None:
+    """code_challenge đi nguyên vẹn pending → authorization code — đầu vào PKCE verify của SDK (WR-01)."""
+    verifier = secrets.token_urlsafe(32)
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
+    provider = _make_provider(oauth_store)
+    txn = await fake_pending_authorize(
+        oauth_store, txn="txn-pkce", code_challenge=challenge
+    )
+    code, _r, _s = await provider.complete_authorization(txn, _login_data())
+    auth_code = await provider.load_authorization_code(_client_info(), code)
+    # code_challenge phải đi nguyên vẹn pending → authorization code.
+    # SDK mcp 1.27 (mcp.server.auth.handlers.token) verify base64url(sha256(
+    # code_verifier)) == auth_code.code_challenge ở route /token — xác nhận
+    # bằng inspect. Test này guard đầu vào cho bước verify đó.
+    assert auth_code.code_challenge == challenge
