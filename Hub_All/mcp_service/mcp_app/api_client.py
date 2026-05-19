@@ -13,6 +13,13 @@ Khi log lỗi chỉ log `method`, `path`, `status_code`, `error.code`.
 Phase 8.3 (MCP-01, D-02): thêm method `login()` gọi `POST /api/auth/login` để bước
 login của OAuth flow xác thực bằng tài khoản Medinet — credential ủy thác hoàn toàn
 API Service (Argon2), MCP Service KHÔNG tự verify password và KHÔNG log email/password.
+
+Phase 8.3 Plan 03 (MCP-02, D-03): `_request`/`get`/`post` nay nhận thêm param `jwt`
+— khi có JWT, forward header `Authorization: Bearer <JWT>` (danh tính theo từng user
+OAuth) thay cho `X-API-Key`; nhánh `X-API-Key` GIỮ NGUYÊN cho client local. Thêm
+method `refresh_jwt()` gọi `POST /api/auth/refresh` đổi JWT downstream mới khi JWT cũ
+hết hạn giữa phiên OAuth dài (Pitfall 4) — refresh CÓ rotation (AUTH-02), caller
+PHẢI lưu đè cả access + refresh token mới (Pitfall 5).
 """
 from __future__ import annotations
 
@@ -72,15 +79,25 @@ class ApiClient:
         method: str,
         path: str,
         *,
-        api_key: str,
+        api_key: str | None = None,
+        jwt: str | None = None,
         json_body: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
     ) -> Any:
         """Gọi API Service và unwrap envelope. Map lỗi sang exception riêng.
 
-        KHÔNG log api_key, header, hay URL có query string (T-08.2-01-I).
+        Credential: ưu tiên `jwt` (header `Authorization: Bearer <JWT>` — D-03);
+        nếu không có jwt thì dùng `api_key` (header `X-API-Key` — nhánh client
+        local). Thiếu cả hai → raise ApiClientError.
+
+        KHÔNG log api_key, jwt, header, hay URL có query string (T-08.2-01-I).
         """
-        headers = {"X-API-Key": api_key}
+        if jwt:
+            headers = {"Authorization": f"Bearer {jwt}"}
+        elif api_key:
+            headers = {"X-API-Key": api_key}
+        else:
+            raise ApiClientError("Thiếu credential — cần jwt hoặc api_key")
         try:
             resp = await self._client.request(
                 method, path, headers=headers, json=json_body, params=params
@@ -130,21 +147,27 @@ class ApiClient:
         self,
         path: str,
         *,
-        api_key: str,
+        api_key: str | None = None,
+        jwt: str | None = None,
         params: dict[str, Any] | None = None,
     ) -> Any:
-        """Gọi GET tới API Service."""
-        return await self._request("GET", path, api_key=api_key, params=params)
+        """Gọi GET tới API Service — credential qua `jwt` hoặc `api_key`."""
+        return await self._request(
+            "GET", path, api_key=api_key, jwt=jwt, params=params
+        )
 
     async def post(
         self,
         path: str,
         *,
-        api_key: str,
+        api_key: str | None = None,
+        jwt: str | None = None,
         json_body: dict[str, Any] | None = None,
     ) -> Any:
-        """Gọi POST tới API Service."""
-        return await self._request("POST", path, api_key=api_key, json_body=json_body)
+        """Gọi POST tới API Service — credential qua `jwt` hoặc `api_key`."""
+        return await self._request(
+            "POST", path, api_key=api_key, jwt=jwt, json_body=json_body
+        )
 
     async def login(self, email: str, password: str) -> dict | None:
         """Xác thực credential Medinet qua API Service (D-02). None nếu credential sai.
@@ -192,6 +215,63 @@ class ApiClient:
         message = err.get("message", "lỗi không xác định")
         logger.error(
             "API Service trả lỗi khi login: status_code=%s error_code=%s",
+            resp.status_code,
+            code,
+        )
+        raise ApiServerError(f"{code}: {message}")
+
+    async def refresh_jwt(self, refresh_token: str) -> dict | None:
+        """Đổi JWT downstream mới bằng refresh token API Service (Pitfall 4).
+
+        Gọi POST /api/auth/refresh. JWT API Service access TTL chỉ 900s — phiên
+        OAuth sống nhiều ngày → JWT hết hạn giữa phiên; method này refresh JWT.
+
+        REFRESH CÓ ROTATION (AUTH-02) — refresh token cũ bị blacklist sau khi
+        đổi; caller PHẢI lưu đè CẢ access + refresh token mới (Pitfall 5), nếu
+        chỉ lưu access mới thì lần refresh kế tiếp dùng refresh đã blacklist.
+
+        Bảo mật: KHÔNG log refresh token hay JWT.
+
+        Returns:
+            - dict `{access_token, refresh_token, expires_at, user}` khi refresh OK.
+            - `None` khi refresh token hết hạn/blacklist (HTTP 401) — caller map
+              sang ToolError MCP_UNAUTHORIZED yêu cầu re-connect.
+
+        Raises:
+            ApiServerError: lỗi hạ tầng (network, 5xx, response không hợp lệ).
+        """
+        try:
+            resp = await self._client.post(
+                "/api/auth/refresh", json={"refresh_token": refresh_token}
+            )
+        except httpx.RequestError as e:
+            logger.error("API Service không phản hồi khi refresh: %s", type(e).__name__)
+            raise ApiServerError(
+                f"Không kết nối được API Service: {type(e).__name__}"
+            ) from e
+
+        try:
+            envelope = resp.json()
+        except ValueError as e:
+            logger.error(
+                "API Service trả response refresh không hợp lệ: status_code=%s",
+                resp.status_code,
+            )
+            raise ApiServerError(
+                f"API Service trả response không hợp lệ (status {resp.status_code})"
+            ) from e
+
+        if resp.status_code == 200 and envelope.get("success") is True:
+            return envelope.get("data")  # {access_token, refresh_token, expires_at, user}
+        if resp.status_code == 401:
+            logger.info("Refresh JWT thất bại — refresh token hết hạn (status 401)")
+            return None
+
+        err = envelope.get("error") or {}
+        code = err.get("code", "ERROR")
+        message = err.get("message", "lỗi không xác định")
+        logger.error(
+            "API Service trả lỗi khi refresh: status_code=%s error_code=%s",
             resp.status_code,
             code,
         )
