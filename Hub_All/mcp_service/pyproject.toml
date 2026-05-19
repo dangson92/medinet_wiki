@@ -11,6 +11,10 @@ dependencies = [
     # Schema + config
     "pydantic>=2.7.0,<3",
     "pydantic-settings>=2.6,<3",
+    # OAuth state store cục bộ — KHÔNG chạm DB chung (Phase 8.2 boundary)
+    "aiosqlite>=0.20,<1",
+    # ASGI server — khai báo tường minh cho Dockerfile CMD --factory
+    "uvicorn>=0.30,<1",
 ]
 
 [project.optional-dependencies]
