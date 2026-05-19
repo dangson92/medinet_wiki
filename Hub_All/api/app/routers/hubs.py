@@ -1,7 +1,11 @@
 """Hubs router — Plan 05-03 (HUB-01 hub registry CRUD + HUB-03 stats).
 
-6 endpoint — mọi endpoint admin-only (`require_role("admin")`; T-05-03-01
-Elevation of Privilege mitigation — hub CRUD là admin-only theo HUB-01):
+6 endpoint — 5 endpoint mutate admin-only (`require_role("admin")`; T-05-03-01
+Elevation of Privilege mitigation — hub CRUD là admin-only theo HUB-01).
+
+Phase 8.2 — CHỈ `GET /api/hubs` nới sang `get_api_key_or_jwt` (cho MCP Service
+tool `list_hubs`): non-admin chỉ thấy hub được assign, admin thấy mọi hub.
+5 endpoint còn lại GIỮ NGUYÊN admin-only.
 
     GET    /api/hubs              — list phân trang (per_page cap ≤ 100)
     POST   /api/hubs              — create → 201
@@ -22,11 +26,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import require_role
+from app.auth.dependencies import get_api_key_or_jwt, require_role
 from app.db.session import get_session
-from app.models.auth import User
+from app.models.auth import User, UserHub
 from app.pkg import response as resp
 from app.schemas.hubs import (
     CreateHubRequest,
@@ -50,19 +55,34 @@ def get_hub_service(
 async def list_hubs(
     page: int = 1,
     per_page: int = 20,
-    user: User = Depends(require_role("admin")),  # noqa: B008
+    user: User = Depends(get_api_key_or_jwt),  # noqa: B008
     service: HubService = Depends(get_hub_service),  # noqa: B008
+    db: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> JSONResponse:
-    """GET /api/hubs — list phân trang, admin-only.
+    """GET /api/hubs — list phân trang.
+
+    Phase 8.2 — chấp nhận X-API-Key (cho MCP Service tool `list_hubs`) ngoài
+    JWT; non-admin chỉ thấy hub được assign, admin thấy mọi hub. Các endpoint
+    hubs khác (POST/PUT/PATCH/stats) GIỮ admin-only.
 
     Cap per_page ≤ 100 + page ≥ 1 (T-05-03 DoS — pagination cap).
     """
-    _ = user  # admin-only gate qua require_role.
     capped_per_page = max(1, min(per_page, 100))
     capped_page = max(1, page)
-    items, total = await service.list(
-        page=capped_page, per_page=capped_per_page
-    )
+
+    if user.role == "admin":
+        # admin quản trị cross-hub — thấy mọi hub.
+        items, total = await service.list(
+            page=capped_page, per_page=capped_per_page
+        )
+    else:
+        # non-admin — chỉ hub được assign (load hub_ids từ DB user_hubs,
+        # KHÔNG tin payload; T-08.2-02-I Information Disclosure mitigation).
+        stmt = select(UserHub.hub_id).where(UserHub.user_id == user.id)
+        hub_ids = [str(h) for h in (await db.execute(stmt)).scalars().all()]
+        items, total = await service.list_for_hubs(
+            hub_ids=hub_ids, page=capped_page, per_page=capped_per_page
+        )
     return resp.paginated(
         items=[i.model_dump(mode="json") for i in items],
         page=capped_page,

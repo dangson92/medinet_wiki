@@ -1,6 +1,9 @@
 """Ask router — Plan 07-04 (ASK-01/02/03/05 + AUX-03).
 
-3 endpoint POST — JWT bắt buộc (viewer+), shape khớp ASK-01 contract:
+Phase 8.2 — 3 endpoint chấp nhận X-API-Key HOặC JWT (cho MCP Service forward
+X-API-Key của client); hub isolation vẫn enforce qua `user.hub_ids` như cũ.
+
+3 endpoint POST — auth viewer+, shape khớp ASK-01 contract:
 
     POST /api/ask             — single-hub ask (ASK-01)
     POST /api/ask/cross-hub   — cross-hub ask (ASK-03)
@@ -45,7 +48,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse
 
-from app.auth.dependencies import UserWithHubs, get_current_user_with_hubs
+from app.auth.dependencies import UserWithHubs, get_api_key_or_jwt_with_hubs
 from app.middleware import SEARCH_LIMIT, limiter
 from app.pkg import response as resp
 from app.schemas.ask import AskRequest
@@ -154,7 +157,7 @@ async def ask_endpoint(
     request: Request,
     body: AskRequest,
     background_tasks: BackgroundTasks,
-    user: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
+    user: UserWithHubs = Depends(get_api_key_or_jwt_with_hubs),  # noqa: B008
     service: AskService = Depends(get_ask_service),  # noqa: B008
 ) -> JSONResponse:
     """POST /api/ask — single-hub ask (ASK-01)."""
@@ -246,7 +249,7 @@ async def search_answer_endpoint(
     request: Request,
     body: AskRequest,
     background_tasks: BackgroundTasks,
-    user: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
+    user: UserWithHubs = Depends(get_api_key_or_jwt_with_hubs),  # noqa: B008
     service: AskService = Depends(get_ask_service),  # noqa: B008
 ) -> JSONResponse:
     """POST /api/search/answer — RAG answer cho frontend `searchAnswer()`.
@@ -301,10 +304,16 @@ async def ask_cross_hub_endpoint(
     request: Request,
     body: AskRequest,
     background_tasks: BackgroundTasks,
-    user: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
+    user: UserWithHubs = Depends(get_api_key_or_jwt_with_hubs),  # noqa: B008
     service: AskService = Depends(get_ask_service),  # noqa: B008
 ) -> JSONResponse:
-    """POST /api/ask/cross-hub — cross-hub ask (ASK-03)."""
+    """POST /api/ask/cross-hub — cross-hub ask (ASK-03).
+
+    Phase 8.2 — tool MCP `ask_wiki` cross-hub thực tế gọi `/api/search/answer`,
+    KHÔNG gọi endpoint này; vẫn đổi sang `get_api_key_or_jwt_with_hubs` cho
+    NHẤT QUÁN (mọi endpoint search/ask cùng auth path) — tránh trạng thái 5/6
+    endpoint một kiểu auth, 1 endpoint kiểu khác gây nhầm lẫn.
+    """
     return await _run_ask(
         body=body,
         user=user,

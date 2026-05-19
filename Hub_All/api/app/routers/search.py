@@ -1,6 +1,10 @@
 """Search router — Plan 06-02 (SEARCH-01..03 + D-04 find-similar).
 
-3 endpoint POST — JWT bắt buộc (viewer+), shape khớp `frontend/src/services/
+Phase 8.2 — 3 endpoint chấp nhận X-API-Key HOặC JWT (cho MCP Service forward
+X-API-Key của client); hub isolation vẫn enforce qua `user.hub_ids` như cũ
+(intersect ở `SearchService` — D-07 defense in depth).
+
+3 endpoint POST — auth viewer+, shape khớp `frontend/src/services/
 api.ts` (`search()`, `crossHubSearch()`, `findSimilar()` — D6 contract):
 
     POST /api/search            — union search 1 câu SQL (SEARCH-01 / SEARCH-02)
@@ -29,7 +33,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from app.auth.dependencies import UserWithHubs, get_current_user_with_hubs
+from app.auth.dependencies import UserWithHubs, get_api_key_or_jwt_with_hubs
 from app.middleware import SEARCH_LIMIT, limiter
 from app.pkg import response as resp
 from app.schemas.search import SearchRequest, SimilarRequest
@@ -61,11 +65,11 @@ def get_search_service(request: Request) -> SearchService:
 async def search_endpoint(
     request: Request,
     body: SearchRequest,
-    user: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
+    user: UserWithHubs = Depends(get_api_key_or_jwt_with_hubs),  # noqa: B008
     service: SearchService = Depends(get_search_service),  # noqa: B008
 ) -> JSONResponse:
     """POST /api/search — union vector search (SEARCH-01 / SEARCH-02)."""
-    _ = request  # slowapi đọc; auth gate qua get_current_user_with_hubs.
+    _ = request  # slowapi đọc; auth gate qua get_api_key_or_jwt_with_hubs.
     try:
         result = await service.search(body=body, user=user)
     except ValueError as e:
@@ -80,7 +84,7 @@ async def search_endpoint(
 async def cross_hub_search_endpoint(
     request: Request,
     body: SearchRequest,
-    user: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
+    user: UserWithHubs = Depends(get_api_key_or_jwt_with_hubs),  # noqa: B008
     service: SearchService = Depends(get_search_service),  # noqa: B008
 ) -> JSONResponse:
     """POST /api/search/cross-hub — fan-out + re-rank (SEARCH-03)."""
@@ -99,7 +103,7 @@ async def cross_hub_search_endpoint(
 async def find_similar_endpoint(
     request: Request,
     body: SimilarRequest,
-    user: UserWithHubs = Depends(get_current_user_with_hubs),  # noqa: B008
+    user: UserWithHubs = Depends(get_api_key_or_jwt_with_hubs),  # noqa: B008
     service: SearchService = Depends(get_search_service),  # noqa: B008
 ) -> JSONResponse:
     """POST /api/search/similar — find-similar (D-04)."""

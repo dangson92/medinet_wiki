@@ -168,6 +168,45 @@ class HubService:
         items = [_row_to_response(r) for r in rows]
         return items, total
 
+    async def list_for_hubs(
+        self,
+        *,
+        hub_ids: list[str],
+        page: int,
+        per_page: int,
+    ) -> tuple[list[HubResponse], int]:
+        """Phase 8.2 — list hub scope theo `hub_ids` (non-admin chỉ thấy hub
+        được assign). Returns (items, total).
+
+        `hub_ids` rỗng → trả `([], 0)` NGAY (tránh SQL `ANY([])`). Analog
+        `list()` nhưng thêm `WHERE id = ANY(:hub_ids)` — named bind param
+        (asyncpg parametrize, KHÔNG f-string nội suy giá trị).
+        """
+        if not hub_ids:
+            return [], 0
+
+        total_row = (
+            await self.db.execute(
+                text("SELECT COUNT(*) FROM hubs WHERE id = ANY(:hub_ids)"),
+                {"hub_ids": hub_ids},
+            )
+        ).fetchone()
+        total = int(total_row[0]) if total_row else 0
+
+        offset = max(0, (page - 1) * per_page)
+        rows = (
+            await self.db.execute(
+                text(
+                    f"SELECT {_HUB_SELECT_COLS} FROM hubs "
+                    "WHERE id = ANY(:hub_ids) "
+                    "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+                ),
+                {"hub_ids": hub_ids, "limit": per_page, "offset": offset},
+            )
+        ).fetchall()
+        items = [_row_to_response(r) for r in rows]
+        return items, total
+
     async def update(
         self,
         *,
