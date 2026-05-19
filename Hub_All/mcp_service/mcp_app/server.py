@@ -18,6 +18,7 @@ Transport: Streamable HTTP, stateless_http=True.
 """
 from __future__ import annotations
 
+import atexit
 import logging
 from typing import Any
 
@@ -249,3 +250,64 @@ async def ask_wiki(  # type: ignore[type-arg]
         answer=answer,
         citations=_to_citations(raw_citations, cross_hub=cross_hub),
     )
+
+
+# ---------------------------------------------------------------------------
+# Entrypoint — chạy MCP Service standalone trên port riêng
+# ---------------------------------------------------------------------------
+def _close_client_atexit() -> None:
+    """Best-effort đóng ApiClient khi process thoát.
+
+    `streamable_http_app()` trả Starlette app gốc — không cho thêm on_shutdown
+    handler dễ dàng. Dùng atexit best-effort: chạy aclose() trong event loop mới.
+    Nếu lỗi (loop đang chạy, đã đóng) → chỉ log warning, không raise lúc thoát.
+    """
+    global _api_client
+    if _api_client is None:
+        return
+    try:
+        import asyncio
+
+        asyncio.run(_api_client.aclose())
+    except Exception as e:  # noqa: BLE001 — cleanup best-effort lúc thoát process
+        logger.warning("Không đóng được ApiClient lúc thoát: %s", type(e).__name__)
+    finally:
+        _api_client = None
+
+
+atexit.register(_close_client_atexit)
+
+
+def build_asgi_app() -> Any:
+    """Tạo Starlette ASGI app cho MCP Service standalone.
+
+    `mcp.streamable_http_app()` trả Starlette app và tự gắn lifespan session
+    manager (`StreamableHTTPSessionManager.run()`) — KHÔNG cần compose lifespan
+    thủ công như `api/app/main.py` vì đây là app gốc, không phải sub-mount.
+    """
+    return mcp.streamable_http_app()
+
+
+def main() -> None:
+    """Entrypoint chạy MCP Service như process độc lập trên port riêng.
+
+    `python -m mcp_app.server` → __name__ == "__main__" → main(). Lắng nghe
+    host/port từ config (`MCP_SERVICE_HOST` / `MCP_SERVICE_PORT`).
+    """
+    import uvicorn
+
+    logging.basicConfig(level=logging.INFO)
+    settings = get_settings()
+    app = build_asgi_app()
+    # KHÔNG log api_key — chỉ log host/port/api_base_url (T-08.2-03-I2)
+    logger.info(
+        "MCP Service khởi động — host=%s port=%s api_base_url=%s",
+        settings.service_host,
+        settings.service_port,
+        settings.api_base_url,
+    )
+    uvicorn.run(app, host=settings.service_host, port=settings.service_port)
+
+
+if __name__ == "__main__":
+    main()
