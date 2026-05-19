@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
 status: Ready to execute
-last_updated: "2026-05-19T10:04:43.041Z"
+last_updated: "2026-05-19T12:00:00.000Z"
 progress:
   total_phases: 13
   completed_phases: 11
-  total_plans: 55
+  total_plans: 57
   completed_plans: 55
-  percent: 100
+  percent: 96
 ---
 
 # State — MEDWIKI
@@ -17,7 +17,7 @@ progress:
 **Mã dự án:** MEDWIKI
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Ngày tạo state:** 2026-05-13 (pivot lần 2 — M1 Docling abandoned)
-**Last updated:** 2026-05-19 (Phase 8.3 Plan 04 — deploy MCP Service public HTTPS: Dockerfile multi-stage uv non-root factory CMD + .dockerignore; Caddyfile reverse proxy auto-TLS forward nguyên host; docker-compose service mcp_service + caddy + 3 named volume; 08.3-HUMAN-UAT.md SC4. docker build + compose config PASS. Phase 8.3 4/4 plans code complete — SC4 chờ human UAT)
+**Last updated:** 2026-05-19 (Phase 8.3 gap closure planned — 2 plan mới 08.3-05/06 vá lỗi đúng đắn vòng đời token OAuth: CR-01 claim auth code nguyên tử, CR-02 rotate theo refresh_token + kiểm rowcount, WR-02 hạn pending, WR-03 revoke chuẩn hoá, WR-04 KeyError, WR-05 UNIQUE refresh_token + test replay/đồng thời/PKCE. Plan checker PASSED iteration 2. Sẵn sàng /gsd-execute-phase 8.3)
 
 ---
 
