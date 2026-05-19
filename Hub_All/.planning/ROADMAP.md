@@ -41,6 +41,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [x] **Phase 7: Ask API + LiteLLM + Citation + Hot-Swap + Usage** — LLM answerer với citation `[N]` + provider hot-swap + token usage logging ✓ (2026-05-18, 5 plans / 3 waves, 5/5 REQ-ID ASK-01..05; integration test 18 test / 11 critical PASS; verify human_needed — latency p95 + anti-injection LLM thật defer Phase 9, 07-HUMAN-UAT.md)
 - [x] **Phase 8: Frontend E2E Smoke** — verify React 19 hoạt động end-to-end với FastAPI mới ✓ (2026-05-19, 4 plans / 4 waves, COMPAT-01; verify human_needed — 8/11 auto-verified, regression 109/109 unit PASS, code review 0 Critical; SC1/SC2-browser/SC5 cần human UAT — 08-HUMAN-UAT.md)
 - [x] **Phase 8.1: MCP Server — Expose Wiki Tools** *(INSERTED)* — MCP server Streamable HTTP tại `/mcp` expose 3 tool read-only (`search_wiki`/`ask_wiki`/`list_hubs`) cho AI client ngoài ✓ (2026-05-19, 3 plans / 3 waves; verify human_needed — 3/5 SC auto-verified, unit `tests/unit/mcp/` 9 PASS, regression 118 PASS, code review CR-01 đã vá; SC1/SC5 chờ human UAT — 08.1-HUMAN-UAT.md)
+- [ ] **Phase 8.2: MCP Service — Tách Thành Process Độc Lập** *(INSERTED)* — tách MCP khỏi process FastAPI thành service riêng `Hub_All/mcp_service/` gọi API qua HTTP (đảo decision D-04 của Phase 8.1)
 - [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
 
@@ -335,6 +336,39 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 > **Phase 8.1 hoàn tất (2026-05-19):** MCP server Streamable HTTP mount `/mcp` cùng process FastAPI (D-02), 3 tool read-only gọi trực tiếp service layer (D-04), auth `X-API-Key` tái dùng `ApiKeyService.verify_key` (D-05), hub isolation enforce ở service layer (D-12/D-13). Deviation: `mcp` resolve `1.27.1` thay vì `1.9.4` — API khác (`streamable_http_app()`, `_composed_lifespan` tự viết vì không có `combine_lifespans`, header qua `ctx.request_context`); code adapt + pin `>=1.27.0,<1.28`. Code review 1 Critical (CR-01 usage-log drop âm thầm — đã vá `_spawn_usage_log`) + 4 Warning (WR-01/03/04 còn tồn — `08.1-REVIEW.md`). Verify `human_needed`: SC2/SC3/SC4 auto-verified, `tests/unit/mcp/` 9 PASS, regression 118 PASS; SC1 (kết nối AI client thật) + SC5 (usage_events DB thật) chờ human UAT — `08.1-HUMAN-UAT.md`.
 
 ---
+
+### Phase 8.2: MCP Service — Tách Thành Process Độc Lập *(INSERTED 2026-05-19)*
+
+**Goal:** Tách MCP server khỏi process FastAPI thành một service độc lập (`Hub_All/mcp_service/` — process/runtime + port riêng) gọi API Service qua HTTP — đảo decision D-04 ("gọi trực tiếp SearchService/AskService — KHÔNG self-call HTTP") của Phase 8.1. Kiến trúc đích: Frontend ─► API Service; LLM Agent ─► MCP Service ─► API Service.
+
+**Depends on:** Phase 8.1 (MCP server in-process tồn tại — phase này refactor nó)
+**Parallel-able with:** Phase 9 (eval) — độc lập task
+**Requirements:** MCP-01, MCP-02 (re-architecture — không thêm REQ-ID mới)
+**Research flag:** LOW (FastMCP standalone `streamable_http_app()` + `httpx` client — pattern phổ biến, hạ tầng đã có từ Phase 8.1)
+
+**Bối cảnh quyết định:**
+- Đảo D-04: MCP tool gọi API qua HTTP (`httpx`) thay vì import service layer in-process.
+- MCP Service tách hẳn `Hub_All/mcp_service/` — dependency tối thiểu (`mcp`, `httpx`, `pydantic`), KHÔNG import `app.*`.
+- Gỡ mount `/mcp` + `_composed_lifespan` khỏi `api/app/main.py`; bỏ `app/mcp/auth.py` (logic DB), `set_pool`, `_spawn_usage_log` (API `/api/ask` tự ghi `usage_events`).
+- Auth: MCP forward header `X-API-Key` → API validate (`get_api_key_or_jwt`).
+- Rate-limit: GIỮ NGUYÊN — chấp nhận MCP traffic chịu `@limiter.limit` như client thường (quyết định user).
+
+**Success Criteria** (draft — chốt ở /gsd-discuss-phase):
+  1. MCP Service chạy process riêng (`Hub_All/mcp_service/`, port riêng), KHÔNG còn mount trong FastAPI app; `api/app/main.py` không còn `/mcp` + `_composed_lifespan`
+  2. 3 tool `list_hubs`/`search_wiki`/`ask_wiki` gọi API qua HTTP (`/api/hubs`, `/api/search[/cross-hub]`, `/api/ask[/cross-hub]`), forward `X-API-Key`, unwrap envelope `{success,data,error}`
+  3. Auth fail (thiếu/sai key) → API trả 401 → MCP map sang `ToolError` MCP_UNAUTHORIZED; hub isolation vẫn enforce (API-side)
+  4. `usage_events` vẫn có row sau mỗi `ask_wiki` thành công (do `/api/ask` BackgroundTasks ghi — MCP không tự ghi nữa)
+  5. Test suite `mcp_service/` mock httpx call tới API; regression API không vỡ khi gỡ mount `/mcp`
+
+**Plans:** 5 plans (4 waves)
+
+- [ ] 08.2-01-PLAN.md — Khung package mcp_service/ + config + schemas + ApiClient httpx (Wave 1, MCP-01/MCP-02)
+- [ ] 08.2-02-PLAN.md — GET /api/hubs nhận X-API-Key + scope theo role (Wave 1, MCP-01/MCP-02)
+- [ ] 08.2-03-PLAN.md — FastMCP server + 3 tool gọi API qua HTTP + entrypoint standalone (Wave 2, MCP-01/MCP-02)
+- [ ] 08.2-04-PLAN.md — Gỡ mount /mcp + _composed_lifespan khỏi api/main.py, xoá app/mcp/ + dep mcp (Wave 3, MCP-01/MCP-02)
+- [ ] 08.2-05-PLAN.md — Test suite mcp_service/ respx mock API + regression API (Wave 4, MCP-01/MCP-02)
+
+---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
 
 **Goal:** Eval framework Python pytest-based đo retrieval quality trên 10 file VN medical thật + 12 query vàng; quality gate ≥75% top-3 PASS để chứng nhận M2 ship-ready.
@@ -399,10 +433,11 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 5/5 | ✓ Complete | 2026-05-18 |
 | 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 4/4 | ✓ Complete (verify human_needed) | 2026-05-19 |
 | 8.1 MCP Server — Expose Wiki Tools | 3/3 | ✓ Complete (verify human_needed) | 2026-05-19 |
+| 8.2 MCP Service — Tách Process Độc Lập | 0/? | Not planned (INSERTED) | - |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
-**Tổng:** 8/11 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 5/7 — Phase 5/6/7/8/8.1 done)
+**Tổng:** 8/12 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 5/8 — Phase 5/6/7/8/8.1 done · Phase 8.2 inserted, chưa plan)
 
 ---
 
