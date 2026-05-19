@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: M2 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 status: in_progress
-last_updated: "2026-05-19T00:00:00Z"
+last_updated: "2026-05-19T08:50:00Z"
 progress:
   total_phases: 10
   completed_phases: 7
@@ -27,7 +27,7 @@ next_phase:
 **Mã dự án:** MEDWIKI
 **Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
 **Ngày tạo state:** 2026-05-13 (pivot lần 2 — M1 Docling abandoned)
-**Last updated:** 2026-05-19 (Phase 8 Frontend E2E Smoke COMPLETE — user accept đóng phase; 3 mục human-UAT defer sang /gsd-verify-work 8)
+**Last updated:** 2026-05-19 (Phase 8 gap closure 08-05 — đóng gap SC5 cocoindex LMDB Permission denied; boot_stack.sh 6/6 PASS)
 
 ---
 
@@ -54,9 +54,9 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 |---|---|
 | Milestone | v2.0 Full RAG Rewrite |
 | Phase | **Phase 8 — Frontend E2E Smoke** ✅ COMPLETE (4/4 plans, 2026-05-19) · Phase 7 ✅ COMPLETE trước đó (5/5 plans) |
-| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01). 08-02 ✅ (Wave 2: fix gap api-side router /api/ai/chat + port 8180 — COMPAT-01). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01). 08-04 ✅ (Wave 4: boot stack + checklist + biên bản UAT — COMPAT-01). Tất cả 2026-05-19. |
+| Plan | 08-01 ✅ (Wave 1: contract diff script + báo cáo — COMPAT-01). 08-02 ✅ (Wave 2: fix gap api-side router /api/ai/chat + port 8180 — COMPAT-01). 08-03 ✅ (Wave 3: test suite tự động golden path + VN filename — COMPAT-01). 08-04 ✅ (Wave 4: boot stack + checklist + biên bản UAT — COMPAT-01). 08-05 ✅ (Wave 5: gap closure SC5 — fix cocoindex LMDB Permission denied; `boot_stack.sh` 6/6 PASS). Tất cả 2026-05-19. |
 | Status | **Phase 8 COMPLETE — user accept đóng phase 2026-05-19.** Frontend E2E Smoke verify-only, KHÔNG sửa frontend (D6 tôn trọng tuyệt đối — 0 file `frontend/` toàn phase). 08-01 đối chiếu contract 54 endpoint `api.ts` ↔ router FastAPI ↔ Go signature `m1-go-archived` → `08-CONTRACT-DIFF.md` (SC3). 08-02 fix gap api-side: router `POST /api/ai/chat` proxy LiteLLM + port mapping `8180:8080` + CORS dev (SC1/SC5). 08-03 test integration golden path API + VN filename UTF-8 (SC2/SC4 — 2 test critical PASS per-file). 08-04 `boot_stack.sh` + `08-SMOKE-CHECKLIST.md` + checkpoint human-verify (auto-approve `--auto`). Verify `human_needed`: 8/11 must-have auto-verified, regression 109/109 unit PASS, code review 0 Critical/3 Warning/5 Info (`08-REVIEW.md`). 3 mục cần con người (SC1 render 11 trang React, SC2-browser citation `[1]` clickable, SC5 docker compose healthy) defer sang `/gsd-verify-work 8` — lưu `08-HUMAN-UAT.md` (status partial, 2 passed / 3 pending) — cùng pattern Phase 6/7. ⚠️ Khôi phục: `ROADMAP.md` bị gsd-planner cắt cụt 464→10 dòng ở commit `15cbb22`, đã restore đầy đủ từ git `6040c46`. Khuyến nghị verify Phase 8 thật + chạy `/gsd-secure-phase 8` (security gate). |
-| Last activity | 2026-05-19 — `/gsd-plan-phase 8` → auto-advance `/gsd-execute-phase 8`: 4 plan / 4 wave sequential trên main tree. Plan + execute + code review + verify. User accept đóng Phase 8. ROADMAP.md restore sau planner truncation bug. |
+| Last activity | 2026-05-19 — `/gsd-execute-phase 8 --gaps-only`: thực thi 08-05 gap closure SC5 (cocoindex LMDB Permission denied). 3 task auto + 1 task bổ sung (COPY alembic.ini/migrations vào image) + checkpoint human-verify approved. `boot_stack.sh` (6/6) PASS, 3-service healthy. Dọn 3 documents + 65 chunks data dev rác. |
 | Total phases | 10 (M2a: 4 + M2b: 6) — Phase 1/2/3/5/6/7/8 complete · Phase 4 + M2a EXIT GATE chưa đóng (theo dõi riêng) |
 | Total requirements | 38 v1 REQ-ID · 6 Phase 3 (AUTH-01..06) · 8 Phase 4 (INGEST-01..08) · 9 Phase 5 (HUB/USER/AUX) · 4 Phase 6 (SEARCH-01..04) · 5 Phase 7 (ASK-01..05) · **COMPAT-01 Phase 8** — lớp tĩnh/tự động ĐẠT (SC3/SC4 + regression); SC1/SC2-browser/SC5 chờ human UAT (`/gsd-verify-work 8`) |
 | Critical path | 1 ✓ → 2 ✓ → 4 📋 → 6 ✓ → 7 ✓ → 9 → 10 |
@@ -95,6 +95,8 @@ See: `.planning/PROJECT.md` (updated 2026-05-13) + `.planning/ROADMAP.md` (creat
 - **D9: Phase numbering reset về 1**.
 - **D-08-01: SC3 (replay/contract test) thoả qua đối chiếu TĨNH** — Go backend đã teardown 2026-05-14 nên không replay live được; đối chiếu 3 lớp (path api.ts↔FastAPI↔router.go, envelope shape, classification gap) qua script regex. Go signature lấy qua `git show m1-go-archived`.
 - **D-08-01-B: `meta.total_pages` lệch nhỏ KHÔNG nâng BLOCKER** — `paginated()` FastAPI thiếu field `total_pages`; frontend khai báo optional → không crash render. Ghi nhận làm ứng viên polish Plan 08-02.
+- **D-08-05: cocoindex LMDB path default TƯƠNG ĐỐI `.cocoindex/state.lmdb`** — KHÔNG dùng tuyệt đối `/app/...` (hỏng chạy native Windows). Container ép tuyệt đối qua env `COCOINDEX_DB` (`environment:` thắng `env_file:`). Pattern "default an toàn 2 môi trường + env override".
+- **D-08-05-B: Follow-up `documents.file_path` nên lưu tương đối theo `FILE_STORE_DIR`** — hiện lưu tuyệt đối host (Windows path) → không portable host↔container, cocoindex backfill fail FileNotFoundError. Thuộc Phase 4/5, chưa xử lý.
 
 ### Risk register (active)
 

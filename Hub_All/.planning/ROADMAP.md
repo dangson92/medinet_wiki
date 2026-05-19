@@ -303,7 +303,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 08-02-PLAN.md — Fix gap api-side: router `/api/ai/chat` + port mapping 8180 + CORS dev (Wave 2, COMPAT-01) ✓ 2026-05-19
 - [x] 08-03-PLAN.md — Test suite golden path API + Vietnamese filename UTF-8 (Wave 3, COMPAT-01) ✓ 2026-05-19
 - [x] 08-04-PLAN.md — Boot stack script + checklist + checkpoint human-verify (Wave 4, COMPAT-01) ✓ 2026-05-19
-- [ ] 08-05-PLAN.md — Gap closure SC5: fix cocoindex LMDB Permission denied (config.py + Dockerfile + docker-compose.yml) (Wave 5, COMPAT-01)
+- [x] 08-05-PLAN.md — Gap closure SC5: fix cocoindex LMDB Permission denied (config.py + Dockerfile + docker-compose.yml) (Wave 5, COMPAT-01) ✓ 2026-05-19 — bỏ tiền tố `Hub_All/` khỏi LMDB path, chown `/app/.cocoindex`, env override + named volume; gộp fix COPY `alembic.ini`/`migrations/` vào image; `boot_stack.sh` (6/6) PASS
 
 **UI hint:** yes
 
