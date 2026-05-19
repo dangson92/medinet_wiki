@@ -401,7 +401,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 08.3-03-PLAN.md — extract_oauth_token + forward Bearer JWT downstream + refresh-on-401 + tool resolve OAuth token (Wave 3, MCP-02) ✅ 2026-05-19
 - [x] 08.3-04-PLAN.md — Dockerfile mcp_service + Caddy reverse proxy auto-TLS + docker-compose + 08.3-HUMAN-UAT.md SC4 (Wave 4, MCP-01/MCP-02) ✅ 2026-05-19
 - [x] 08.3-05-PLAN.md — Gap closure: vá lỗi đúng đắn vòng đời token OAuth — claim_auth_code nguyên tử + rotate_token rowcount + kiểm hạn pending + revoke chuẩn hoá + validate payload (Wave 5, MCP-01/MCP-02)
-- [ ] 08.3-06-PLAN.md — Gap closure: test replay/reuse/PKCE đóng gap SC3 token lifecycle (Wave 6, MCP-01/MCP-02)
+- [x] 08.3-06-PLAN.md — Gap closure: test replay/reuse/PKCE đóng gap SC3 token lifecycle — 11 test mới (5 store + 6 provider) chứng minh replay code/refresh reuse/code+pending hết hạn bị từ chối; regression 78→89 PASS (Wave 6, MCP-01/MCP-02) ✅ 2026-05-19
 
 ---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
