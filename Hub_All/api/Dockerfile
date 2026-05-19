@@ -22,6 +22,9 @@ RUN groupadd --system --gid 1000 apiuser \
 WORKDIR /app
 COPY --from=builder --chown=apiuser:apiuser /app/.venv /app/.venv
 COPY --chown=apiuser:apiuser app ./app
+# Gap SC5: tạo sẵn thư mục cocoindex LMDB state + chown apiuser TRƯỚC khi hạ quyền.
+# /app do root sở hữu nên apiuser không tạo được thư mục con lúc runtime.
+RUN mkdir -p /app/.cocoindex && chown apiuser:apiuser /app/.cocoindex
 USER apiuser
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
