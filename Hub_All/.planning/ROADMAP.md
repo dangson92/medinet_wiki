@@ -397,7 +397,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 **Plans:** 4 plans (4 waves)
 
 - [x] 08.3-01-PLAN.md — Nền tảng: deps aiosqlite/uvicorn + config OAuth + OAuthStore SQLite + Wave 0 test scaffolding (Wave 1, MCP-01) ✅ 2026-05-19
-- [ ] 08.3-02-PLAN.md — MedinetOAuthProvider 9 method + login form xác thực Medinet + wire FastMCP auth_server_provider (Wave 2, MCP-01)
+- [x] 08.3-02-PLAN.md — MedinetOAuthProvider 9 method + login form xác thực Medinet + wire FastMCP auth_server_provider (Wave 2, MCP-01) ✅ 2026-05-19
 - [ ] 08.3-03-PLAN.md — extract_oauth_token + forward Bearer JWT downstream + refresh-on-401 + tool resolve OAuth token (Wave 3, MCP-02)
 - [ ] 08.3-04-PLAN.md — Dockerfile mcp_service + Caddy reverse proxy auto-TLS + docker-compose + 08.3-HUMAN-UAT.md SC4 (Wave 4, MCP-01/MCP-02)
 
