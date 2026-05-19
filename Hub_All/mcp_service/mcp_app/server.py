@@ -225,6 +225,11 @@ async def _call_api(
         if new_pair is None:
             # Refresh token cũng hết hạn → user phải re-connect.
             raise
+        if not all(new_pair.get(k) for k in ("access_token", "refresh_token")):
+            logger.error("refresh_jwt trả payload thiếu access/refresh token")
+            raise ApiUnauthorizedError(
+                "Phản hồi refresh JWT thiếu trường bắt buộc"
+            ) from None
         # Pitfall 5 — lưu đè CẢ downstream JWT + refresh token mới.
         await store.update_downstream_jwt(
             cred.oauth_token or "",

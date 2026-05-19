@@ -126,6 +126,11 @@ def get_login_routes(
             return render_login_form(
                 txn, error="Phiên đăng nhập hết hạn, vui lòng kết nối lại"
             )
+        except (KeyError, TypeError):
+            logger.error("Login callback — payload downstream thiếu trường bắt buộc")
+            return render_login_form(
+                txn, error="Lỗi hệ thống, vui lòng thử lại sau"
+            )
 
         location = f"{redirect_uri}?code={code}"
         if client_state is not None:
