@@ -122,7 +122,7 @@ def test_login_callback_success_redirects(oauth_env) -> None:
     with TestClient(app) as client:
         # Seed pending vào store mà provider dùng (lifespan đã init_schema).
         store = _get_oauth_store()
-        txn = asyncio.get_event_loop().run_until_complete(
+        txn = asyncio.new_event_loop().run_until_complete(
             fake_pending_authorize(store, txn="txn-success")
         )
         resp = client.post(
@@ -151,7 +151,7 @@ def test_lifespan_inits_schema(oauth_env) -> None:
             await store.save_client("c1", {"client_id": "c1", "redirect_uris": ["x"]})
             return await store.get_client("c1")
 
-        result = asyncio.get_event_loop().run_until_complete(_check())
+        result = asyncio.new_event_loop().run_until_complete(_check())
     assert result is not None
     assert result["client_id"] == "c1"
 

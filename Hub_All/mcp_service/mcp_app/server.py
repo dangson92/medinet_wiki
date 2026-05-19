@@ -1,4 +1,4 @@
-"""MCP Service server — Phase 8.2 (MCP-01, MCP-02).
+"""MCP Service server — Phase 8.2 (MCP-01, MCP-02) + Phase 8.3 (MCP-01).
 
 FastMCP Streamable HTTP server expose 3 tool read-only cho AI client:
 - list_hubs   — danh sách Hub mà API key có quyền truy cập
@@ -11,8 +11,15 @@ gọi API Service qua HTTP bằng `ApiClient`. MCP Service KHÔNG truy cập DB/
 KHÔNG tự ghi usage_events — endpoint `/api/ask` của API Service đã ghi qua
 BackgroundTasks (D-14 Phase 8.2).
 
+Phase 8.3 (MCP-01): MCP Service nay đóng vai OAuth Authorization Server — wire
+`FastMCP(auth_server_provider=MedinetOAuthProvider, auth=AuthSettings(...))` để SDK
+tự mount route metadata/`/authorize`/`/token`/`/register`. Thêm route login form
+(`/login`). OAuthStore schema khởi tạo trong lifespan startup của Starlette app
+(compose với lifespan session-manager của SDK — KHÔNG ghi đè).
+
 Auth: client gửi `X-API-Key` qua header MCP → `require_api_key` trích → forward
-xuống API Service; API Service verify (trả 401 nếu sai).
+xuống API Service; API Service verify (trả 401 nếu sai). OAuth token (8.3) do SDK
+verify qua `load_access_token` mỗi tool call.
 
 Transport: Streamable HTTP, stateless_http=True.
 """
@@ -20,10 +27,17 @@ from __future__ import annotations
 
 import atexit
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
+from mcp.server.auth.settings import (
+    AuthSettings,
+    ClientRegistrationOptions,
+    RevocationOptions,
+)
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from pydantic import AnyHttpUrl
 
 from mcp_app.api_client import (
     ApiBadRequestError,
@@ -35,6 +49,8 @@ from mcp_app.api_client import (
 )
 from mcp_app.auth import require_api_key
 from mcp_app.config import get_settings
+from mcp_app.oauth import MedinetOAuthProvider, OAuthStore
+from mcp_app.oauth.login import get_login_routes
 from mcp_app.schemas import (
     AskAnswer,
     CitationItem,
@@ -45,12 +61,6 @@ from mcp_app.schemas import (
 )
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# FastMCP instance
-# stateless_http=True — Streamable HTTP transport không giữ session state
-# ---------------------------------------------------------------------------
-mcp = FastMCP("Medinet Wiki MCP Service", stateless_http=True)
 
 # ---------------------------------------------------------------------------
 # ApiClient singleton — tái dùng 1 AsyncClient cho connection pooling
@@ -71,6 +81,43 @@ def _get_client() -> ApiClient:
             timeout=settings.http_timeout,
         )
     return _api_client
+
+
+# ---------------------------------------------------------------------------
+# OAuth store + provider singleton (Phase 8.3) — lazy-init giống _get_client()
+# ---------------------------------------------------------------------------
+_oauth_store: OAuthStore | None = None
+_oauth_provider: MedinetOAuthProvider | None = None
+
+
+def _get_oauth_store() -> OAuthStore:
+    """Trả OAuthStore singleton — khởi tạo lười từ config.
+
+    `init_schema()` KHÔNG gọi ở đây — chạy trong lifespan startup (build_asgi_app).
+    """
+    global _oauth_store
+    if _oauth_store is None:
+        settings = get_settings()
+        _oauth_store = OAuthStore(db_path=settings.oauth_state_db_path)
+    return _oauth_store
+
+
+def _get_oauth_provider() -> MedinetOAuthProvider:
+    """Trả MedinetOAuthProvider singleton — inject store + api_client + settings.
+
+    Constructor provider chỉ giữ reference (lazy-safe) → an toàn gọi lúc import.
+    """
+    global _oauth_provider
+    if _oauth_provider is None:
+        settings = get_settings()
+        _oauth_provider = MedinetOAuthProvider(
+            store=_get_oauth_store(),
+            api_client=_get_client(),
+            issuer_url=settings.oauth_issuer_url,
+            access_token_ttl=settings.oauth_access_token_ttl,
+            refresh_token_ttl=settings.oauth_refresh_token_ttl,
+        )
+    return _oauth_provider
 
 
 def _map_api_error(e: ApiClientError) -> ToolError:
@@ -119,8 +166,12 @@ def _to_citations(raw: list[dict[str, Any]], *, cross_hub: bool) -> list[Citatio
 
 # ---------------------------------------------------------------------------
 # Tool: list_hubs
+#
+# Phase 8.3: 3 tool nay là hàm module-level THƯỜNG (KHÔNG decorator @mcp.tool()).
+# Đăng ký qua `register_tools(mcp)` trong `build_asgi_app()` — vì `build_asgi_app`
+# nay là factory tạo FastMCP MỚI mỗi lần gọi (session-manager .run() chỉ chạy
+# được 1 lần / instance). Body 3 tool GIỮ NGUYÊN logic Phase 8.2.
 # ---------------------------------------------------------------------------
-@mcp.tool()
 async def list_hubs(ctx: Context) -> HubList:  # type: ignore[type-arg]
     """Liệt kê các Hub Medinet Wiki mà API key có quyền truy cập.
 
@@ -153,7 +204,6 @@ async def list_hubs(ctx: Context) -> HubList:  # type: ignore[type-arg]
 # ---------------------------------------------------------------------------
 # Tool: search_wiki
 # ---------------------------------------------------------------------------
-@mcp.tool()
 async def search_wiki(  # type: ignore[type-arg]
     ctx: Context,
     query: str,
@@ -206,7 +256,6 @@ async def search_wiki(  # type: ignore[type-arg]
 # ---------------------------------------------------------------------------
 # Tool: ask_wiki
 # ---------------------------------------------------------------------------
-@mcp.tool()
 async def ask_wiki(  # type: ignore[type-arg]
     ctx: Context,
     query: str,
@@ -256,36 +305,117 @@ async def ask_wiki(  # type: ignore[type-arg]
 # Entrypoint — chạy MCP Service standalone trên port riêng
 # ---------------------------------------------------------------------------
 def _close_client_atexit() -> None:
-    """Best-effort đóng ApiClient khi process thoát.
+    """Best-effort đóng ApiClient + OAuthStore khi process thoát.
 
-    `streamable_http_app()` trả Starlette app gốc — không cho thêm on_shutdown
-    handler dễ dàng. Dùng atexit best-effort: chạy aclose() trong event loop mới.
-    Nếu lỗi (loop đang chạy, đã đóng) → chỉ log warning, không raise lúc thoát.
+    Lifespan shutdown (build_asgi_app) đã đóng OAuthStore — atexit là lớp phòng
+    vệ thêm cho trường hợp process thoát ngoài vòng đời ASGI. Nếu lỗi (loop đang
+    chạy, đã đóng) → chỉ log warning, không raise lúc thoát.
     """
-    global _api_client
-    if _api_client is None:
-        return
-    try:
-        import asyncio
+    global _api_client, _oauth_store
+    import asyncio
 
-        asyncio.run(_api_client.aclose())
-    except Exception as e:  # noqa: BLE001 — cleanup best-effort lúc thoát process
-        logger.warning("Không đóng được ApiClient lúc thoát: %s", type(e).__name__)
-    finally:
-        _api_client = None
+    if _api_client is not None:
+        try:
+            asyncio.run(_api_client.aclose())
+        except Exception as e:  # noqa: BLE001 — cleanup best-effort lúc thoát
+            logger.warning(
+                "Không đóng được ApiClient lúc thoát: %s", type(e).__name__
+            )
+        finally:
+            _api_client = None
+
+    if _oauth_store is not None:
+        try:
+            asyncio.run(_oauth_store.aclose())
+        except Exception as e:  # noqa: BLE001 — cleanup best-effort lúc thoát
+            logger.warning(
+                "Không đóng được OAuthStore lúc thoát: %s", type(e).__name__
+            )
+        finally:
+            _oauth_store = None
 
 
 atexit.register(_close_client_atexit)
 
 
-def build_asgi_app() -> Any:
-    """Tạo Starlette ASGI app cho MCP Service standalone.
+def register_tools(mcp: FastMCP) -> None:
+    """Đăng ký 3 tool read-only lên một FastMCP instance.
 
-    `mcp.streamable_http_app()` trả Starlette app và tự gắn lifespan session
-    manager (`StreamableHTTPSessionManager.run()`) — KHÔNG cần compose lifespan
-    thủ công như `api/app/main.py` vì đây là app gốc, không phải sub-mount.
+    Tách khỏi định nghĩa hàm để `build_asgi_app()` tạo FastMCP mới mỗi lần gọi
+    (factory) — `mcp.tool()` trả lại chính hàm gốc, không bọc, nên 3 hàm
+    `list_hubs`/`search_wiki`/`ask_wiki` vẫn import trực tiếp được cho unit test.
     """
-    return mcp.streamable_http_app()
+    mcp.tool()(list_hubs)
+    mcp.tool()(search_wiki)
+    mcp.tool()(ask_wiki)
+
+
+def _build_mcp() -> FastMCP:
+    """Dựng FastMCP instance MỚI wired OAuth Authorization Server (Phase 8.3).
+
+    stateless_http=True — Streamable HTTP transport không giữ session (Pitfall 2,
+    KHÔNG xung đột OAuth). `auth_server_provider` non-None → SDK tự mount route
+    metadata/`/authorize`/`/token`/`/register` (create_auth_routes). AuthSettings
+    issuer_url đọc từ config (default an toàn → Settings() không raise khi thiếu env).
+    """
+    settings = get_settings()
+    mcp = FastMCP(
+        "Medinet Wiki MCP Service",
+        stateless_http=True,
+        auth_server_provider=_get_oauth_provider(),
+        auth=AuthSettings(
+            issuer_url=AnyHttpUrl(settings.oauth_issuer_url),
+            resource_server_url=AnyHttpUrl(settings.oauth_issuer_url),
+            client_registration_options=ClientRegistrationOptions(
+                enabled=True,
+                valid_scopes=["wiki"],
+                default_scopes=["wiki"],
+            ),
+            revocation_options=RevocationOptions(enabled=True),
+            required_scopes=["wiki"],
+        ),
+    )
+    register_tools(mcp)
+    return mcp
+
+
+def build_asgi_app() -> Any:
+    """Factory tạo Starlette ASGI app cho MCP Service standalone.
+
+    Tạo FastMCP MỚI mỗi lần gọi — `StreamableHTTPSessionManager.run()` chỉ chạy
+    được 1 lần / instance, nên factory cần instance riêng cho mỗi app (Dockerfile
+    CMD dùng `uvicorn ... --factory`).
+
+    `mcp.streamable_http_app()` trả Starlette app đã tự gắn lifespan session
+    manager + route OAuth do SDK mount khi `auth_server_provider` non-None
+    (metadata/`/authorize`/`/token`/`/register`).
+
+    Phase 8.3: compose lifespan — chạy `OAuthStore.init_schema()` lúc startup
+    TRƯỚC khi nhận request đầu tiên, rồi mới chạy lifespan SDK lồng bên trong.
+    Cách compose này bảo toàn lifespan session-manager của SDK (KHÔNG ghi đè).
+    Route `/login` + `/login/callback` thêm vào app sau khi SDK đã mount route OAuth.
+    """
+    mcp = _build_mcp()
+    app = mcp.streamable_http_app()  # Starlette app — đã có lifespan SDK
+    _sdk_lifespan = app.router.lifespan_context  # giữ lifespan SDK gốc
+
+    @asynccontextmanager
+    async def _composed_lifespan(app_: Any):  # type: ignore[no-untyped-def]
+        # startup: khởi tạo schema OAuth store TRƯỚC khi nhận request đầu tiên.
+        await _get_oauth_store().init_schema()
+        # rồi chạy lifespan SDK (session manager) lồng bên trong.
+        async with _sdk_lifespan(app_):
+            yield
+        # shutdown: đóng store best-effort.
+        await _get_oauth_store().aclose()
+
+    app.router.lifespan_context = _composed_lifespan
+
+    # Mount route login form custom — cạnh route OAuth do SDK tự tạo.
+    for route in get_login_routes(_get_oauth_provider(), _get_client()):
+        app.router.routes.append(route)
+
+    return app
 
 
 def main() -> None:
@@ -299,12 +429,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     settings = get_settings()
     app = build_asgi_app()
-    # KHÔNG log api_key — chỉ log host/port/api_base_url (T-08.2-03-I2)
+    # KHÔNG log api_key/token/signing key — chỉ log host/port/url (T-08.2-03-I2).
+    # oauth_issuer_url là URL public — an toàn để log.
     logger.info(
-        "MCP Service khởi động — host=%s port=%s api_base_url=%s",
+        "MCP Service khởi động — host=%s port=%s api_base_url=%s oauth_issuer_url=%s",
         settings.service_host,
         settings.service_port,
         settings.api_base_url,
+        settings.oauth_issuer_url,
     )
     uvicorn.run(app, host=settings.service_host, port=settings.service_port)
 

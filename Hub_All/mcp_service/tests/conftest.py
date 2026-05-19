@@ -43,17 +43,21 @@ def mock_ctx():
 
 @pytest.fixture(autouse=True)
 def reset_api_client():
-    """Reset singleton ApiClient của server trước + sau mỗi test.
+    """Reset singleton của server (ApiClient + OAuth store/provider) mỗi test.
 
-    `mcp_app.server._api_client` là singleton lazy-init. Nếu không reset, base_url
-    của test trước leak sang test sau (respx route không khớp). Đặt `None` để
-    `_get_client()` tạo ApiClient mới từ config (đã bị override bởi `api_base_url`).
+    `mcp_app.server._api_client` / `_oauth_store` / `_oauth_provider` là singleton
+    lazy-init. Nếu không reset, base_url / DB path của test trước leak sang test
+    sau. Đặt `None` để `_get_*()` tạo instance mới từ config (đã bị override).
     """
     import mcp_app.server as server
 
     server._api_client = None
+    server._oauth_store = None
+    server._oauth_provider = None
     yield
     server._api_client = None
+    server._oauth_store = None
+    server._oauth_provider = None
 
 
 @pytest.fixture
