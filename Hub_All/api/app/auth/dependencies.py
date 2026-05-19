@@ -7,6 +7,7 @@ Dependencies:
 - require_role          — gate endpoint theo role (AUTH-04).
 - get_current_user_with_hubs — User + hub_assignments từ user_hubs (HUB-02).
 - get_api_key_or_jwt    — auth qua X-API-Key HOẶC Bearer JWT (AUX-02 — Plan 05-05).
+- get_api_key_or_jwt_with_hubs — auth X-API-Key HOặC JWT + hub_assignments (Phase 8.2).
 """
 from __future__ import annotations
 
@@ -286,3 +287,31 @@ async def get_api_key_or_jwt(
     return await get_current_user(
         token=token, jwt_mgr=jwt_mgr, redis=redis, db=db
     )
+
+
+async def get_api_key_or_jwt_with_hubs(
+    user: User = Depends(get_api_key_or_jwt),  # noqa: B008 — FastAPI pattern
+    db: AsyncSession = Depends(get_session),  # noqa: B008
+) -> UserWithHubs:
+    """Auth X-API-Key HOặC JWT + hub_assignments từ user_hubs (Phase 8.2).
+
+    Analog `get_current_user_with_hubs` nhưng chấp nhận X-API-Key HOặC Bearer
+    JWT. Dùng cho endpoint search/ask để MCP Service (forward X-API-Key của
+    client, KHÔNG có JWT) gọi được.
+
+    Điểm KHÁC `get_current_user_with_hubs` DUY NHẤT: `user` inject qua
+    `Depends(get_api_key_or_jwt)` thay vì `Depends(get_current_user)` — nhờ vậy
+    đường X-API-Key được verify trước (qua `ApiKeyService.verify_key`), đường
+    JWT vẫn fallback. Auth fail → `get_api_key_or_jwt` raise 401 TRƯỚC khi hàm
+    này chạy (KHÔNG nuốt lỗi).
+
+    `hub_ids` load từ DB `user_hubs` (KHÔNG tin payload) — nguồn hub isolation
+    HUB-02. admin vẫn trả `hub_ids` thực tế; bypass filter cho admin xảy ra ở
+    service layer (`hub_filter_clause`/`verify_hub_access`), KHÔNG ở dependency
+    này — giữ đồng nhất với `get_current_user_with_hubs`.
+    """
+    from app.models.auth import UserHub
+
+    stmt = select(UserHub.hub_id).where(UserHub.user_id == user.id)
+    hub_ids = [str(h) for h in (await db.execute(stmt)).scalars().all()]
+    return UserWithHubs(user=user, hub_ids=hub_ids)
