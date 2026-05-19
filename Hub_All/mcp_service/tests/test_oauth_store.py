@@ -11,6 +11,14 @@ Phủ CRUD roundtrip 4 bảng SQLite của OAuth state store:
 - test_pending_roundtrip          — save_pending → load_pending; delete → None.
 - test_pending_helper_seeds       — helper conftest fake_pending_authorize hoạt động.
 - test_cleanup_expired            — dọn code hết hạn + pending bỏ dở >600s.
+
+Phase 8.3 Plan 06 (gap closure SC3 — token lifecycle) thêm test phủ đường
+replay / đồng thời cho các vá lỗi Plan 05 (CR-01/CR-02):
+- test_claim_auth_code_single_use     — claim_auth_code đọc+xoá nguyên tử (CR-01).
+- test_claim_auth_code_missing        — claim code không tồn tại → None.
+- test_rotate_token_success           — rotate_token định vị theo refresh → True.
+- test_rotate_token_reuse_returns_false — rotate lại refresh đã dùng → False (CR-02).
+- test_rotate_token_unknown_refresh   — rotate refresh không tồn tại → False.
 """
 from __future__ import annotations
 
@@ -228,3 +236,94 @@ async def test_cleanup_expired(oauth_store) -> None:
     assert await oauth_store.load_auth_code("code-valid") is not None
     assert await oauth_store.load_pending("txn-old") is None
     assert await oauth_store.load_pending("txn-fresh") is not None
+
+
+async def test_claim_auth_code_single_use(oauth_store) -> None:
+    """claim_auth_code đọc + xoá code nguyên tử — lần 2 trả None (CR-01)."""
+    await oauth_store.save_auth_code(
+        code="code-claim",
+        client_id="client-abc",
+        code_payload={"redirect_uri": "https://claude.ai/cb", "scopes": ["wiki"]},
+        downstream_jwt="jwt-a",
+        downstream_refresh_token="jwt-r",
+        user_payload={"id": 1, "email": "u@medinet.vn"},
+        expires_at=int(time.time()) + 600,
+    )
+    first = await oauth_store.claim_auth_code("code-claim")
+    assert first is not None
+    assert first["downstream_jwt"] == "jwt-a"
+    assert first["downstream_refresh_token"] == "jwt-r"
+    assert first["client_id"] == "client-abc"
+    assert first["code_payload"]["scopes"] == ["wiki"]
+    assert first["user_payload"]["id"] == 1
+    assert first["expires_at"] > int(time.time())
+    # Claim lần 2 — code đã bị xoá nguyên tử.
+    assert await oauth_store.claim_auth_code("code-claim") is None
+    assert await oauth_store.load_auth_code("code-claim") is None
+
+
+async def test_claim_auth_code_missing(oauth_store) -> None:
+    """claim_auth_code với code không tồn tại → None."""
+    assert await oauth_store.claim_auth_code("code-khong-ton-tai") is None
+
+
+async def test_rotate_token_success(oauth_store) -> None:
+    """rotate_token định vị theo refresh_token → True; access cũ mất hiệu lực (CR-02)."""
+    await oauth_store.save_token(
+        access_token="acc-A",
+        refresh_token="ref-R",
+        client_id="client-abc",
+        scopes=["wiki"],
+        downstream_jwt="jwt",
+        downstream_refresh_token="jwt-r",
+        user_payload={"id": 1},
+        expires_at=int(time.time()) + 3600,
+    )
+    ok = await oauth_store.rotate_token(
+        old_refresh_token="ref-R",
+        new_access_token="acc-A2",
+        new_refresh_token="ref-R2",
+        expires_at=int(time.time()) + 3600,
+    )
+    assert ok is True
+    assert await oauth_store.load_token("acc-A2") is not None
+    assert await oauth_store.load_token("acc-A") is None
+    assert await oauth_store.load_token_by_refresh("ref-R2") is not None
+
+
+async def test_rotate_token_reuse_returns_false(oauth_store) -> None:
+    """rotate_token với refresh token đã rotate → False (rowcount 0, reuse)."""
+    await oauth_store.save_token(
+        access_token="acc-B",
+        refresh_token="ref-S",
+        client_id="client-abc",
+        scopes=["wiki"],
+        downstream_jwt="jwt",
+        downstream_refresh_token="jwt-r",
+        user_payload={"id": 1},
+        expires_at=int(time.time()) + 3600,
+    )
+    assert await oauth_store.rotate_token(
+        old_refresh_token="ref-S",
+        new_access_token="acc-B2",
+        new_refresh_token="ref-S2",
+        expires_at=int(time.time()) + 3600,
+    ) is True
+    # Dùng lại refresh token CŨ — phải trả False.
+    assert await oauth_store.rotate_token(
+        old_refresh_token="ref-S",
+        new_access_token="acc-B3",
+        new_refresh_token="ref-S3",
+        expires_at=int(time.time()) + 3600,
+    ) is False
+    assert await oauth_store.load_token("acc-B3") is None
+
+
+async def test_rotate_token_unknown_refresh(oauth_store) -> None:
+    """rotate_token với refresh token không tồn tại → False."""
+    assert await oauth_store.rotate_token(
+        old_refresh_token="ref-khong-ton-tai",
+        new_access_token="acc-x",
+        new_refresh_token="ref-x",
+        expires_at=int(time.time()) + 3600,
+    ) is False
