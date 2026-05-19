@@ -1,7 +1,9 @@
-"""Fixture chung cho test MCP Service — Phase 8.2 Plan 05 + Phase 8.3 Plan 01.
+"""Fixture chung cho test MCP Service — Phase 8.2 Plan 05 + Phase 8.3 Plan 01/03.
 
 Cung cấp:
 - `mock_ctx`     — factory tạo `ctx` MCP giả với (hoặc không có) header X-API-Key.
+- `mock_ctx_oauth` — (Phase 8.3 Plan 03) factory tạo `ctx` MCP giả với header
+  `Authorization: Bearer <token>` thay X-API-Key.
 - `reset_api_client` — autouse, reset singleton `_api_client` của server trước/sau
   mỗi test để base_url không leak giữa các test.
 - `api_base_url` — base URL dùng cho respx mock + override config qua env MCP_API_BASE_URL.
@@ -35,6 +37,27 @@ def mock_ctx():
     def _make(api_key: str | None = "test-key-123") -> MagicMock:
         ctx = MagicMock()
         headers: dict[str, str] = {"x-api-key": api_key} if api_key is not None else {}
+        ctx.request_context.request.headers = headers
+        return ctx
+
+    return _make
+
+
+@pytest.fixture
+def mock_ctx_oauth():
+    """Factory tạo `ctx` MCP giả mang header `Authorization: Bearer <token>`.
+
+    Biến thể của `mock_ctx` cho client OAuth (Phase 8.3 Plan 03):
+    - `token` là chuỗi → headers `{"authorization": "Bearer <token>"}` →
+      `extract_oauth_token` đọc được token.
+    - `token is None` → headers rỗng `{}` → cả X-API-Key lẫn OAuth đều thiếu.
+    """
+
+    def _make(token: str | None = "oauth-token-test") -> MagicMock:
+        ctx = MagicMock()
+        headers: dict[str, str] = (
+            {"authorization": f"Bearer {token}"} if token is not None else {}
+        )
         ctx.request_context.request.headers = headers
         return ctx
 

@@ -1,6 +1,6 @@
 """Test cho server.py — 3 tool MCP gọi API Service qua HTTP.
 
-Phủ 9 behavior:
+Phủ 9 behavior gốc + 3 behavior OAuth resolve credential (Phase 8.3 Plan 03):
 - Test 1 (list_hubs): unwrap data.items → HubList.
 - Test 2 (search_wiki single-hub): post /api/search với hub_ids=[hub_id].
 - Test 3 (search_wiki cross-hub): post /api/search/cross-hub với hub_ids=None.
@@ -10,6 +10,9 @@ Phủ 9 behavior:
 - Test 7 (API 401): ApiUnauthorizedError → ToolError MCP_UNAUTHORIZED.
 - Test 8 (API 403): ApiForbiddenError → ToolError HUB_ACCESS_DENIED.
 - Test 9 (API 5xx): ApiServerError → ToolError không leak stack trace.
+- Test 10 (resolve OAuth): ctx có Bearer token hợp lệ → tool chạy, forward JWT.
+- Test 11 (OAuth token invalid): Bearer token không trong store → ToolError MCP_UNAUTHORIZED.
+- Test 12 (no credential): không header → ToolError MCP_UNAUTHORIZED.
 
 Mock ở tầng ApiClient (_get_client) — KHÔNG cần API Service thật, KHÔNG cần respx.
 CHỈ import 3 tool + helper từ mcp_app.server (KHÔNG import build_asgi_app/main).
@@ -210,3 +213,98 @@ async def test_api_5xx_no_stack_trace_leak(
     # Message KHÔNG chứa dấu vết stack trace nội bộ
     assert "Traceback" not in msg
     assert "File \"" not in msg
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.3 Plan 03 — tool resolve OAuth token → forward downstream JWT
+# ---------------------------------------------------------------------------
+
+
+async def _seed_oauth_token(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    access_token: str,
+    downstream_jwt: str,
+    downstream_refresh: str = "ds-refresh",
+) -> "object":
+    """Tạo OAuthStore :memory:, seed 1 OAuth token, wire vào provider+store singleton.
+
+    Trả store để test inspect sau (vd verify downstream JWT đã rotate).
+    """
+    import time
+
+    from mcp_app.oauth.provider import MedinetOAuthProvider
+    from mcp_app.oauth.store import OAuthStore
+
+    store = OAuthStore(db_path=":memory:")
+    await store.init_schema()
+    await store.save_token(
+        access_token=access_token,
+        refresh_token="oauth-refresh",
+        client_id="client-test",
+        scopes=["wiki"],
+        downstream_jwt=downstream_jwt,
+        downstream_refresh_token=downstream_refresh,
+        user_payload={"id": "u1", "email": "a@b.com", "role": "admin"},
+        expires_at=int(time.time()) + 3600,
+    )
+    provider = MedinetOAuthProvider(
+        store=store,
+        api_client=None,
+        issuer_url="https://mcp.example.com",
+        access_token_ttl=3600,
+        refresh_token_ttl=2592000,
+    )
+    monkeypatch.setattr("mcp_app.server._get_oauth_store", lambda: store)
+    monkeypatch.setattr("mcp_app.server._get_oauth_provider", lambda: provider)
+    return store
+
+
+async def test_tool_resolves_oauth_token(
+    mock_ctx_oauth, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test 10: ctx có Bearer token hợp lệ → tool chạy, forward downstream JWT."""
+    store = await _seed_oauth_token(
+        monkeypatch, access_token="oauth-tok-1", downstream_jwt="jwt-downstream-1"
+    )
+    client = AsyncMock()
+    client.get.return_value = {"items": [{"id": "h1", "name": "Hub 1"}]}
+    _patch_client(monkeypatch, client)
+
+    result = await list_hubs(mock_ctx_oauth(token="oauth-tok-1"))
+
+    assert len(result.hubs) == 1
+    # Tool forward downstream JWT (không X-API-Key)
+    assert client.get.call_args.kwargs.get("jwt") == "jwt-downstream-1"
+    assert client.get.call_args.kwargs.get("api_key") is None
+    await store.aclose()
+
+
+async def test_tool_oauth_token_invalid(
+    mock_ctx_oauth, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test 11: Bearer token không trong store → ToolError MCP_UNAUTHORIZED."""
+    store = await _seed_oauth_token(
+        monkeypatch, access_token="oauth-tok-1", downstream_jwt="jwt-1"
+    )
+    client = AsyncMock()
+    _patch_client(monkeypatch, client)
+
+    with pytest.raises(ToolError, match="MCP_UNAUTHORIZED"):
+        await list_hubs(mock_ctx_oauth(token="token-khong-ton-tai"))
+    await store.aclose()
+
+
+async def test_tool_no_credential(
+    mock_ctx_oauth, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test 12: không header nào → ToolError MCP_UNAUTHORIZED."""
+    store = await _seed_oauth_token(
+        monkeypatch, access_token="oauth-tok-1", downstream_jwt="jwt-1"
+    )
+    client = AsyncMock()
+    _patch_client(monkeypatch, client)
+
+    with pytest.raises(ToolError, match="MCP_UNAUTHORIZED"):
+        await list_hubs(mock_ctx_oauth(token=None))
+    await store.aclose()
