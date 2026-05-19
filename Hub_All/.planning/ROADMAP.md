@@ -366,7 +366,9 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 08.2-02-PLAN.md — get_api_key_or_jwt_with_hubs + 4 endpoint search/ask + GET /api/hubs nhận X-API-Key, scope theo role (Wave 1, MCP-01/MCP-02) ✅ 2026-05-19
 - [x] 08.2-03-PLAN.md — FastMCP server + 3 tool gọi API qua HTTP + entrypoint standalone (Wave 2, MCP-01/MCP-02) ✅ 2026-05-19
 - [x] 08.2-04-PLAN.md — Gỡ mount /mcp + _composed_lifespan khỏi api/main.py, xoá app/mcp/ + dep mcp (Wave 3, MCP-01/MCP-02) ✅ 2026-05-19
-- [ ] 08.2-05-PLAN.md — Test suite mcp_service/ respx mock API + regression API (Wave 4, MCP-01/MCP-02)
+- [x] 08.2-05-PLAN.md — Test suite mcp_service/ respx mock API + regression API (Wave 4, MCP-01/MCP-02) ✅ 2026-05-19
+
+**Phase 8.2 ✅ COMPLETE (2026-05-19)** — 5/5 plans / 4 waves. MCP Service tách thành process độc lập gọi API qua HTTP (đảo D-04 Phase 8.1). SC1/SC2/SC3/SC5 auto-verified; SC4 (`usage_events`) `human_needed` — UAT thủ công ghi README. 33 test mcp_service/ PASS + 119 regression API unit PASS, ruff clean.
 
 ---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
@@ -433,7 +435,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 5/5 | ✓ Complete | 2026-05-18 |
 | 8. Frontend E2E Smoke (TEARDOWN-01 done 2026-05-14) | 4/4 | ✓ Complete (verify human_needed) | 2026-05-19 |
 | 8.1 MCP Server — Expose Wiki Tools | 3/3 | ✓ Complete (verify human_needed) | 2026-05-19 |
-| 8.2 MCP Service — Tách Process Độc Lập | 0/? | Not planned (INSERTED) | - |
+| 8.2 MCP Service — Tách Process Độc Lập | 5/5 | ✓ Complete (verify human_needed — SC4) | 2026-05-19 |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
