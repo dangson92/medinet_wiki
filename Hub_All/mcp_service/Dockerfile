@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Dockerfile MCP Service — Phase 8.3.
 # Multi-stage uv (mẫu theo api/Dockerfile). KHÁC api: không DB chung nên KHÔNG
-# alembic/migrations; CMD dùng FACTORY build_asgi_app nên cần cờ --factory.
+# có bước migration; CMD dùng FACTORY build_asgi_app nên cần cờ --factory.
 
 FROM python:3.12-slim-bookworm AS builder
 ENV UV_LINK_MODE=copy \
