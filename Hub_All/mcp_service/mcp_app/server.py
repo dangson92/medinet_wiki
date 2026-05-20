@@ -303,7 +303,15 @@ async def list_hubs(ctx: Context) -> HubList:  # type: ignore[type-arg]
     except ApiClientError as e:
         raise _map_api_error(e) from e
 
-    items = data.get("items", []) if isinstance(data, dict) else []
+    # API service `/api/hubs` (resp.paginated) trả envelope `{data:[...], meta:{...}}`
+    # → `data` đã unwrap là LIST hub. Fallback `dict.get("items")` cho format cũ
+    # phòng khi API đổi shape; cuối cùng default `[]`.
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = data.get("items", [])
+    else:
+        items = []
     return HubList(
         hubs=[
             HubItem(
