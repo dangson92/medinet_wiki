@@ -577,68 +577,6 @@ def build_asgi_app() -> Any:
     for route in get_login_routes(_get_oauth_provider(), _get_client()):
         inner.router.routes.append(route)
 
-    # DEBUG (Phase 8.3 triage Claude 401 /mcp/token) — middleware log
-    # request đến /token: Authorization header + Content-Type + body
-    # form keys (KHÔNG log secret value, chỉ key presence + length).
-    # Mục đích: xác định Claude web dùng auth method nào (basic/post/none).
-    # Remove sau khi fix xong root cause.
-    from starlette.middleware.base import BaseHTTPMiddleware
-
-    class _TokenDebugMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Any, call_next: Any) -> Any:
-            if request.url.path.endswith("/token") and request.method == "POST":
-                auth = request.headers.get("authorization", "<none>")
-                # Mask Basic — chỉ log prefix "Basic " + length b64 segment.
-                if auth.startswith("Basic "):
-                    auth_log = f"Basic <{len(auth) - 6} chars>"
-                elif auth.startswith("Bearer "):
-                    auth_log = f"Bearer <{len(auth) - 7} chars>"
-                else:
-                    auth_log = f"<{auth[:10]}...>" if auth != "<none>" else "<none>"
-                ct = request.headers.get("content-type", "<none>")
-                body = await request.body()
-                # Restore body cho downstream re-read.
-                from starlette.types import Receive
-
-                async def _replay() -> dict:
-                    return {"type": "http.request", "body": body, "more_body": False}
-
-                request._receive = _replay  # type: ignore[assignment]
-                # Parse form keys + MASK client_secret (first 6 + last 4 char
-                # + length) — đủ để verify Claude pasted-secret khớp DB không.
-                keys: list[str] = []
-                cs_mask = "<n/a>"
-                cid_mask = "<n/a>"
-                if "application/x-www-form-urlencoded" in ct.lower():
-                    try:
-                        from urllib.parse import parse_qsl
-
-                        form_dict = dict(parse_qsl(body.decode()))
-                        keys = list(form_dict.keys())
-                        cs = form_dict.get("client_secret", "")
-                        if cs:
-                            cs_mask = f"{cs[:6]}...{cs[-4:]} (len={len(cs)})"
-                        else:
-                            cs_mask = "<missing>"
-                        cid = form_dict.get("client_id", "")
-                        if cid:
-                            cid_mask = f"{cid[:10]}...{cid[-6:]} (len={len(cid)})"
-                    except Exception:  # noqa: BLE001
-                        keys = ["<parse_err>"]
-                logger.warning(
-                    "DEBUG /token POST — Authorization=%s CT=%s body_len=%d "
-                    "form_keys=%s client_id=%s client_secret=%s",
-                    auth_log,
-                    ct[:50],
-                    len(body),
-                    keys,
-                    cid_mask,
-                    cs_mask,
-                )
-            return await call_next(request)
-
-    inner.add_middleware(_TokenDebugMiddleware)
-
     # Subdomain/authority-root deploy → trả inner trực tiếp.
     if not prefix:
         return inner

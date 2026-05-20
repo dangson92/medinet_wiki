@@ -34,6 +34,17 @@ logger = logging.getLogger(__name__)
 # mcp_service/tests/test_oauth_provider.py constant REDIRECT.
 _DEFAULT_REDIRECT_URI = "https://claude.ai/api/mcp/auth_callback"
 
+# Default redirect_uris cho client mới — gồm Claude web + MCP Inspector
+# (dev tool chính thức của Anthropic, default callback localhost:6274).
+# Inspector cần redirect_uri này để OAuth flow hoạt động, nếu không SDK
+# reject InvalidRedirectUriError ("not registered for client"). Mở rộng
+# tại default → mọi client mới hỗ trợ cả 2 mà không cần config riêng.
+_DEFAULT_REDIRECT_URIS = [
+    _DEFAULT_REDIRECT_URI,
+    "http://localhost:6274/oauth/callback",
+    "http://127.0.0.1:6274/oauth/callback",
+]
+
 
 def _generate_client_id() -> str:
     """`mcpu_` + 22 ký tự urlsafe (~128 bit entropy)."""
@@ -69,7 +80,7 @@ class MCPOAuthClientService:
             user_id=user_id,
             client_id=_generate_client_id(),
             client_secret=_generate_client_secret(),
-            redirect_uris=[_DEFAULT_REDIRECT_URI],
+            redirect_uris=list(_DEFAULT_REDIRECT_URIS),
         )
         self.db.add(client)
         await self.db.flush()
