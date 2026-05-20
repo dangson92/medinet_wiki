@@ -577,6 +577,53 @@ def build_asgi_app() -> Any:
     for route in get_login_routes(_get_oauth_provider(), _get_client()):
         inner.router.routes.append(route)
 
+    # DEBUG (Phase 8.3 triage Claude 401 /mcp/token) — middleware log
+    # request đến /token: Authorization header + Content-Type + body
+    # form keys (KHÔNG log secret value, chỉ key presence + length).
+    # Mục đích: xác định Claude web dùng auth method nào (basic/post/none).
+    # Remove sau khi fix xong root cause.
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class _TokenDebugMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Any, call_next: Any) -> Any:
+            if request.url.path.endswith("/token") and request.method == "POST":
+                auth = request.headers.get("authorization", "<none>")
+                # Mask Basic — chỉ log prefix "Basic " + length b64 segment.
+                if auth.startswith("Basic "):
+                    auth_log = f"Basic <{len(auth) - 6} chars>"
+                elif auth.startswith("Bearer "):
+                    auth_log = f"Bearer <{len(auth) - 7} chars>"
+                else:
+                    auth_log = f"<{auth[:10]}...>" if auth != "<none>" else "<none>"
+                ct = request.headers.get("content-type", "<none>")
+                body = await request.body()
+                # Restore body cho downstream re-read.
+                from starlette.types import Receive
+
+                async def _replay() -> dict:
+                    return {"type": "http.request", "body": body, "more_body": False}
+
+                request._receive = _replay  # type: ignore[assignment]
+                # Parse form keys (don't log values — secret protection).
+                keys: list[str] = []
+                if "application/x-www-form-urlencoded" in ct.lower():
+                    try:
+                        from urllib.parse import parse_qsl
+
+                        keys = [k for k, _ in parse_qsl(body.decode())]
+                    except Exception:  # noqa: BLE001
+                        keys = ["<parse_err>"]
+                logger.warning(
+                    "DEBUG /token POST — Authorization=%s Content-Type=%s body_len=%d form_keys=%s",
+                    auth_log,
+                    ct[:50],
+                    len(body),
+                    keys,
+                )
+            return await call_next(request)
+
+    inner.add_middleware(_TokenDebugMiddleware)
+
     # Subdomain/authority-root deploy → trả inner trực tiếp.
     if not prefix:
         return inner
