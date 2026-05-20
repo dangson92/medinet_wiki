@@ -471,11 +471,19 @@ def _build_mcp() -> FastMCP:
     KHÔNG xung đột OAuth). `auth_server_provider` non-None → SDK tự mount route
     metadata/`/authorize`/`/token`/`/register` (create_auth_routes). AuthSettings
     issuer_url đọc từ config (default an toàn → Settings() không raise khi thiếu env).
+
+    `streamable_http_path` đặt theo `path_prefix`:
+    - rỗng → mặc định `/mcp` (subdomain/authority-root deploy).
+    - non-empty (vd `mcp`) → `/` (transport ở root của inner app); wrapper
+      ở `build_asgi_app` mount inner dưới `/<prefix>` → external = `/<prefix>`.
     """
     settings = get_settings()
+    prefix = settings.path_prefix.strip("/")
+    streamable_path = "/" if prefix else "/mcp"
     mcp = FastMCP(
         "Medinet Wiki MCP Service",
         stateless_http=True,
+        streamable_http_path=streamable_path,
         auth_server_provider=_get_oauth_provider(),
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(settings.oauth_issuer_url),
@@ -508,10 +516,18 @@ def build_asgi_app() -> Any:
     TRƯỚC khi nhận request đầu tiên, rồi mới chạy lifespan SDK lồng bên trong.
     Cách compose này bảo toàn lifespan session-manager của SDK (KHÔNG ghi đè).
     Route `/login` + `/login/callback` thêm vào app sau khi SDK đã mount route OAuth.
+
+    Khi `MCP_PATH_PREFIX` non-empty (path-based deploy dưới cùng domain với
+    app khác qua reverse proxy không rewrite path — vd Cloudflare Tunnel):
+    wrap inner app dưới Mount(`/<prefix>`, ...) + add 2 route metadata
+    RFC 8414/9728 ở root với suffix path (Claude tự fetch ở đường này).
     """
+    settings = get_settings()
+    prefix = settings.path_prefix.strip("/")
+
     mcp = _build_mcp()
-    app = mcp.streamable_http_app()  # Starlette app — đã có lifespan SDK
-    _sdk_lifespan = app.router.lifespan_context  # giữ lifespan SDK gốc
+    inner = mcp.streamable_http_app()  # Starlette app — đã có lifespan SDK
+    _sdk_lifespan = inner.router.lifespan_context  # giữ lifespan SDK gốc
 
     @asynccontextmanager
     async def _composed_lifespan(app_: Any):  # type: ignore[no-untyped-def]
@@ -523,13 +539,75 @@ def build_asgi_app() -> Any:
         # shutdown: đóng store best-effort.
         await _get_oauth_store().aclose()
 
-    app.router.lifespan_context = _composed_lifespan
+    inner.router.lifespan_context = _composed_lifespan
 
     # Mount route login form custom — cạnh route OAuth do SDK tự tạo.
     for route in get_login_routes(_get_oauth_provider(), _get_client()):
-        app.router.routes.append(route)
+        inner.router.routes.append(route)
 
-    return app
+    # Subdomain/authority-root deploy → trả inner trực tiếp.
+    if not prefix:
+        return inner
+
+    # Path-based deploy: wrap inner dưới Mount(`/<prefix>`, ...) + add 2
+    # route metadata RFC 8414/9728 ở root với suffix path. Claude fetch
+    # metadata theo issuer_url (RFC 8414 §3, RFC 9728 §3.1) — path suffix
+    # bằng path component của issuer (vd issuer `.../mcp` → metadata path
+    # `/.well-known/oauth-*/mcp`).
+    from urllib.parse import urlparse
+
+    from mcp.server.auth.handlers.metadata import (
+        MetadataHandler,
+        ProtectedResourceMetadataHandler,
+    )
+    from mcp.server.auth.routes import build_metadata
+    from mcp.shared.auth import ProtectedResourceMetadata
+    from starlette.applications import Starlette
+    from starlette.routing import Mount, Route
+
+    issuer = AnyHttpUrl(settings.oauth_issuer_url)
+    client_reg = ClientRegistrationOptions(
+        enabled=True, valid_scopes=["wiki"], default_scopes=["wiki"]
+    )
+    revoke = RevocationOptions(enabled=True)
+    as_metadata = build_metadata(issuer, None, client_reg, revoke)
+
+    pr_metadata = ProtectedResourceMetadata(
+        resource=issuer,
+        authorization_servers=[issuer],
+        scopes_supported=["wiki"],
+    )
+
+    issuer_path = (urlparse(str(issuer)).path or "").rstrip("/")
+    as_route_path = f"/.well-known/oauth-authorization-server{issuer_path}"
+    pr_route_path = f"/.well-known/oauth-protected-resource{issuer_path}"
+
+    wrapper = Starlette(
+        routes=[
+            Route(
+                as_route_path,
+                endpoint=MetadataHandler(as_metadata).handle,
+                methods=["GET", "OPTIONS"],
+            ),
+            Route(
+                pr_route_path,
+                endpoint=ProtectedResourceMetadataHandler(pr_metadata).handle,
+                methods=["GET", "OPTIONS"],
+            ),
+            Mount(f"/{prefix}", app=inner),
+        ],
+    )
+    # Forward lifespan từ inner (đã compose lifespan SDK + OAuth store) lên
+    # wrapper — nếu không, Starlette wrapper start không trigger lifespan
+    # của inner → session manager SDK không khởi tạo → transport 500.
+    wrapper.router.lifespan_context = inner.router.lifespan_context
+    logger.info(
+        "MCP build_asgi_app — path-prefix mode prefix=%s as_metadata=%s pr_metadata=%s",
+        prefix,
+        as_route_path,
+        pr_route_path,
+    )
+    return wrapper
 
 
 def main() -> None:

@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     # không hoạt động (chỉ còn DCR), bind cứng cũng bị skip.
     oauth_internal_token: str = ""
 
+    # Path prefix khi deploy MCP dưới cùng domain với app khác (vd reverse
+    # proxy `wiki.example.com/mcp/*` → MCP service). Rỗng = deploy ở
+    # authority root (subdomain riêng); non-empty = wrap toàn bộ FastMCP
+    # app dưới prefix này + serve metadata RFC 8414/9728 với path suffix.
+    # Khớp với segment cuối của `oauth_issuer_url` (vd issuer .../mcp →
+    # prefix "mcp"). Sửa cả 2 cùng lúc khi đổi deploy mode.
+    path_prefix: str = ""
+
     @field_validator("api_base_url", mode="after")
     @classmethod
     def _validate_base_url(cls, value: str) -> str:
