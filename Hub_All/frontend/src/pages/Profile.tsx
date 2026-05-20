@@ -191,9 +191,13 @@ export default function Profile() {
   };
 
   // Derived URL connector — admin override (system setting MCP_PUBLIC_URL)
-  // ưu tiên; fallback MCP_URL derived từ host. Path cố định /mcp.
+  // ưu tiên; fallback MCP_URL derived từ host. Transport path cố định `/mcp`.
+  // Nếu admin URL ĐÃ kết thúc `/mcp` (path-based deploy, vd
+  // `wiki.example.com/mcp`) thì KHÔNG append nữa → tránh `/mcp/mcp` thừa.
   const mcpBase = (adminMcpUrl || MCP_URL).trim().replace(/\/+$/, '');
-  const connectorUrl = mcpBase ? `${mcpBase}/mcp` : '';
+  const connectorUrl = mcpBase
+    ? (mcpBase.toLowerCase().endsWith('/mcp') ? mcpBase : `${mcpBase}/mcp`)
+    : '';
 
   const initials = form.name ? form.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'U';
 
