@@ -23,7 +23,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from mcp_app.api_client import ApiClient, ApiClientError
-from mcp_app.oauth.provider import MedinetOAuthProvider
+from mcp_app.oauth.provider import BindMismatchError, MedinetOAuthProvider
 from mcp_app.oauth.store import OAuthStoreError
 
 logger = logging.getLogger(__name__)
@@ -120,6 +120,21 @@ def get_login_routes(
         try:
             code, redirect_uri, client_state = await provider.complete_authorization(
                 txn, login_data
+            )
+        except BindMismatchError:
+            # Phase 8.3 per-user bind: user vừa login KHÔNG phải owner của
+            # pre-registered client. Render thông báo cụ thể — KHÔNG render
+            # lỗi hệ thống chung gây bối rối "tài khoản đúng nhưng vẫn fail".
+            logger.info(
+                "Login callback — bind mismatch (user khác chủ sở hữu connector)"
+            )
+            return render_login_form(
+                txn,
+                error=(
+                    "Tài khoản này không phải chủ sở hữu connector. "
+                    "Đăng nhập bằng đúng tài khoản đã sinh credentials, hoặc tạo "
+                    "credentials mới ở Profile của tài khoản hiện tại."
+                ),
             )
         except OAuthStoreError:
             logger.info("Login callback — txn hết hạn hoặc không hợp lệ")

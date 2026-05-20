@@ -220,6 +220,80 @@ class ApiClient:
         )
         raise ApiServerError(f"{code}: {message}")
 
+    async def get_mcp_client_internal(
+        self, client_id: str, *, internal_token: str
+    ) -> dict | None:
+        """Lookup pre-registered MCP OAuth client từ API service (Phase 8.3 per-user).
+
+        Gọi `GET /api/internal/mcp/clients/{client_id}` với header
+        `Authorization: Bearer <internal_token>` — shared secret giữa 2 service.
+
+        Returns:
+            - dict `{client_id, client_secret, redirect_uris, owner_user_id,
+              owner_email}` khi client tồn tại trong API DB (per-user
+              pre-registered, KHÔNG phải DCR).
+            - `None` khi API trả 404 (client chưa registered) hoặc 503
+              (endpoint chưa cấu hình MCP_INTERNAL_TOKEN — degrade an toàn
+              về "không bind").
+
+        Raises:
+            ApiUnauthorizedError: 401 — internal_token sai (configuration bug).
+            ApiServerError:       5xx / response không hợp lệ / network.
+
+        Bảo mật: KHÔNG log `internal_token` hay `client_secret` (T-08.3-08).
+        """
+        path = f"/api/internal/mcp/clients/{client_id}"
+        headers = {"Authorization": f"Bearer {internal_token}"}
+        try:
+            resp = await self._client.get(path, headers=headers)
+        except httpx.RequestError as e:
+            logger.error(
+                "API Service không phản hồi khi lookup MCP client: %s",
+                type(e).__name__,
+            )
+            raise ApiServerError(
+                f"Không kết nối được API Service: {type(e).__name__}"
+            ) from e
+
+        try:
+            envelope = resp.json()
+        except ValueError as e:
+            logger.error(
+                "API Service trả response lookup MCP client không hợp lệ: status_code=%s",
+                resp.status_code,
+            )
+            raise ApiServerError(
+                f"API Service trả response không hợp lệ (status {resp.status_code})"
+            ) from e
+
+        if resp.status_code == 200 and envelope.get("success") is True:
+            data = envelope.get("data")
+            return data if isinstance(data, dict) else None
+        if resp.status_code == 404:
+            # Client chưa registered (DCR / không tồn tại) — KHÔNG log
+            # client_id (PII nhẹ; chỉ log loại kết quả).
+            logger.info("MCP client lookup — 404 not registered")
+            return None
+        if resp.status_code == 503:
+            # API chưa cấu hình MCP_INTERNAL_TOKEN — log warning, degrade
+            # về "không bind". Operator phải set env để bind enforce work.
+            logger.warning(
+                "API Service chưa cấu hình MCP_INTERNAL_TOKEN — bind enforce skipped"
+            )
+            return None
+
+        err = envelope.get("error") or {}
+        code = err.get("code", "ERROR")
+        message = err.get("message", "lỗi không xác định")
+        logger.error(
+            "API Service trả lỗi khi lookup MCP client: status_code=%s error_code=%s",
+            resp.status_code,
+            code,
+        )
+        if resp.status_code == 401:
+            raise ApiUnauthorizedError(message)
+        raise ApiServerError(f"{code}: {message}")
+
     async def refresh_jwt(self, refresh_token: str) -> dict | None:
         """Đổi JWT downstream mới bằng refresh token API Service (Pitfall 4).
 

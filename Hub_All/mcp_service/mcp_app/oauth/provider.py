@@ -34,8 +34,17 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 
-from mcp_app.api_client import ApiClient
+from mcp_app.api_client import ApiClient, ApiClientError
 from mcp_app.oauth.store import OAuthStore, OAuthStoreError
+
+
+class BindMismatchError(Exception):
+    """User login OAuth ≠ owner pre-registered client (Phase 8.3 add-on per-user).
+
+    Raised từ `complete_authorization` khi client là pre-registered (có owner
+    trong API DB) nhưng user vừa login bằng tài khoản khác. login_callback
+    catch riêng → render thông báo "không khớp" thay vì 500 chung.
+    """
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +75,16 @@ class MedinetOAuthProvider(
         issuer_url: str,
         access_token_ttl: int,
         refresh_token_ttl: int,
+        internal_token: str = "",
     ) -> None:
         self._store = store
         self._api_client = api_client
         self._issuer_url = issuer_url.rstrip("/")
         self._access_token_ttl = access_token_ttl
         self._refresh_token_ttl = refresh_token_ttl
+        # Shared secret cho `/api/internal/mcp/clients/{id}` lookup (Phase 8.3
+        # per-user pre-registered). Rỗng = tắt fallback API + bind enforce.
+        self._internal_token = internal_token
 
     # --- helper nội bộ ---
 
@@ -88,11 +101,52 @@ class MedinetOAuthProvider(
     # --- DCR (RFC 7591) ---
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        """Đọc client đã đăng ký DCR. None nếu không tồn tại."""
+        """Đọc client. Local store (DCR) trước, fallback API (per-user pre-registered).
+
+        Phase 8.3 add-on: client_id KHÔNG ở local store có thể là per-user
+        pre-registered (sinh qua API service `/api/mcp/my-oauth-client`). Hỏi
+        `/api/internal/mcp/clients/{id}` qua shared secret. None nếu cả 2
+        nguồn đều miss.
+        """
+        # 1. Local store — DCR clients đăng ký trực tiếp với MCP.
         metadata = await self._store.get_client(client_id)
-        if metadata is None:
+        if metadata is not None:
+            return OAuthClientInformationFull.model_validate(metadata)
+
+        # 2. Fallback API — per-user pre-registered (Phase 8.3 add-on).
+        info = await self._fetch_internal_client(client_id)
+        if info is None:
             return None
-        return OAuthClientInformationFull.model_validate(metadata)
+
+        return OAuthClientInformationFull(
+            client_id=info["client_id"],
+            client_secret=info["client_secret"],
+            redirect_uris=[AnyUrl(u) for u in info.get("redirect_uris", [])],
+            token_endpoint_auth_method="client_secret_post",
+            grant_types=["authorization_code", "refresh_token"],
+            response_types=["code"],
+            scope="wiki",
+        )
+
+    async def _fetch_internal_client(self, client_id: str) -> dict | None:
+        """Helper gọi API internal lookup. None nếu thiếu config / 404 / lỗi.
+
+        Degrade an toàn: lỗi API → None (không phá luồng DCR cũ). Bind
+        enforcement ở complete_authorization xử lý riêng trường hợp client
+        có owner mà không lookup được.
+        """
+        if self._api_client is None or not self._internal_token:
+            return None
+        try:
+            return await self._api_client.get_mcp_client_internal(
+                client_id, internal_token=self._internal_token
+            )
+        except ApiClientError as e:
+            logger.warning(
+                "MCP client internal lookup failed: %s — fallback DCR-only",
+                type(e).__name__,
+            )
+            return None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """Lưu client DCR. DCR mở (D-01) — KHÔNG từ chối client."""
@@ -163,6 +217,27 @@ class MedinetOAuthProvider(
             raise OAuthStoreError(
                 "Phản hồi login từ API Service thiếu trường bắt buộc"
             )
+
+        # Bind enforcement (Phase 8.3 add-on per-user): nếu client_id là
+        # per-user pre-registered (có owner ở API), user login PHẢI khớp owner.
+        # Client DCR (không có ở API → lookup None) → skip bind, behavior cũ.
+        client_id = pending["client_id"]
+        internal_info = await self._fetch_internal_client(client_id)
+        if internal_info is not None:
+            owner_user_id = str(internal_info.get("owner_user_id") or "")
+            login_user = login_data.get("user") or {}
+            login_user_id = str(login_user.get("id") or "")
+            if owner_user_id and login_user_id and owner_user_id != login_user_id:
+                logger.warning(
+                    "MedinetOAuthProvider bind mismatch — client_id=%s "
+                    "owner_user=%s login_user=%s",
+                    client_id,
+                    owner_user_id,
+                    login_user_id,
+                )
+                raise BindMismatchError(
+                    "Tài khoản đăng nhập không khớp với chủ sở hữu connector"
+                )
 
         code = self._new_opaque()
         code_payload = {

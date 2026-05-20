@@ -122,6 +122,8 @@ def _get_oauth_provider() -> MedinetOAuthProvider:
             issuer_url=settings.oauth_issuer_url,
             access_token_ttl=settings.oauth_access_token_ttl,
             refresh_token_ttl=settings.oauth_refresh_token_ttl,
+            # Phase 8.3 per-user add-on — rỗng = tắt fallback API + bind enforce.
+            internal_token=settings.oauth_internal_token,
         )
     return _oauth_provider
 

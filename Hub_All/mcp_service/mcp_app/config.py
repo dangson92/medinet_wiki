@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     oauth_access_token_ttl: int = 3600       # 1 giờ
     oauth_refresh_token_ttl: int = 2592000   # 30 ngày
 
+    # Shared secret giữa MCP service ↔ API service cho endpoint internal
+    # `GET /api/internal/mcp/clients/{id}` (per-user pre-registered OAuth).
+    # MCP gửi `Authorization: Bearer <oauth_internal_token>`; API verify match
+    # env `MCP_INTERNAL_TOKEN`. Rỗng = tắt fallback API → pre-registered client
+    # không hoạt động (chỉ còn DCR), bind cứng cũng bị skip.
+    oauth_internal_token: str = ""
+
     @field_validator("api_base_url", mode="after")
     @classmethod
     def _validate_base_url(cls, value: str) -> str:
