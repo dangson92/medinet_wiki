@@ -604,21 +604,36 @@ def build_asgi_app() -> Any:
                     return {"type": "http.request", "body": body, "more_body": False}
 
                 request._receive = _replay  # type: ignore[assignment]
-                # Parse form keys (don't log values — secret protection).
+                # Parse form keys + MASK client_secret (first 6 + last 4 char
+                # + length) — đủ để verify Claude pasted-secret khớp DB không.
                 keys: list[str] = []
+                cs_mask = "<n/a>"
+                cid_mask = "<n/a>"
                 if "application/x-www-form-urlencoded" in ct.lower():
                     try:
                         from urllib.parse import parse_qsl
 
-                        keys = [k for k, _ in parse_qsl(body.decode())]
+                        form_dict = dict(parse_qsl(body.decode()))
+                        keys = list(form_dict.keys())
+                        cs = form_dict.get("client_secret", "")
+                        if cs:
+                            cs_mask = f"{cs[:6]}...{cs[-4:]} (len={len(cs)})"
+                        else:
+                            cs_mask = "<missing>"
+                        cid = form_dict.get("client_id", "")
+                        if cid:
+                            cid_mask = f"{cid[:10]}...{cid[-6:]} (len={len(cid)})"
                     except Exception:  # noqa: BLE001
                         keys = ["<parse_err>"]
                 logger.warning(
-                    "DEBUG /token POST — Authorization=%s Content-Type=%s body_len=%d form_keys=%s",
+                    "DEBUG /token POST — Authorization=%s CT=%s body_len=%d "
+                    "form_keys=%s client_id=%s client_secret=%s",
                     auth_log,
                     ct[:50],
                     len(body),
                     keys,
+                    cid_mask,
+                    cs_mask,
                 )
             return await call_next(request)
 

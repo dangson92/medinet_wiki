@@ -127,13 +127,10 @@ class MedinetOAuthProvider(
             client_id=info["client_id"],
             client_secret=info["client_secret"],
             redirect_uris=[AnyUrl(u) for u in info.get("redirect_uris", [])],
-            # client_secret_basic: RFC 6749 §2.3.1 default cho confidential client.
-            # Claude web gửi credentials qua header `Authorization: Basic <b64>`;
-            # SDK MCP `ClientAuthenticator` chỉ check 1 method per client
-            # (hardcoded `client_secret_post` cũ → form body rỗng khi Claude
-            # gửi Basic → "Client secret is required" → 401 ở /mcp/token).
-            # Đổi sang basic để khớp Claude. Test script local cập nhật theo.
-            token_endpoint_auth_method="client_secret_basic",
+            # client_secret_post — debug log (0eeed2b) chứng minh Claude gửi
+            # secret qua form body, KHÔNG Basic header. SDK ClientAuthenticator
+            # đọc form_data["client_secret"] khi method = post → compare value.
+            token_endpoint_auth_method="client_secret_post",
             grant_types=["authorization_code", "refresh_token"],
             response_types=["code"],
             scope="wiki",
