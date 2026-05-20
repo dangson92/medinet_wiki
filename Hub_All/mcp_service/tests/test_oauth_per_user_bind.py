@@ -107,7 +107,7 @@ async def test_get_client_fallback_api_returns_pre_registered(
     assert loaded.client_id == PER_USER_CLIENT_ID
     assert loaded.client_secret == "secret-fallback"
     assert loaded.scope == "wiki"
-    assert loaded.token_endpoint_auth_method == "client_secret_post"
+    assert loaded.token_endpoint_auth_method == "client_secret_basic"
     assert AnyUrl(REDIRECT) in loaded.redirect_uris
 
 
