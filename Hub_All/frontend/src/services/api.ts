@@ -291,6 +291,18 @@ class APIClient {
     return this.request<{ message: string }>('POST', '/api/profile/password', { old_password: oldPassword, new_password: newPassword });
   }
 
+  // ─── MCP OAuth Client (Phase 8.3 per-user pre-registered) ───
+  // User mở Profile → tab MCP Connector → GET lazy-create cặp riêng để dán
+  // vào dialog "Add custom connector" → Advanced của Claude web. Rotate đổi
+  // client_secret nếu nghi rò rỉ.
+  async getMyMCPOAuthClient() {
+    return this.request<MCPOAuthClientAPI>('GET', '/api/mcp/my-oauth-client');
+  }
+
+  async rotateMyMCPOAuthClient() {
+    return this.request<MCPOAuthClientAPI>('POST', '/api/mcp/my-oauth-client/rotate');
+  }
+
   // ─── Audit Logs ───
   async getAuditLogs(params: { date_from?: string; date_to?: string; actor_type?: string; action?: string; hub_id?: string; page?: number; per_page?: number } = {}) {
     const query = new URLSearchParams();
@@ -612,6 +624,17 @@ export interface APIKeyAPI {
 
 export interface APIKeyWithPlaintextAPI extends APIKeyAPI {
   plain_key: string;
+}
+
+// Per-user pre-registered MCP OAuth client (Phase 8.3 add-on).
+// Shape khớp MCPOAuthClientResponse ở api/app/schemas/mcp_oauth.py.
+// `client_secret` trả plaintext — user copy dán vào dialog Claude Advanced.
+export interface MCPOAuthClientAPI {
+  client_id: string;
+  client_secret: string;
+  redirect_uris: string[];
+  created_at: string;
+  rotated_at: string | null;
 }
 
 export interface CitationRefAPI {
