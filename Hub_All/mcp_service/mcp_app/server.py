@@ -611,21 +611,24 @@ def build_asgi_app() -> Any:
     )
 
     issuer_path = (urlparse(str(issuer)).path or "").rstrip("/")
-    as_route_path = f"/.well-known/oauth-authorization-server{issuer_path}"
-    pr_route_path = f"/.well-known/oauth-protected-resource{issuer_path}"
+    as_route_suffix = f"/.well-known/oauth-authorization-server{issuer_path}"
+    pr_route_suffix = f"/.well-known/oauth-protected-resource{issuer_path}"
+    # Một số client (vd MCP Inspector v0.21.2) KHÔNG follow RFC 8414 §3 cho
+    # non-root issuer — chỉ thử `/.well-known/oauth-authorization-server`
+    # (no suffix) thay vì có suffix `/mcp`. Serve metadata Ở CẢ 2 vị trí
+    # (suffix per RFC + no-suffix dạng "legacy") để tương thích rộng. Cùng
+    # content qua cùng handler — không thêm storage / branch.
+    as_route_root = "/.well-known/oauth-authorization-server"
+    pr_route_root = "/.well-known/oauth-protected-resource"
+    as_handler = MetadataHandler(as_metadata).handle
+    pr_handler = ProtectedResourceMetadataHandler(pr_metadata).handle
 
     wrapper = Starlette(
         routes=[
-            Route(
-                as_route_path,
-                endpoint=MetadataHandler(as_metadata).handle,
-                methods=["GET", "OPTIONS"],
-            ),
-            Route(
-                pr_route_path,
-                endpoint=ProtectedResourceMetadataHandler(pr_metadata).handle,
-                methods=["GET", "OPTIONS"],
-            ),
+            Route(as_route_suffix, endpoint=as_handler, methods=["GET", "OPTIONS"]),
+            Route(pr_route_suffix, endpoint=pr_handler, methods=["GET", "OPTIONS"]),
+            Route(as_route_root, endpoint=as_handler, methods=["GET", "OPTIONS"]),
+            Route(pr_route_root, endpoint=pr_handler, methods=["GET", "OPTIONS"]),
             Mount(f"/{prefix}", app=inner),
         ],
     )
@@ -636,8 +639,8 @@ def build_asgi_app() -> Any:
     logger.info(
         "MCP build_asgi_app — path-prefix mode prefix=%s as_metadata=%s pr_metadata=%s",
         prefix,
-        as_route_path,
-        pr_route_path,
+        as_route_suffix,
+        pr_route_suffix,
     )
     return wrapper
 
