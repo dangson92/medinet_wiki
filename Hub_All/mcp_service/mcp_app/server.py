@@ -577,6 +577,15 @@ def build_asgi_app() -> Any:
     for route in get_login_routes(_get_oauth_provider(), _get_client()):
         inner.router.routes.append(route)
 
+    # CORS — RFC 8414 §3.1 / RFC 9728 §3.1 yêu cầu metadata endpoint OAuth
+    # support CORS để browser-based client dùng được. MCP Inspector
+    # (localhost:6274) + Claude web (claude.ai) fetch cross-origin → cần
+    # `Access-Control-Allow-Origin`. Public AS — không dùng cookie credentials
+    # (Authorization Bearer header), an toàn `allow_origins=*` +
+    # `allow_credentials=False`. Áp dụng CẢ 2 mode (subdomain + path-prefix)
+    # cùng config để hành vi đồng nhất.
+    _add_cors_middleware(inner)
+
     # Subdomain/authority-root deploy → trả inner trực tiếp.
     if not prefix:
         return inner
@@ -603,6 +612,28 @@ def build_asgi_app() -> Any:
     )
     revoke = RevocationOptions(enabled=True)
     as_metadata = build_metadata(issuer, None, client_reg, revoke)
+
+    # MCP SDK Python ClientAuthenticator (client_auth.py) yêu cầu `client_id`
+    # XUẤT HIỆN TRONG FORM BODY — KHÔNG đọc từ Authorization Basic header.
+    # Vì vậy server thực chất CHỈ support `client_secret_post`, dù SDK mặc
+    # định quảng cáo CẢ `client_secret_basic`.
+    #
+    # Bug user gặp: MCP Inspector cho user nhập tay client_id/secret →
+    # clientInformation thiếu `token_endpoint_auth_method` → MCP TS SDK
+    # `selectClientAuthMethod` ưu tiên basic > post (auth.js dòng 47-51) →
+    # gửi credentials qua header, form body trống `client_id` → server trả
+    # 401 "Missing client_id".
+    #
+    # Fix: bỏ quảng cáo `client_secret_basic`. Client tự fallback sang post,
+    # gửi `client_id` trong form → ClientAuthenticator pass. Claude web đã
+    # dùng post (DCR/per-user response set explicit auth_method) → không
+    # bị ảnh hưởng. Áp dụng CẢ token + revocation endpoint (revoke handler
+    # cũng dùng cùng ClientAuthenticator).
+    as_metadata.token_endpoint_auth_methods_supported = ["client_secret_post"]
+    if as_metadata.revocation_endpoint_auth_methods_supported is not None:
+        as_metadata.revocation_endpoint_auth_methods_supported = [
+            "client_secret_post"
+        ]
 
     pr_metadata = ProtectedResourceMetadata(
         resource=issuer,
@@ -642,13 +673,111 @@ def build_asgi_app() -> Any:
     # wrapper — nếu không, Starlette wrapper start không trigger lifespan
     # của inner → session manager SDK không khởi tạo → transport 500.
     wrapper.router.lifespan_context = inner.router.lifespan_context
+    # CORS — áp dụng CHO wrapper (cover metadata route ở root + Mount inner)
+    # bằng cùng cấu hình với inner (subdomain mode). Lý do bắt buộc: log
+    # console của MCP Inspector cho thấy preflight tất cả `/.well-known/*`
+    # bị browser block vì thiếu `Access-Control-Allow-Origin` → fallback
+    # default endpoint ở root → `POST /token` 404 (đúng URL phải là /<prefix>/token).
+    _add_cors_middleware(wrapper)
     logger.info(
         "MCP build_asgi_app — path-prefix mode prefix=%s as_metadata=%s pr_metadata=%s",
         prefix,
         as_route_suffix,
         pr_route_suffix,
     )
-    return wrapper
+    # Bọc wrapper thêm shim ASGI: rewrite path 2 trường hợp NGAY TRƯỚC khi
+    # Starlette Router xét routes.
+    #
+    # (1) `/<prefix>` exact → `/<prefix>/` — chặn 307 redirect mà Router tự
+    #     phát do `redirect_slashes=True` (mặc định). Mount regex
+    #     `^/<prefix>/(?P<path>.*)$` KHÔNG match exact `/<prefix>`.
+    #     Tại sao 307 nguy hiểm: Claude (web) gửi POST `/<prefix>` kèm
+    #     `Authorization: Bearer …` + header phiên `Mcp-Session-Id`. RFC 7231
+    #     §6.4.7 quy 307 giữ method, nhưng nhiều HTTP runtime DROP
+    #     `Authorization` (security default) khi follow redirect → 401 ngẫu nhiên.
+    #
+    # (2) `/token`, `/authorize`, `/register`, `/revoke` ở root →
+    #     `/<prefix>/...` — alias cho client (vd MCP Inspector v0.21.2) khi
+    #     metadata discovery fail vì lỗi nào đó (CORS, network, version cũ)
+    #     → fallback default endpoint ở origin gốc thay vì path đúng theo
+    #     metadata. Forward sang inner SDK qua Mount(`/<prefix>`, ...).
+    #
+    # Path khác (`/.well-known/*`, `/login`, `/<prefix>/...`) pass-through
+    # nguyên. Lifespan/websocket scope cũng pass-through.
+    return _AsgiPathShim(wrapper, prefix=prefix)
+
+
+# OAuth endpoint path mà SDK MCP mount dưới inner — alias ở root (Fix B)
+# để cover client bỏ qua metadata discovery, hard-code endpoint default
+# `{origin}/token`, `{origin}/authorize`, ... Giữ exact-match frozenset
+# để tra cứu O(1) + tránh false-positive với sub-path (`/tokens`, ...).
+_OAUTH_ROOT_ALIAS_PATHS = frozenset(
+    {"/token", "/authorize", "/register", "/revoke"}
+)
+
+
+def _add_cors_middleware(app: Any) -> None:
+    """Add Starlette CORSMiddleware lên `app` với cấu hình public OAuth AS.
+
+    RFC 8414 §3.1 / RFC 9728 §3.1 yêu cầu metadata endpoint hỗ trợ CORS.
+    Public AS — không dùng cookie credentials (Authorization Bearer header),
+    nên `allow_origins=*` + `allow_credentials=False` (mặc định) hợp lệ:
+    browser sẽ chấp nhận `Access-Control-Allow-Origin: *`.
+
+    `allow_methods=*` + `allow_headers=*` để cover tất cả OAuth/MCP endpoint
+    (GET metadata, POST token/register/revoke, DELETE session, OPTIONS preflight).
+    `Mcp-Session-Id` + `WWW-Authenticate` expose ra browser để client đọc được.
+    """
+    from starlette.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Mcp-Session-Id", "WWW-Authenticate"],
+        max_age=86400,
+    )
+
+
+class _AsgiPathShim:
+    """ASGI wrapper rewrite path ở 2 trường hợp trước khi Starlette Router xét.
+
+    (1) `/<prefix>` exact → `/<prefix>/` — chặn 307 redirect (xem comment ở
+        `build_asgi_app`).
+    (2) `/token`, `/authorize`, `/register`, `/revoke` ở root → `/<prefix>/...`
+        — alias cho client bỏ qua metadata discovery (Fix B Phase 8.3).
+
+    Delegate `.routes` / `.router` / `.url_path_for` qua `__getattr__` để code
+    bên ngoài (uvicorn host=..., test introspect) thấy giống Starlette wrapper.
+    """
+
+    def __init__(self, app: Any, *, prefix: str) -> None:
+        self._app = app
+        self._prefix = prefix
+        self._prefix_with_slash = f"/{prefix}/"
+        self._prefix_no_slash = f"/{prefix}"
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") == "http":
+            path = scope.get("path")
+            new_path: str | None = None
+            if path == self._prefix_no_slash:
+                # (1) exact prefix → add trailing slash để Mount match.
+                new_path = self._prefix_with_slash
+            elif path in _OAUTH_ROOT_ALIAS_PATHS:
+                # (2) OAuth endpoint ở root → forward vào inner qua Mount prefix.
+                new_path = f"/{self._prefix}{path}"
+            if new_path is not None:
+                scope = dict(scope)
+                scope["path"] = new_path
+                scope["raw_path"] = new_path.encode("utf-8")
+        await self._app(scope, receive, send)
+
+    def __getattr__(self, name: str) -> Any:
+        # Delegate truy cập attr không có sẵn về Starlette wrapper (vd `.routes`,
+        # `.router`, `.url_path_for`) — giữ tương thích test/inspect hiện hữu.
+        return getattr(self._app, name)
 
 
 def main() -> None:
