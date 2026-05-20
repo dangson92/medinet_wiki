@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class UpdateSystemSettingsRequest(BaseModel):
-    """Body PUT /api/system-settings — 9 key khớp Settings.tsx."""
+    """Body PUT /api/system-settings — 11 key khớp Settings.tsx."""
 
     SYSTEM_NAME: str | None = None
     SYSTEM_URL: str | None = None
@@ -21,5 +21,12 @@ class UpdateSystemSettingsRequest(BaseModel):
     SECURITY_SESSION_TIMEOUT: str | None = None
     NOTIFY_EMAIL_ENABLED: str | None = None
     NOTIFY_TELEGRAM_ENABLED: str | None = None
-    # MCP Connector — domain public HTTPS của MCP Service (tab MCP Connector).
+    # MCP Connector (tab MCP Connector trong Settings.tsx).
+    # MCP_PUBLIC_URL    — domain public HTTPS của MCP Service.
+    # MCP_OAUTH_CLIENT_ID / MCP_OAUTH_CLIENT_SECRET — pre-registered OAuth
+    #   client (sinh qua `python -m mcp_app.oauth.create_client` trong
+    #   container mcp_service), admin dán vào Settings để tiện copy lại
+    #   khi thêm connector trong Claude web.
     MCP_PUBLIC_URL: str | None = None
+    MCP_OAUTH_CLIENT_ID: str | None = None
+    MCP_OAUTH_CLIENT_SECRET: str | None = None
