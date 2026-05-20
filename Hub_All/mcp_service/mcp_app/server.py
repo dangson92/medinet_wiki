@@ -620,6 +620,11 @@ def build_asgi_app() -> Any:
     # content qua cùng handler — không thêm storage / branch.
     as_route_root = "/.well-known/oauth-authorization-server"
     pr_route_root = "/.well-known/oauth-protected-resource"
+    # OIDC discovery alias — Inspector + một số client probe `openid-configuration`
+    # ngay cả khi server không phải OIDC provider. Serve cùng OAuth metadata
+    # (OIDC = superset của OAuth, client OIDC tự ignore field thiếu). Tránh
+    # 404 trong log + giúp Inspector hoàn tất discovery loop.
+    oidc_route_root = "/.well-known/openid-configuration"
     as_handler = MetadataHandler(as_metadata).handle
     pr_handler = ProtectedResourceMetadataHandler(pr_metadata).handle
 
@@ -629,6 +634,7 @@ def build_asgi_app() -> Any:
             Route(pr_route_suffix, endpoint=pr_handler, methods=["GET", "OPTIONS"]),
             Route(as_route_root, endpoint=as_handler, methods=["GET", "OPTIONS"]),
             Route(pr_route_root, endpoint=pr_handler, methods=["GET", "OPTIONS"]),
+            Route(oidc_route_root, endpoint=as_handler, methods=["GET", "OPTIONS"]),
             Mount(f"/{prefix}", app=inner),
         ],
     )
