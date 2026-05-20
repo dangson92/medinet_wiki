@@ -7,8 +7,11 @@ import type { MCPOAuthClientAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 // URL gốc MCP Service — mặc định suy từ host thật của app (port 8190 dev),
-// override qua VITE_MCP_URL khi build. User dán vào ô URL chính dialog Claude.
+// override qua VITE_MCP_URL khi build. Admin có thể set `MCP_PUBLIC_URL`
+// trong Settings → MCP Connector để override per-deployment; Profile fetch
+// giá trị đó, fallback về MCP_URL derived nếu admin chưa set.
 const MCP_URL = import.meta.env.VITE_MCP_URL || `http://${window.location.hostname}:8190`;
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
 
 export default function Profile() {
   const { refreshUser } = useAuth();
@@ -29,6 +32,9 @@ export default function Profile() {
   const [mcpRotating, setMcpRotating] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // Admin-set domain override từ system-settings (Settings tab → MCP Connector).
+  // Rỗng = chưa set → fallback MCP_URL derived từ host.
+  const [adminMcpUrl, setAdminMcpUrl] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -127,18 +133,34 @@ export default function Profile() {
   };
 
   // Lazy-load MCP client lần đầu khi user mở tab MCP — KHÔNG fetch ở mount
-  // để khỏi tạo cặp cho user chưa cần.
+  // để khỏi tạo cặp cho user chưa cần. Cùng lúc fetch admin-set domain
+  // (system-settings) để derive connector URL khớp với deployment.
   useEffect(() => {
     if (activeTab !== 'mcp' || mcpClient || mcpLoading) return;
     setMcpLoading(true);
     setMcpError('');
-    api.getMyMCPOAuthClient()
+
+    // Fetch song song: client per-user + admin MCP domain override.
+    const token = localStorage.getItem('access_token');
+    const settingsP = token
+      ? fetch(`${API_URL}/api/system-settings`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(r => (r.ok ? r.json() : null))
+          .then((data: Record<string, string> | null) => {
+            if (data && data.MCP_PUBLIC_URL) setAdminMcpUrl(data.MCP_PUBLIC_URL);
+          })
+          .catch(() => {})
+      : Promise.resolve();
+
+    const clientP = api.getMyMCPOAuthClient()
       .then(res => {
         if (res.success && res.data) setMcpClient(res.data);
         else setMcpError(res.error?.message || 'Không tải được MCP client');
       })
-      .catch(() => setMcpError('Lỗi kết nối server'))
-      .finally(() => setMcpLoading(false));
+      .catch(() => setMcpError('Lỗi kết nối server'));
+
+    Promise.all([settingsP, clientP]).finally(() => setMcpLoading(false));
   }, [activeTab, mcpClient, mcpLoading]);
 
   const handleRotateMcpClient = async () => {
@@ -168,8 +190,9 @@ export default function Profile() {
       .catch(() => {});
   };
 
-  // Derived URL connector — host thật của app + path /mcp.
-  const mcpBase = MCP_URL.trim().replace(/\/+$/, '');
+  // Derived URL connector — admin override (system setting MCP_PUBLIC_URL)
+  // ưu tiên; fallback MCP_URL derived từ host. Path cố định /mcp.
+  const mcpBase = (adminMcpUrl || MCP_URL).trim().replace(/\/+$/, '');
   const connectorUrl = mcpBase ? `${mcpBase}/mcp` : '';
 
   const initials = form.name ? form.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : 'U';

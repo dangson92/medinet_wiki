@@ -20,7 +20,6 @@ import {
   X,
   Sparkles,
   Plug,
-  Copy,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -110,59 +109,6 @@ const SectionHeader = ({ number, title, badgeText, description }: SectionHeaderP
   </div>
 );
 
-// CopyField — hàng URL chỉ-đọc kèm nút sao chép vào clipboard.
-// Dùng ở tab MCP Connector để admin copy URL dán vào Claude web.
-type CopyFieldProps = {
-  label: string;
-  hint?: string;
-  value: string;
-  fieldKey: string;
-  copiedKey: string | null;
-  onCopy: (key: string, value: string) => void;
-  emphasis?: boolean;
-};
-const CopyField = ({ label, hint, value, fieldKey, copiedKey, onCopy, emphasis }: CopyFieldProps) => {
-  const copied = copiedKey === fieldKey;
-  return (
-    <div className={cn(
-      'rounded-xl border p-3.5',
-      emphasis
-        ? 'border-brand-indigo/40 bg-brand-indigo/5 dark:bg-brand-indigo/10'
-        : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20'
-    )}>
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-        {emphasis && (
-          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded text-brand-indigo bg-brand-indigo/10 shrink-0">
-            Dán vào Claude web
-          </span>
-        )}
-      </div>
-      {hint && <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">{hint}</p>}
-      <div className="flex items-center gap-2">
-        <code className="flex-1 min-w-0 truncate font-mono text-xs sm:text-sm px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-          {value || <span className="italic text-slate-400">Chưa cấu hình domain MCP</span>}
-        </code>
-        <button
-          type="button"
-          onClick={() => value && onCopy(fieldKey, value)}
-          disabled={!value}
-          title="Sao chép"
-          className={cn(
-            'w-9 h-9 flex items-center justify-center rounded-lg shrink-0 transition-colors',
-            copied
-              ? 'text-success bg-success/10'
-              : 'text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700',
-            !value && 'opacity-40 cursor-not-allowed'
-          )}
-        >
-          {copied ? <Check size={16} /> : <Copy size={15} />}
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('general');
   const [isSaving, setIsSaving] = useState(false);
@@ -183,12 +129,11 @@ export default function Settings() {
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifyTelegram, setNotifyTelegram] = useState(false);
 
-  // ─── MCP Connector state ───
-  // Domain MCP Service — mặc định suy ra từ host thật của app (MCP_URL);
-  // giá trị admin đã lưu trong DB sẽ override. URL connector tự sinh từ đây.
+  // ─── MCP domain state (admin set chung cho cả deployment) ───
+  // Mặc định suy từ host thật của app (MCP_URL); giá trị admin đã lưu trong
+  // DB sẽ override. Profile tab MCP Connector tự fetch giá trị này để mọi
+  // user dùng chung domain. Per-user credentials lo ở Profile.
   const [mcpPublicUrl, setMcpPublicUrl] = useState(MCP_URL);
-  // copiedKey = fieldKey vừa được copy → đổi icon nút thành dấu check 2s.
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // RAG config state
   const [ragEmbeddingProvider, setRagEmbeddingProvider] = useState('gemini');
@@ -411,23 +356,10 @@ export default function Settings() {
 
   const availableModels = MODEL_CATALOG.filter(m => m.provider === ragEmbeddingProvider);
 
-  // ─── MCP Connector — URL tự sinh từ domain ───
-  // Domain gốc strip trailing slash; connector + 2 endpoint OAuth discovery
-  // derive theo path cố định mà MCP Service mount (Phase 8.3).
+  // ─── MCP domain — kiểm tra scheme cho cảnh báo HTTPS ───
+  // Per-user credentials + URL connector path /mcp đã chuyển sang Profile.
   const mcpBase = mcpPublicUrl.trim().replace(/\/+$/, '');
   const isHttps = mcpBase.toLowerCase().startsWith('https://');
-  const connectorUrl = mcpBase ? `${mcpBase}/mcp` : '';
-  const oauthAsUrl = mcpBase ? `${mcpBase}/.well-known/oauth-authorization-server` : '';
-  const oauthPrUrl = mcpBase ? `${mcpBase}/.well-known/oauth-protected-resource` : '';
-
-  const copyToClipboard = (key: string, value: string) => {
-    navigator.clipboard?.writeText(value)
-      .then(() => {
-        setCopiedKey(key);
-        setTimeout(() => setCopiedKey(null), 2000);
-      })
-      .catch(() => {});
-  };
 
   // Locked dimension = the dimension already stored in non-empty collections.
   // If all non-empty collections share the same dim → that's the lock.
@@ -684,23 +616,23 @@ export default function Settings() {
             </div>
           )}
 
-          {/* ═══════════ TAB: MCP Connector ═══════════ */}
+          {/* ═══════════ TAB: MCP Connector (admin — cấu hình domain dùng chung) ═══════════ */}
           {activeTab === 'mcp' && (
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              {/* ══ Domain config ══ */}
+              {/* ══ Domain config (admin set 1 lần cho cả deployment) ══ */}
               <section className="glass-card p-5 sm:p-6">
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-9 h-9 rounded-xl bg-brand-indigo/10 flex items-center justify-center shrink-0">
                     <Plug size={18} className="text-brand-indigo" />
                   </div>
                   <div>
-                    <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">MCP Connector cho Claude</h3>
+                    <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Domain MCP Service</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Kết nối Claude web / Desktop tới Medinet Wiki qua MCP + OAuth 2.0.
+                      Cấu hình chung deployment — admin set 1 lần, mọi user dùng. Credentials OAuth riêng từng user xem ở <strong>Profile → MCP Connector</strong>.
                     </p>
                   </div>
                 </div>
@@ -718,7 +650,7 @@ export default function Settings() {
                     spellCheck={false}
                   />
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    URL gốc nơi MCP Service được expose ra Internet — khớp <code className="font-mono">MCP_OAUTH_ISSUER_URL</code> của container. Sửa xong nhấn <strong>Lưu thay đổi</strong> ở góc trên.
+                    URL gốc nơi MCP Service được expose ra Internet — khớp <code className="font-mono">MCP_OAUTH_ISSUER_URL</code> của container. Để trống thì frontend tự suy từ host đang chạy app. Sửa xong nhấn <strong>Lưu thay đổi</strong> ở góc trên.
                   </p>
                 </div>
 
@@ -726,72 +658,15 @@ export default function Settings() {
                   <div className="mt-3 flex items-start gap-2.5 p-3 bg-warning/10 border border-warning/20 rounded-xl">
                     <AlertTriangle size={14} className="text-warning shrink-0 mt-0.5" />
                     <p className="text-xs text-warning font-medium leading-relaxed">
-                      Domain không dùng <strong>https://</strong> — Claude web chỉ chấp nhận connector qua HTTPS, OAuth discovery sẽ lỗi nếu để HTTP.
+                      Domain không dùng <strong>https://</strong> — Claude web chỉ chấp nhận connector qua HTTPS, OAuth flow sẽ lỗi nếu để HTTP.
                     </p>
                   </div>
                 )}
-              </section>
 
-              {/* ══ Copy fields ══ */}
-              <section className="glass-card p-5 sm:p-6">
-                <div className="mb-4">
-                  <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Thông tin kết nối</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Các URL dưới đây tự sinh từ domain ở trên — bấm nút để sao chép.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <CopyField
-                    emphasis
-                    label="MCP Endpoint URL"
-                    fieldKey="connector"
-                    hint='URL dán vào dialog "Add custom connector" của Claude web.'
-                    value={connectorUrl}
-                    copiedKey={copiedKey}
-                    onCopy={copyToClipboard}
-                  />
-                  <CopyField
-                    label="OAuth Authorization Server metadata"
-                    fieldKey="oauth-as"
-                    hint="Endpoint Claude tự dò (RFC 8414) — dùng khi cần kiểm tra OAuth lúc debug."
-                    value={oauthAsUrl}
-                    copiedKey={copiedKey}
-                    onCopy={copyToClipboard}
-                  />
-                  <CopyField
-                    label="OAuth Protected Resource metadata"
-                    fieldKey="oauth-pr"
-                    hint="Metadata RFC 9728 — Claude dùng để xác định authorization server."
-                    value={oauthPrUrl}
-                    copiedKey={copiedKey}
-                    onCopy={copyToClipboard}
-                  />
-                </div>
-              </section>
-
-              {/* ══ Hướng dẫn ══ */}
-              <section className="glass-card p-5 sm:p-6">
-                <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100 mb-4">Cách thêm vào Claude web</h3>
-                <ol className="space-y-3">
-                  {[
-                    'Mở Claude web → Settings → Connectors → "Add custom connector".',
-                    'Dán "MCP Endpoint URL" ở trên vào ô URL rồi xác nhận.',
-                    'Claude mở trang đăng nhập Medinet Wiki — đăng nhập bằng tài khoản sẵn có.',
-                    'Cho phép quyền truy cập — connector chuyển sang trạng thái đã kết nối.',
-                    'Thử yêu cầu Claude dùng 3 tool: list_hubs, search_wiki, ask_wiki.',
-                  ].map((step, i) => (
-                    <li key={i} className="flex gap-3">
-                      <span className="w-6 h-6 rounded-full bg-brand-indigo/10 text-brand-indigo text-xs font-bold flex items-center justify-center shrink-0">
-                        {i + 1}
-                      </span>
-                      <span className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{step}</span>
-                    </li>
-                  ))}
-                </ol>
                 <div className="mt-4 flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
                   <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Claude web tự dò cấu hình OAuth qua endpoint <code className="font-mono">.well-known</code> — bạn chỉ cần dán <strong>MCP Endpoint URL</strong>, không phải nhập client ID / secret thủ công.
+                    Mỗi user có cặp <strong>client_id / client_secret riêng</strong> (bind cứng theo tài khoản). Vào <strong>Profile → tab MCP Connector</strong> để xem cặp của bạn, sao chép sang dialog "Add custom connector" của Claude web.
                   </p>
                 </div>
               </section>
