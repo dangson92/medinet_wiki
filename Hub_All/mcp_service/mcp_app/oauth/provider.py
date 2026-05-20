@@ -86,6 +86,11 @@ class MedinetOAuthProvider(
         # per-user pre-registered). Rỗng = tắt fallback API + bind enforce.
         self._internal_token = internal_token
 
+    @property
+    def issuer_url(self) -> str:
+        """Issuer URL public (đã strip trailing slash) — login.py dùng cho form action."""
+        return self._issuer_url
+
     # --- helper nội bộ ---
 
     @staticmethod

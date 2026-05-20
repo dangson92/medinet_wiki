@@ -29,14 +29,20 @@ from mcp_app.oauth.store import OAuthStoreError
 logger = logging.getLogger(__name__)
 
 
-def render_login_form(txn: str, error: str | None = None) -> HTMLResponse:
+def render_login_form(
+    txn: str, callback_action: str, error: str | None = None
+) -> HTMLResponse:
     """Trả HTML form đăng nhập tối giản.
 
     Args:
         txn: transaction id — đặt vào hidden input để POST callback nối lại flow.
+        callback_action: URL form action — TUYỆT ĐỐI (đã prepend issuer_url) để
+            form hoạt động đúng khi MCP service không ở authority root
+            (vd path-based reverse proxy `wiki.example.com/mcp/*`).
         error: thông báo lỗi (nếu có) — hiển thị dòng đỏ phía trên form.
     """
     safe_txn = html.escape(txn, quote=True)
+    safe_action = html.escape(callback_action, quote=True)
     error_block = ""
     if error:
         error_block = (
@@ -53,7 +59,7 @@ def render_login_form(txn: str, error: str | None = None) -> HTMLResponse:
   <h2>Đăng nhập Medinet Wiki</h2>
   <p>Đăng nhập bằng tài khoản Medinet Wiki để cấp quyền truy cập.</p>
   {error_block}
-  <form method="post" action="/login/callback">
+  <form method="post" action="{safe_action}">
     <input type="hidden" name="txn" value="{safe_txn}">
     <p>
       <label for="email">Email</label><br>
@@ -78,7 +84,13 @@ def get_login_routes(
     """Trả danh sách Route Starlette cho login form.
 
     Dùng closure để inject `provider` + `api_client` vào handler — tránh global.
+
+    Form action dựng từ `provider.issuer_url` (TUYỆT ĐỐI) — để form callback
+    đến đúng MCP service kể cả khi service nằm dưới path prefix qua reverse
+    proxy (vd `wiki.example.com/mcp/*` → MCP `/...`). URL tuyệt đối tránh
+    được collision với route `/login` của ứng dụng khác cùng authority.
     """
+    callback_action = f"{provider.issuer_url}/login/callback"
 
     async def login_get(request: Request) -> Response:
         """GET /login — trả HTML form. Thiếu `txn` -> 400."""
@@ -88,7 +100,7 @@ def get_login_routes(
                 "<p>Thiếu tham số txn — phiên đăng nhập không hợp lệ.</p>",
                 status_code=400,
             )
-        return render_login_form(txn)
+        return render_login_form(txn, callback_action)
 
     async def login_callback(request: Request) -> Response:
         """POST /login/callback — xác thực credential Medinet, phát code OAuth."""
@@ -109,12 +121,14 @@ def get_login_routes(
         except ApiClientError:
             logger.error("Login callback — lỗi hạ tầng khi gọi API Service")
             return render_login_form(
-                txn, error="Lỗi hệ thống, vui lòng thử lại sau"
+                txn, callback_action, error="Lỗi hệ thống, vui lòng thử lại sau"
             )
 
         # (b) Credential sai -> render lại form kèm lỗi.
         if login_data is None:
-            return render_login_form(txn, error="Sai tài khoản hoặc mật khẩu")
+            return render_login_form(
+                txn, callback_action, error="Sai tài khoản hoặc mật khẩu"
+            )
 
         # (c) Login OK -> phát authorization code, redirect về client.
         try:
@@ -130,6 +144,7 @@ def get_login_routes(
             )
             return render_login_form(
                 txn,
+                callback_action,
                 error=(
                     "Tài khoản này không phải chủ sở hữu connector. "
                     "Đăng nhập bằng đúng tài khoản đã sinh credentials, hoặc tạo "
@@ -139,12 +154,12 @@ def get_login_routes(
         except OAuthStoreError:
             logger.info("Login callback — txn hết hạn hoặc không hợp lệ")
             return render_login_form(
-                txn, error="Phiên đăng nhập hết hạn, vui lòng kết nối lại"
+                txn, callback_action, error="Phiên đăng nhập hết hạn, vui lòng kết nối lại"
             )
         except (KeyError, TypeError):
             logger.error("Login callback — payload downstream thiếu trường bắt buộc")
             return render_login_form(
-                txn, error="Lỗi hệ thống, vui lòng thử lại sau"
+                txn, callback_action, error="Lỗi hệ thống, vui lòng thử lại sau"
             )
 
         location = f"{redirect_uri}?code={code}"
