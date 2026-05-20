@@ -14,6 +14,7 @@ from app.models.auth import RefreshToken, User, UserHub
 from app.models.chunk import Chunk
 from app.models.document import DOCUMENT_STATUS_VALUES, Document
 from app.models.hub import Hub
+from app.models.mcp_oauth import MCPOAuthClient
 from app.models.settings import ApiKey, Setting
 from app.models.usage import UsageEvent
 
@@ -24,6 +25,7 @@ __all__ = [
     "Chunk",
     "Document",
     "Hub",
+    "MCPOAuthClient",
     "RefreshToken",
     "Setting",
     "UsageEvent",

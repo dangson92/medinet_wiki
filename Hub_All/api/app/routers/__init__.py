@@ -22,6 +22,8 @@ from app.routers.ask import router as ask_router
 from app.routers.audit_logs import router as audit_logs_router
 from app.routers.documents import router as documents_router
 from app.routers.hubs import router as hubs_router
+from app.routers.mcp_oauth import internal_router as mcp_oauth_internal_router
+from app.routers.mcp_oauth import router as mcp_oauth_router
 from app.routers.profile import router as profile_router
 from app.routers.rag_config import router as rag_config_router
 from app.routers.search import router as search_router
@@ -37,6 +39,8 @@ __all__ = [
     "audit_logs_router",
     "documents_router",
     "hubs_router",
+    "mcp_oauth_internal_router",
+    "mcp_oauth_router",
     "profile_router",
     "rag_config_router",
     "search_router",

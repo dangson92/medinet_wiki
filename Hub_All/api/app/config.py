@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     openai_api_key: str = "sk-replace-me"
     gemini_api_key: str = "replace-me"
 
+    # MCP ↔ API shared secret (Phase 8.3 per-user pre-registered OAuth add-on).
+    # MCP service gửi `Authorization: Bearer <token>` khi gọi
+    # `/api/internal/mcp/clients/{id}`. Endpoint internal trả 503 nếu rỗng
+    # (chưa configured) — fail-closed thay vì silent allow.
+    mcp_internal_token: str = ""
+
     # Settings encryption (Phase 5)
     aes_key: str = "replace-with-32-byte-base64-key"
 

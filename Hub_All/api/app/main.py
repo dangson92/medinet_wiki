@@ -403,6 +403,15 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
 
     app.include_router(system_settings_router)
 
+    # Mount MCP OAuth client routers (Phase 8.3 add-on — per-user pre-registered
+    # OAuth client cho Claude web "Add custom connector" Advanced).
+    # User-facing: /api/mcp/my-oauth-client[+/rotate] — Profile section.
+    # Internal:    /api/internal/mcp/clients/{id} — MCP service gọi (shared secret).
+    from app.routers import mcp_oauth_internal_router, mcp_oauth_router
+
+    app.include_router(mcp_oauth_router)
+    app.include_router(mcp_oauth_internal_router)
+
     # Mount ai-chat router (Phase 8 COMPAT-01 — POST /api/ai/chat proxy LLM cho
     # GeminiAssistant; BLOCKER 08-CONTRACT-DIFF — frontend Dashboard golden path).
     from app.routers import ai_chat_router
