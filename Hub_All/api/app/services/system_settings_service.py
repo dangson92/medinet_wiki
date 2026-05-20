@@ -5,7 +5,7 @@ Bảo mật / Thông báo" gọi GET/PUT `/api/system-settings`. Endpoint Go-era
 chưa được port → frontend nhận 404, load về giá trị mặc định, lưu thất bại.
 
 Persist key-value vào bảng `settings` (JSONB scalar) — DÙNG CHUNG bảng với
-`rag_config_service`, nên service này CHỈ thao tác whitelist 11 key của tab
+`rag_config_service`, nên service này CHỈ thao tác whitelist 9 key của tab
 hệ thống, KHÔNG đụng các key `RAG_*` / `LLM_*` / `*_API_KEY`.
 
 Khác `rag_config`: settings hệ thống thuần khai báo (tên, URL, toggle) → KHÔNG
@@ -36,12 +36,6 @@ _DEFAULTS: dict[str, str] = {
     "NOTIFY_TELEGRAM_ENABLED": "false",
     # Rỗng = chưa cấu hình → frontend tự suy domain từ host thật của app.
     "MCP_PUBLIC_URL": "",
-    # Pre-registered OAuth client cho Claude web "Add custom connector"
-    # → Advanced. Sinh qua CLI trong container mcp_service:
-    #   python -m mcp_app.oauth.create_client --redirect-uri <URL>
-    # Admin dán 2 chuỗi vào Settings để tiện copy lại sau.
-    "MCP_OAUTH_CLIENT_ID": "",
-    "MCP_OAUTH_CLIENT_SECRET": "",
 }
 _ALLOWED_KEYS = frozenset(_DEFAULTS)
 
@@ -57,13 +51,13 @@ def _parse_jsonb(raw: Any) -> Any:
 
 
 class SystemSettingsService:
-    """CRUD settings hệ thống qua bảng `settings` (whitelist 11 key)."""
+    """CRUD settings hệ thống qua bảng `settings` (whitelist 9 key)."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def get_settings(self) -> dict[str, str]:
-        """GET /api/system-settings — 11 key hiện tại, fallback default nếu DB rỗng."""
+        """GET /api/system-settings — 9 key hiện tại, fallback default nếu DB rỗng."""
         rows = (
             await self.db.execute(text("SELECT key, value FROM settings"))
         ).fetchall()

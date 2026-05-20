@@ -3,7 +3,7 @@
 2 endpoint khớp contract frontend React 19 (`Settings.tsx` tab Chung / Bảo mật
 / Thông báo):
 
-    GET  /api/system-settings  — 11 key cấu hình hệ thống (authenticated)
+    GET  /api/system-settings  — 9 key cấu hình hệ thống (authenticated)
     PUT  /api/system-settings  — update (admin-only)
 
 NOTE — RAW JSON, KHÔNG envelope: frontend đọc `data.SYSTEM_NAME` trực tiếp

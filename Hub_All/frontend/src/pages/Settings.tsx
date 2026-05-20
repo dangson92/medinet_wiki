@@ -21,7 +21,6 @@ import {
   Sparkles,
   Plug,
   Copy,
-  EyeOff,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -188,13 +187,6 @@ export default function Settings() {
   // Domain MCP Service — mặc định suy ra từ host thật của app (MCP_URL);
   // giá trị admin đã lưu trong DB sẽ override. URL connector tự sinh từ đây.
   const [mcpPublicUrl, setMcpPublicUrl] = useState(MCP_URL);
-  // Pre-registered OAuth credentials — admin sinh qua CLI trong container
-  // mcp_service rồi dán vào đây để lưu + copy lại khi điền dialog Claude.
-  const [mcpClientId, setMcpClientId] = useState('');
-  const [mcpClientSecret, setMcpClientSecret] = useState('');
-  // showSecret = client_secret hiển thị plaintext (input type=text) hay
-  // che dấu (input type=password). Mặc định che để chống shoulder-surfing.
-  const [showSecret, setShowSecret] = useState(false);
   // copiedKey = fieldKey vừa được copy → đổi icon nút thành dấu check 2s.
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -280,8 +272,6 @@ export default function Settings() {
         if (data.NOTIFY_EMAIL_ENABLED)     setNotifyEmail(data.NOTIFY_EMAIL_ENABLED === 'true');
         if (data.NOTIFY_TELEGRAM_ENABLED)  setNotifyTelegram(data.NOTIFY_TELEGRAM_ENABLED === 'true');
         if (data.MCP_PUBLIC_URL)           setMcpPublicUrl(data.MCP_PUBLIC_URL);
-        if (data.MCP_OAUTH_CLIENT_ID)      setMcpClientId(data.MCP_OAUTH_CLIENT_ID);
-        if (data.MCP_OAUTH_CLIENT_SECRET)  setMcpClientSecret(data.MCP_OAUTH_CLIENT_SECRET);
       })
       .catch(() => {});
   }, []);
@@ -340,8 +330,6 @@ export default function Settings() {
         NOTIFY_EMAIL_ENABLED:     String(notifyEmail),
         NOTIFY_TELEGRAM_ENABLED:  String(notifyTelegram),
         MCP_PUBLIC_URL:           mcpPublicUrl,
-        MCP_OAUTH_CLIENT_ID:      mcpClientId,
-        MCP_OAUTH_CLIENT_SECRET:  mcpClientSecret,
       }),
     });
     return res;
@@ -424,11 +412,13 @@ export default function Settings() {
   const availableModels = MODEL_CATALOG.filter(m => m.provider === ragEmbeddingProvider);
 
   // ─── MCP Connector — URL tự sinh từ domain ───
-  // Domain gốc strip trailing slash; connectorUrl mount tại path cố định
-  // /mcp do MCP Service expose (Phase 8.3 HUMAN-UAT bước 2).
+  // Domain gốc strip trailing slash; connector + 2 endpoint OAuth discovery
+  // derive theo path cố định mà MCP Service mount (Phase 8.3).
   const mcpBase = mcpPublicUrl.trim().replace(/\/+$/, '');
   const isHttps = mcpBase.toLowerCase().startsWith('https://');
   const connectorUrl = mcpBase ? `${mcpBase}/mcp` : '';
+  const oauthAsUrl = mcpBase ? `${mcpBase}/.well-known/oauth-authorization-server` : '';
+  const oauthPrUrl = mcpBase ? `${mcpBase}/.well-known/oauth-protected-resource` : '';
 
   const copyToClipboard = (key: string, value: string) => {
     navigator.clipboard?.writeText(value)
@@ -742,125 +732,40 @@ export default function Settings() {
                 )}
               </section>
 
-              {/* ══ MCP Endpoint URL — dán vào ô URL chính của dialog Claude ══ */}
+              {/* ══ Copy fields ══ */}
               <section className="glass-card p-5 sm:p-6">
                 <div className="mb-4">
-                  <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">URL MCP Endpoint</h3>
+                  <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Thông tin kết nối</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Tự sinh từ domain ở trên — dán vào ô URL chính của dialog "Add custom connector".
+                    Các URL dưới đây tự sinh từ domain ở trên — bấm nút để sao chép.
                   </p>
                 </div>
-                <CopyField
-                  emphasis
-                  label="MCP Endpoint URL"
-                  fieldKey="connector"
-                  hint='Đây là URL chính — vào dialog "Add custom connector" của Claude web rồi dán.'
-                  value={connectorUrl}
-                  copiedKey={copiedKey}
-                  onCopy={copyToClipboard}
-                />
-              </section>
-
-              {/* ══ Pre-registered OAuth client — Advanced field của dialog Claude ══ */}
-              <section className="glass-card p-5 sm:p-6">
-                <div className="mb-4">
-                  <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Pre-registered OAuth client</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Khi thêm connector trong Claude web, mở mục <strong>Advanced</strong> rồi dán 2 chuỗi dưới đây. Sinh credentials bằng CLI trong container <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">mcp_service</code>:
-                  </p>
-                  <pre className="mt-2 p-3 rounded-lg bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto leading-relaxed">
-{`docker compose exec mcp_service \\
-  python -m mcp_app.oauth.create_client \\
-  --redirect-uri <URL từ dialog Claude>`}
-                  </pre>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                    CLI in ra <code className="font-mono">client_id</code> + <code className="font-mono">client_secret</code> — dán vào 2 ô bên dưới rồi nhấn <strong>Lưu thay đổi</strong>. Sau đó bấm nút copy để paste qua dialog Claude.
-                  </p>
-                </div>
-
                 <div className="space-y-3">
-                  {/* Client ID — không nhạy cảm, hiển thị plaintext */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 p-3.5">
-                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 block mb-1.5">
-                      OAuth Client ID
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={mcpClientId}
-                        onChange={e => setMcpClientId(e.target.value)}
-                        placeholder="mcp_..."
-                        className="flex-1 min-w-0 input-field font-mono text-sm"
-                        spellCheck={false}
-                        autoComplete="off"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => mcpClientId && copyToClipboard('client-id', mcpClientId)}
-                        disabled={!mcpClientId}
-                        title="Sao chép"
-                        className={cn(
-                          'w-9 h-9 flex items-center justify-center rounded-lg shrink-0 transition-colors',
-                          copiedKey === 'client-id'
-                            ? 'text-success bg-success/10'
-                            : 'text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700',
-                          !mcpClientId && 'opacity-40 cursor-not-allowed',
-                        )}
-                      >
-                        {copiedKey === 'client-id' ? <Check size={16} /> : <Copy size={15} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Client Secret — nhạy cảm, mặc định che, có nút mắt */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 p-3.5">
-                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 block mb-1.5">
-                      OAuth Client Secret
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type={showSecret ? 'text' : 'password'}
-                        value={mcpClientSecret}
-                        onChange={e => setMcpClientSecret(e.target.value)}
-                        placeholder="••••••••"
-                        className="flex-1 min-w-0 input-field font-mono text-sm"
-                        spellCheck={false}
-                        autoComplete="new-password"
-                        data-lpignore="true"
-                        data-1p-ignore
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecret(v => !v)}
-                        title={showSecret ? 'Ẩn secret' : 'Hiện secret'}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg shrink-0 text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                      >
-                        {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => mcpClientSecret && copyToClipboard('client-secret', mcpClientSecret)}
-                        disabled={!mcpClientSecret}
-                        title="Sao chép"
-                        className={cn(
-                          'w-9 h-9 flex items-center justify-center rounded-lg shrink-0 transition-colors',
-                          copiedKey === 'client-secret'
-                            ? 'text-success bg-success/10'
-                            : 'text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700',
-                          !mcpClientSecret && 'opacity-40 cursor-not-allowed',
-                        )}
-                      >
-                        {copiedKey === 'client-secret' ? <Check size={16} /> : <Copy size={15} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
-                  <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Mất 2 chuỗi? Chạy lại CLI để sinh cặp mới — INSERT OR REPLACE vào store, không cộng dồn rác. Cặp cũ sẽ không dùng được nữa từ phía Claude khi bạn cập nhật lại 2 chuỗi mới trong dialog connector.
-                  </p>
+                  <CopyField
+                    emphasis
+                    label="MCP Endpoint URL"
+                    fieldKey="connector"
+                    hint='URL dán vào dialog "Add custom connector" của Claude web.'
+                    value={connectorUrl}
+                    copiedKey={copiedKey}
+                    onCopy={copyToClipboard}
+                  />
+                  <CopyField
+                    label="OAuth Authorization Server metadata"
+                    fieldKey="oauth-as"
+                    hint="Endpoint Claude tự dò (RFC 8414) — dùng khi cần kiểm tra OAuth lúc debug."
+                    value={oauthAsUrl}
+                    copiedKey={copiedKey}
+                    onCopy={copyToClipboard}
+                  />
+                  <CopyField
+                    label="OAuth Protected Resource metadata"
+                    fieldKey="oauth-pr"
+                    hint="Metadata RFC 9728 — Claude dùng để xác định authorization server."
+                    value={oauthPrUrl}
+                    copiedKey={copiedKey}
+                    onCopy={copyToClipboard}
+                  />
                 </div>
               </section>
 
@@ -869,13 +774,11 @@ export default function Settings() {
                 <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100 mb-4">Cách thêm vào Claude web</h3>
                 <ol className="space-y-3">
                   {[
-                    'Sinh credentials bằng CLI ở card trên (chạy 1 lần trong container mcp_service) nếu chưa có.',
                     'Mở Claude web → Settings → Connectors → "Add custom connector".',
-                    'Dán "MCP Endpoint URL" vào ô URL chính.',
-                    'Mở mục Advanced → copy redirect_uri Claude hiển thị (sẽ cần ở bước 5 nếu chưa truyền vào CLI).',
-                    'Dán "OAuth Client ID" + "OAuth Client Secret" từ 2 ô ở trên vào Advanced rồi xác nhận.',
-                    'Claude mở trang đăng nhập Medinet Wiki — đăng nhập bằng tài khoản sẵn có, cho phép quyền truy cập.',
-                    'Connector kết nối — thử yêu cầu Claude gọi 3 tool: list_hubs, search_wiki, ask_wiki.',
+                    'Dán "MCP Endpoint URL" ở trên vào ô URL rồi xác nhận.',
+                    'Claude mở trang đăng nhập Medinet Wiki — đăng nhập bằng tài khoản sẵn có.',
+                    'Cho phép quyền truy cập — connector chuyển sang trạng thái đã kết nối.',
+                    'Thử yêu cầu Claude dùng 3 tool: list_hubs, search_wiki, ask_wiki.',
                   ].map((step, i) => (
                     <li key={i} className="flex gap-3">
                       <span className="w-6 h-6 rounded-full bg-brand-indigo/10 text-brand-indigo text-xs font-bold flex items-center justify-center shrink-0">
@@ -888,7 +791,7 @@ export default function Settings() {
                 <div className="mt-4 flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
                   <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Cặp client_id/secret này là pre-registered — bỏ qua Dynamic Client Registration. Bảo mật vẫn dựa vào PKCE + login Medinet + token theo user (Phase 8.3 đã verify).
+                    Claude web tự dò cấu hình OAuth qua endpoint <code className="font-mono">.well-known</code> — bạn chỉ cần dán <strong>MCP Endpoint URL</strong>, không phải nhập client ID / secret thủ công.
                   </p>
                 </div>
               </section>
