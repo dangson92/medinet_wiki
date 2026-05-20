@@ -586,9 +586,10 @@ def build_asgi_app() -> Any:
     # cùng config để hành vi đồng nhất.
     _add_cors_middleware(inner)
 
-    # Subdomain/authority-root deploy → trả inner trực tiếp.
+    # Subdomain/authority-root deploy → trả inner bọc _BasicAuthFormShim
+    # (defense-in-depth Basic→form, xem class docstring).
     if not prefix:
-        return inner
+        return _BasicAuthFormShim(inner)
 
     # Path-based deploy: wrap inner dưới Mount(`/<prefix>`, ...) + add 2
     # route metadata RFC 8414/9728 ở root với suffix path. Claude fetch
@@ -704,7 +705,13 @@ def build_asgi_app() -> Any:
     #
     # Path khác (`/.well-known/*`, `/login`, `/<prefix>/...`) pass-through
     # nguyên. Lifespan/websocket scope cũng pass-through.
-    return _AsgiPathShim(wrapper, prefix=prefix)
+    #
+    # Order: _AsgiPathShim (ngoài cùng) → _BasicAuthFormShim → wrapper.
+    # _AsgiPathShim rewrite path (vd `/token` → `/mcp/token`) TRƯỚC khi
+    # _BasicAuthFormShim kiểm path → shim chỉ cần check 1 dạng path
+    # đã chuẩn hoá (sau rewrite). _BasicAuthFormShim bridge Basic→form
+    # NGAY TRƯỚC khi wrapper Router dispatch xuống inner SDK ClientAuthenticator.
+    return _AsgiPathShim(_BasicAuthFormShim(wrapper), prefix=prefix)
 
 
 # OAuth endpoint path mà SDK MCP mount dưới inner — alias ở root (Fix B)
@@ -713,6 +720,15 @@ def build_asgi_app() -> Any:
 # để tra cứu O(1) + tránh false-positive với sub-path (`/tokens`, ...).
 _OAUTH_ROOT_ALIAS_PATHS = frozenset(
     {"/token", "/authorize", "/register", "/revoke"}
+)
+
+# Path POST cần shim convert Basic → form (xem _BasicAuthFormShim). Cover
+# cả root variant + mọi prefix variant (sau khi _AsgiPathShim rewrite,
+# path luôn có prefix). Frozenset → O(1) lookup. KHÔNG include /authorize
+# vì /authorize không cần client_secret (chỉ /token + /revoke dùng
+# ClientAuthenticator).
+_BASIC_AUTH_SHIM_PATHS = frozenset(
+    {"/token", "/revoke", "/mcp/token", "/mcp/revoke"}
 )
 
 
@@ -738,6 +754,195 @@ def _add_cors_middleware(app: Any) -> None:
         expose_headers=["Mcp-Session-Id", "WWW-Authenticate"],
         max_age=86400,
     )
+
+
+class _BasicAuthFormShim:
+    """ASGI shim convert `Authorization: Basic` header → form `client_id`/`client_secret`.
+
+    Lý do: MCP SDK Python ClientAuthenticator (client_auth.py:55-58) yêu cầu
+    `client_id` xuất hiện TRONG FORM BODY — KHÔNG bao giờ đọc từ Authorization
+    Basic header. Nhưng MCP TS SDK `applyBasicAuth` (auth.js:92-98) khi chọn
+    method `client_secret_basic` CHỈ set Authorization header, KHÔNG add
+    `client_id` vào form. Mismatch → server fail 401 "Missing client_id".
+
+    Server đã bỏ quảng cáo `client_secret_basic` ở metadata để client mới
+    fallback sang post. Shim này là defense-in-depth: cover client còn cache
+    metadata cũ (trước fix), hoặc client hard-code chọn basic ngoài luồng
+    metadata. Bridge gap để OAuth flow hoạt động với MỌI client tuân thủ
+    RFC 6749 §2.3.1 (chấp nhận credentials qua HEADER hoặc BODY).
+
+    Pass-through (KHÔNG can thiệp):
+    - Scope khác `http` (lifespan, websocket).
+    - Method != POST.
+    - Path không thuộc `_BASIC_AUTH_SHIM_PATHS`.
+    - Không có Authorization Basic header.
+    - Content-Type không phải form-urlencoded.
+    - Form body đã có `client_id` (client_secret_post bình thường).
+    - Basic header malformed (decode fail) → forward nguyên (SDK xử lý lỗi).
+
+    Inject:
+    - Nếu form thiếu `client_id` → thêm từ Basic (URL-decoded per RFC 6749 §2.3.1).
+    - Nếu form thiếu `client_secret` → thêm từ Basic (URL-decoded).
+    - Đè Content-Length header (kích thước body đã đổi).
+
+    Bảo mật: KHÔNG log nội dung body / header Authorization / client_secret.
+    Decode Basic bọc try/except chống malformed input → forward as-is khi fail.
+
+    Delegate attr qua `__getattr__` giống `_AsgiPathShim` để uvicorn introspect
+    không vỡ.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self._app(scope, receive, send)
+            return
+
+        method = scope.get("method", "").upper()
+        path = scope.get("path", "")
+        if method != "POST" or path not in _BASIC_AUTH_SHIM_PATHS:
+            await self._app(scope, receive, send)
+            return
+
+        # Trích Authorization + Content-Type từ scope headers.
+        auth_header: str | None = None
+        content_type = b""
+        for name, value in scope.get("headers", []):
+            lname = name.lower() if isinstance(name, bytes) else name.lower().encode()
+            if lname == b"authorization":
+                auth_header = (
+                    value if isinstance(value, str) else value.decode("latin-1")
+                )
+            elif lname == b"content-type":
+                content_type = (
+                    value if isinstance(value, bytes) else value.encode("latin-1")
+                )
+
+        if not auth_header or not auth_header.startswith("Basic "):
+            await self._app(scope, receive, send)
+            return
+
+        # Chỉ rewrite form-urlencoded. JSON body / multipart không phải case
+        # OAuth /token + /revoke (RFC 6749 quy form-urlencoded), nhưng phòng vệ.
+        if b"application/x-www-form-urlencoded" not in content_type.lower():
+            await self._app(scope, receive, send)
+            return
+
+        # Buffer toàn bộ request body.
+        body_parts: list[bytes] = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            mtype = message.get("type")
+            if mtype == "http.disconnect":
+                # Client cắt — nothing to forward.
+                return
+            if mtype != "http.request":
+                continue
+            body_parts.append(message.get("body", b"") or b"")
+            more_body = bool(message.get("more_body"))
+        body = b"".join(body_parts)
+
+        # Parse form hiện tại. Nếu đã có client_id → forward nguyên (path
+        # client_secret_post bình thường, không cần shim).
+        from urllib.parse import parse_qsl, unquote, urlencode
+
+        try:
+            body_str = body.decode("utf-8")
+        except UnicodeDecodeError:
+            await self._forward_with_body(scope, body, receive, send)
+            return
+
+        pairs = parse_qsl(body_str, keep_blank_values=True)
+        keys = {k for k, _ in pairs}
+        if "client_id" in keys:
+            await self._forward_with_body(scope, body, receive, send)
+            return
+
+        # Decode Authorization Basic. Bọc try/except chống malformed.
+        import base64
+        import binascii
+
+        try:
+            encoded = auth_header[6:].strip()
+            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            await self._forward_with_body(scope, body, receive, send)
+            return
+
+        if ":" not in decoded:
+            await self._forward_with_body(scope, body, receive, send)
+            return
+
+        basic_client_id, basic_client_secret = decoded.split(":", 1)
+        # RFC 6749 §2.3.1 — URL-decode mỗi phần (vì colon trong client_id/secret
+        # bị percent-encode trước khi base64).
+        basic_client_id = unquote(basic_client_id)
+        basic_client_secret = unquote(basic_client_secret)
+        if not basic_client_id:
+            await self._forward_with_body(scope, body, receive, send)
+            return
+
+        # Inject client_id (luôn) + client_secret (nếu form thiếu).
+        new_pairs = list(pairs)
+        new_pairs.append(("client_id", basic_client_id))
+        if "client_secret" not in keys:
+            new_pairs.append(("client_secret", basic_client_secret))
+        new_body = urlencode(new_pairs).encode("utf-8")
+
+        # Rewrite Content-Length — drop old, append new.
+        new_headers: list[tuple[bytes, bytes]] = []
+        for name, value in scope.get("headers", []):
+            name_b = name if isinstance(name, bytes) else name.encode("latin-1")
+            value_b = value if isinstance(value, bytes) else value.encode("latin-1")
+            if name_b.lower() == b"content-length":
+                continue
+            new_headers.append((name_b, value_b))
+        new_headers.append(
+            (b"content-length", str(len(new_body)).encode("latin-1"))
+        )
+
+        new_scope = dict(scope)
+        new_scope["headers"] = new_headers
+
+        logger.info(
+            "BasicAuthFormShim — convert Basic→form cho path=%s (client_id "
+            "thiếu trong form)",
+            path,
+        )
+        await self._forward_with_body(new_scope, new_body, receive, send)
+
+    async def _forward_with_body(
+        self, scope: Any, body: bytes, receive: Any, send: Any
+    ) -> None:
+        """Replay buffered body cho inner app. Receive tiếp theo trả empty more_body=False.
+
+        `receive` gốc đã được consume cho việc buffer. Cần wrap thành receive
+        mới phát message chứa toàn bộ body, sau đó tiếp tục forward các message
+        khác (vd http.disconnect) qua receive gốc.
+        """
+        sent = False
+
+        async def _receive() -> dict:
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {
+                    "type": "http.request",
+                    "body": body,
+                    "more_body": False,
+                }
+            # Sau khi gửi body, delegate về receive gốc — cho phép app nhận
+            # http.disconnect nếu client cắt giữa chừng.
+            return await receive()
+
+        await self._app(scope, _receive, send)
+
+    def __getattr__(self, name: str) -> Any:
+        # Delegate giống _AsgiPathShim — uvicorn / test introspect không vỡ.
+        return getattr(self._app, name)
 
 
 class _AsgiPathShim:

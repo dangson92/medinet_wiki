@@ -467,3 +467,413 @@ async def test_metadata_advertises_only_client_secret_post(monkeypatch) -> None:
         f"['client_secret_post']. Got: "
         f"{metadata.get('revocation_endpoint_auth_methods_supported')!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test _BasicAuthFormShim — defense-in-depth Basic→form converter
+# ---------------------------------------------------------------------------
+import base64
+
+import pytest
+
+
+def _make_http_scope(
+    method: str,
+    path: str,
+    headers: list[tuple[bytes, bytes]],
+) -> dict:
+    """Builder ASGI scope HTTP request — giảm boilerplate."""
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": method,
+        "scheme": "https",
+        "path": path,
+        "raw_path": path.encode("utf-8"),
+        "query_string": b"",
+        "root_path": "",
+        "headers": headers,
+        "server": ("wiki.example.com", 443),
+        "client": ("127.0.0.1", 0),
+    }
+
+
+async def _run_shim(
+    shim_app, scope: dict, body: bytes
+) -> tuple[dict, bytes]:
+    """Chạy shim với body cho trước, trả về scope + body recorder nhận được.
+
+    Trả (recorded_scope, recorded_body). Recorder gắn vào shim._app — bắt
+    scope + body sau khi shim xử lý.
+    """
+    recorded_scope: dict = {}
+    recorded_body = bytearray()
+
+    async def _recorder(s, recv, send):  # type: ignore[no-untyped-def]
+        recorded_scope.update(s)
+        more = True
+        while more:
+            msg = await recv()
+            if msg.get("type") != "http.request":
+                break
+            recorded_body.extend(msg.get("body") or b"")
+            more = bool(msg.get("more_body"))
+
+    # Swap shim._app — test shim độc lập (không cần Starlette wrapper thực).
+    shim_app._app = _recorder
+
+    sent_request = False
+
+    async def _receive() -> dict:
+        nonlocal sent_request
+        if sent_request:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        sent_request = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def _send(_msg: dict) -> None:
+        pass
+
+    await shim_app(scope, _receive, _send)
+    return recorded_scope, bytes(recorded_body)
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_injects_client_id_from_basic_header() -> None:
+    """POST /mcp/token với Authorization Basic + form thiếu client_id → shim inject.
+
+    Đây là case chính: client MCP TS SDK chọn `client_secret_basic` (gửi
+    credentials qua header), form body chỉ có grant_type/code/code_verifier/
+    redirect_uri. Shim decode Basic, inject client_id + client_secret vào form
+    → SDK ClientAuthenticator đọc client_id từ form OK.
+    """
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)  # _app gán trong _run_shim
+
+    client_id = "mcpu_test123"
+    client_secret = "supersecret_xyz"
+    basic_value = base64.b64encode(
+        f"{client_id}:{client_secret}".encode("utf-8")
+    ).decode("ascii")
+
+    body = (
+        b"grant_type=authorization_code&code=abc&"
+        b"code_verifier=verifier_xyz&redirect_uri=http%3A%2F%2Flocal%2Fcb"
+    )
+    scope = _make_http_scope(
+        "POST",
+        "/mcp/token",
+        [
+            (b"host", b"wiki.example.com"),
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", str(len(body)).encode("ascii")),
+        ],
+    )
+
+    rec_scope, rec_body = await _run_shim(shim, scope, body)
+
+    # Body forwarded đã có client_id + client_secret
+    body_str = rec_body.decode("utf-8")
+    assert "client_id=mcpu_test123" in body_str, (
+        f"client_id phải được inject vào form body. Got: {body_str!r}"
+    )
+    assert "client_secret=supersecret_xyz" in body_str, (
+        f"client_secret phải được inject vào form body. Got: {body_str!r}"
+    )
+    # Field cũ giữ nguyên
+    assert "grant_type=authorization_code" in body_str
+    assert "code=abc" in body_str
+    assert "code_verifier=verifier_xyz" in body_str
+
+    # Content-Length đã rewrite
+    headers = dict(rec_scope.get("headers", []))
+    new_cl = headers.get(b"content-length")
+    assert new_cl is not None
+    assert int(new_cl) == len(rec_body), (
+        f"Content-Length phải = len body sau inject. cl={new_cl!r} "
+        f"body_len={len(rec_body)}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passthrough_when_client_id_already_in_form() -> None:
+    """Form đã có client_id (path client_secret_post bình thường) → KHÔNG inject."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+
+    basic_value = base64.b64encode(b"x:y").decode("ascii")
+    body = (
+        b"grant_type=authorization_code&code=abc&client_id=existing&"
+        b"client_secret=existing_sec&code_verifier=v&redirect_uri=cb"
+    )
+    scope = _make_http_scope(
+        "POST",
+        "/mcp/token",
+        [
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", str(len(body)).encode("ascii")),
+        ],
+    )
+
+    rec_scope, rec_body = await _run_shim(shim, scope, body)
+
+    # Body forwarded NGUYÊN — không thêm/đè
+    assert rec_body == body, (
+        f"Form đã có client_id → body phải forwarded NGUYÊN. "
+        f"original={body!r} got={rec_body!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passthrough_when_no_basic_header() -> None:
+    """KHÔNG có Authorization Basic header → forward nguyên (không buffer body lạ)."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+    body = b"grant_type=authorization_code&code=abc"
+    scope = _make_http_scope(
+        "POST",
+        "/mcp/token",
+        [
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", str(len(body)).encode("ascii")),
+        ],
+    )
+
+    _, rec_body = await _run_shim(shim, scope, body)
+    assert rec_body == body, (
+        f"Không có Basic header → body NGUYÊN. Got: {rec_body!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passthrough_when_path_not_token() -> None:
+    """Path không phải token/revoke → KHÔNG buffer body, forward nguyên.
+
+    Quan trọng: shim KHÔNG được buffer body cho path khác (vd /mcp transport
+    stream), nếu không sẽ phá streaming + tăng latency.
+    """
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+    basic_value = base64.b64encode(b"x:y").decode("ascii")
+    body = b'{"jsonrpc":"2.0","method":"tools/list"}'
+    scope = _make_http_scope(
+        "POST",
+        "/mcp",  # transport endpoint, không phải /mcp/token
+        [
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode("ascii")),
+        ],
+    )
+
+    rec_scope, rec_body = await _run_shim(shim, scope, body)
+    assert rec_body == body
+    # Headers giữ nguyên — không rewrite Content-Length
+    headers = dict(rec_scope.get("headers", []))
+    assert headers.get(b"content-length") == str(len(body)).encode("ascii")
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passthrough_when_get_method() -> None:
+    """Method GET → KHÔNG xử lý (token + revoke chỉ POST)."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+    basic_value = base64.b64encode(b"x:y").decode("ascii")
+    body = b""
+    scope = _make_http_scope(
+        "GET",
+        "/mcp/token",
+        [
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+        ],
+    )
+
+    rec_scope, rec_body = await _run_shim(shim, scope, body)
+    assert rec_body == body
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passthrough_non_form_content_type() -> None:
+    """Content-Type không phải form-urlencoded → forward nguyên (không decode JSON)."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+    basic_value = base64.b64encode(b"x:y").decode("ascii")
+    body = b'{"grant_type":"authorization_code"}'
+    scope = _make_http_scope(
+        "POST",
+        "/mcp/token",
+        [
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+            (b"content-type", b"application/json"),
+        ],
+    )
+
+    _, rec_body = await _run_shim(shim, scope, body)
+    assert rec_body == body, (
+        f"JSON body → KHÔNG can thiệp. Got: {rec_body!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passthrough_malformed_basic() -> None:
+    """Authorization Basic không hợp lệ (không có ':') → forward nguyên."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+    # base64("noColonInside") — decode được nhưng không có ":"
+    bad_basic = base64.b64encode(b"noColonInside").decode("ascii")
+    body = b"grant_type=authorization_code&code=abc"
+    scope = _make_http_scope(
+        "POST",
+        "/mcp/token",
+        [
+            (b"authorization", f"Basic {bad_basic}".encode("ascii")),
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", str(len(body)).encode("ascii")),
+        ],
+    )
+
+    _, rec_body = await _run_shim(shim, scope, body)
+    assert rec_body == body, (
+        f"Basic malformed → forward NGUYÊN. Got: {rec_body!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_url_decodes_credentials() -> None:
+    """RFC 6749 §2.3.1 — client_id/secret trong Basic được URL-encoded trước base64.
+
+    Vd `:` trong client_id phải percent-encode → khi decode form value phải
+    được URL-decode (unquote) ngược lại.
+    """
+    from mcp_app.server import _BasicAuthFormShim
+
+    shim = _BasicAuthFormShim(None)
+
+    # client_id chứa ký tự đặc biệt — phải percent-encode trong Basic
+    raw_client_id = "user:foo"  # contains literal ':'
+    raw_secret = "pass word"  # contains space
+    from urllib.parse import quote
+
+    enc_id = quote(raw_client_id, safe="")
+    enc_secret = quote(raw_secret, safe="")
+    basic_value = base64.b64encode(
+        f"{enc_id}:{enc_secret}".encode("utf-8")
+    ).decode("ascii")
+
+    body = b"grant_type=authorization_code&code=abc"
+    scope = _make_http_scope(
+        "POST",
+        "/token",
+        [
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", str(len(body)).encode("ascii")),
+        ],
+    )
+
+    _, rec_body = await _run_shim(shim, scope, body)
+    body_str = rec_body.decode("utf-8")
+    from urllib.parse import parse_qs
+
+    parsed = parse_qs(body_str)
+    assert parsed.get("client_id") == [raw_client_id], (
+        f"client_id phải URL-decoded về '{raw_client_id}'. Got: {parsed!r}"
+    )
+    assert parsed.get("client_secret") == [raw_secret], (
+        f"client_secret phải URL-decoded về '{raw_secret}'. Got: {parsed!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_handles_chunked_body() -> None:
+    """Body multi-chunk (more_body=True) phải được buffer đầy đủ trước khi parse."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    chunks = [b"grant_type=auth", b"orization_code&", b"code=xyz"]
+
+    async def _chunked_receive():
+        idx = 0
+
+        async def _r():
+            nonlocal idx
+            if idx >= len(chunks):
+                return {"type": "http.request", "body": b"", "more_body": False}
+            chunk = chunks[idx]
+            idx += 1
+            return {
+                "type": "http.request",
+                "body": chunk,
+                "more_body": idx < len(chunks),
+            }
+
+        return _r
+
+    recorder_body = bytearray()
+    recorder_scope: dict = {}
+
+    async def _recorder(s, recv, send):  # type: ignore[no-untyped-def]
+        recorder_scope.update(s)
+        more = True
+        while more:
+            msg = await recv()
+            recorder_body.extend(msg.get("body") or b"")
+            more = bool(msg.get("more_body"))
+
+    shim = _BasicAuthFormShim(_recorder)
+
+    basic_value = base64.b64encode(b"cid:csec").decode("ascii")
+    scope = _make_http_scope(
+        "POST",
+        "/mcp/token",
+        [
+            (b"authorization", f"Basic {basic_value}".encode("ascii")),
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", b"40"),
+        ],
+    )
+
+    receive_fn = await _chunked_receive()
+
+    async def _send(_m): ...
+
+    await shim(scope, receive_fn, _send)
+
+    body_str = recorder_body.decode("utf-8")
+    assert "grant_type=authorization_code" in body_str
+    assert "code=xyz" in body_str
+    assert "client_id=cid" in body_str, (
+        f"Chunked body → shim phải buffer đủ rồi mới parse. Got: {body_str!r}"
+    )
+    assert "client_secret=csec" in body_str
+
+
+@pytest.mark.asyncio
+async def test_basic_auth_shim_passes_through_lifespan() -> None:
+    """Scope lifespan KHÔNG được can thiệp — phải pass-through nguyên vẹn."""
+    from mcp_app.server import _BasicAuthFormShim
+
+    received: dict = {}
+
+    async def _recorder(s, recv, send):  # type: ignore[no-untyped-def]
+        received.update(s)
+
+    shim = _BasicAuthFormShim(_recorder)
+    lifespan_scope = {"type": "lifespan", "asgi": {"version": "3.0"}}
+
+    async def _r():
+        return {"type": "lifespan.startup"}
+
+    async def _s(_m): ...
+
+    await shim(lifespan_scope, _r, _s)
+    assert received.get("type") == "lifespan"
