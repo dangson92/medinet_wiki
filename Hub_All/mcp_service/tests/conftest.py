@@ -65,15 +65,28 @@ def mock_ctx_oauth():
 
 
 @pytest.fixture(autouse=True)
-def reset_api_client():
+def reset_api_client(monkeypatch: pytest.MonkeyPatch):
     """Reset singleton của server (ApiClient + OAuth store/provider) mỗi test.
 
     `mcp_app.server._api_client` / `_oauth_store` / `_oauth_provider` là singleton
     lazy-init. Nếu không reset, base_url / DB path của test trước leak sang test
     sau. Đặt `None` để `_get_*()` tạo instance mới từ config (đã bị override).
+
+    Thêm: ép `MCP_PATH_PREFIX=""` mặc định mọi test — chống `.env` file ở
+    project root (deploy env path-based) leak vào test, làm app wrap dưới
+    Mount khiến route root như `/login` trả 404. Test nào cần path-prefix
+    mode phải explicit `monkeypatch.setenv("MCP_PATH_PREFIX", "mcp")`.
     """
     import mcp_app.server as server
+    from mcp_app.config import get_settings
 
+    monkeypatch.setenv("MCP_PATH_PREFIX", "")
+    # Đồng thời ép MCP_OAUTH_INTERNAL_TOKEN="" mặc định — chống `.env` deploy
+    # (có shared secret) leak vào test khiến provider gọi API internal khi
+    # complete_authorization → respx mock chưa setup endpoint → fail.
+    # Test cần per-user bind explicit set env này + mock route.
+    monkeypatch.setenv("MCP_OAUTH_INTERNAL_TOKEN", "")
+    get_settings.cache_clear()
     server._api_client = None
     server._oauth_store = None
     server._oauth_provider = None

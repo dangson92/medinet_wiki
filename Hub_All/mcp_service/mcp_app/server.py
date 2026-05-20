@@ -43,6 +43,7 @@ from mcp.server.auth.settings import (
 )
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 
 from mcp_app.api_client import (
@@ -480,10 +481,33 @@ def _build_mcp() -> FastMCP:
     settings = get_settings()
     prefix = settings.path_prefix.strip("/")
     streamable_path = "/" if prefix else "/mcp"
+
+    # SDK auto-bật DNS rebinding protection khi `host` mặc định ("127.0.0.1")
+    # với allowed_hosts chỉ gồm localhost. Khi MCP đứng sau reverse proxy
+    # public (Cloudflare Tunnel) Host header sẽ là domain public → SDK reject
+    # 421 Misdirected Request. Whitelist tường minh: issuer's host + localhost.
+    from urllib.parse import urlparse
+
+    issuer_host = urlparse(settings.oauth_issuer_url).netloc
+    allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    if issuer_host and issuer_host not in allowed_hosts:
+        # Exact match — domain public không có port suffix (qua proxy HTTPS 443).
+        allowed_hosts.append(issuer_host)
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        # allowed_origins rỗng → SDK validate Origin chỉ pass khi Origin absent
+        # (server-to-server fetch của Claude — quan sát log không thấy warning
+        # Invalid Origin). Nếu sau này Claude/MCP Inspector gửi Origin, thêm
+        # `f"https://{issuer_host}"` + `"https://claude.ai"` vào danh sách.
+        allowed_origins=[],
+    )
+
     mcp = FastMCP(
         "Medinet Wiki MCP Service",
         stateless_http=True,
         streamable_http_path=streamable_path,
+        transport_security=transport_security,
         auth_server_provider=_get_oauth_provider(),
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(settings.oauth_issuer_url),
