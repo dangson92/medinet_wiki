@@ -330,3 +330,50 @@ async def test_rotate_token_unknown_refresh(oauth_store) -> None:
         new_refresh_token="ref-x",
         expires_at=int(time.time()) + 3600,
     ) is False
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.3 Plan 09 — gap closure wave 9 (HIGH-02 family revocation store)
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_token_family_removes_all(oauth_store) -> None:
+    """delete_token_family xoá tất cả token cùng family_id (HIGH-02, RFC 6749 §10.4).
+
+    Audit 2026-05-21 HIGH-02: refresh reuse → AS PHẢI thu hồi cả family vì
+    không phân biệt được kẻ tấn công và client thật. Test verify:
+    - 3 token thuộc family fam-1 → xoá hết
+    - 1 token thuộc family fam-2 → còn nguyên
+    - rowcount trả 3 (đúng số dòng xoá)
+    """
+    for i, fam in enumerate(["fam-1", "fam-1", "fam-1", "fam-2"]):
+        await oauth_store.save_token(
+            access_token=f"acc-{i}",
+            refresh_token=f"ref-{i}",
+            client_id="client-test",
+            scopes=["wiki"],
+            downstream_jwt=f"jwt-{i}",
+            downstream_refresh_token=f"jwt-r-{i}",
+            user_payload={"id": 1},
+            family_id=fam,
+            expires_at=int(time.time()) + 3600,
+        )
+    deleted = await oauth_store.delete_token_family("fam-1")
+    assert deleted == 3
+    for i in range(3):
+        assert await oauth_store.load_token(f"acc-{i}") is None
+    # Family khác KHÔNG bị động.
+    assert await oauth_store.load_token("acc-3") is not None
+
+
+async def test_delete_token_family_noop_on_null(oauth_store) -> None:
+    """delete_token_family với family_id rỗng/không tồn tại → no-op (back-compat).
+
+    HIGH-02 Plan 08 back-compat: token cũ trước migration không có family_id —
+    delete_token_family no-op khi family_id NULL/rỗng để KHÔNG xoá nhầm token
+    chưa migrate. family_id không tồn tại trong store cũng trả 0 (idempotent).
+    """
+    # rỗng → 0, không xoá.
+    assert await oauth_store.delete_token_family("") == 0
+    # không tồn tại → 0.
+    assert await oauth_store.delete_token_family("fam-nonexistent") == 0
