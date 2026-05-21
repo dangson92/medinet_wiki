@@ -10,7 +10,7 @@
 
 .PHONY: help up down logs api-dev api-test api-lint api-keys api-install \
         eval-install eval-seed eval-clean eval-smoke eval-all eval-report \
-        eval-readme eval-restore
+        eval-readme eval-restore hub-init
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Help
@@ -30,6 +30,9 @@ help: ## Hiển thị danh sách target khả dụng
 	@echo "  api-dev                 - cd api && make dev (uvicorn reload :8080)"
 	@echo "  api-test                - cd api && make test (pytest + testcontainers)"
 	@echo "  api-lint                - cd api && make lint (ruff + mypy strict)"
+	@echo ""
+	@echo "Phase 1 v3.0 Dynamic hub-init (TOPO-01 part 2):"
+	@echo "  hub-init HUB=<name>     - them hub moi (CREATE DB + ext vector + HNSW verify + alembic upgrade head)"
 	@echo ""
 	@echo "Phase 9 Eval Framework (EVAL-02 + EVAL-04):"
 	@echo "  eval-install            - cd eval && pip install -e '.[dev]'"
@@ -72,6 +75,17 @@ api-test:
 
 api-lint:
 	$(MAKE) -C api lint
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 1 v3.0 — Dynamic hub initialization (TOPO-01 part 2)
+# ═══════════════════════════════════════════════════════════════════════════
+# Them hub moi ma KHONG can docker compose down. Usage:
+#   make hub-init HUB=phap_che   # tao DB medinet_hub_phap_che + ext vector + alembic upgrade head
+# Sau khi script DONE, can update app/config.py Literal hub_name de Settings accept hub moi.
+
+hub-init:
+	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-init HUB=<name>"; exit 2; fi
+	$(MAKE) -C api hub-init HUB=$(HUB)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Phase 9 Eval Framework (EVAL-02 + EVAL-04)

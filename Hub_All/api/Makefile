@@ -1,7 +1,7 @@
 # Medinet Wiki API — dev tasks
 .PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov clean \
         migrate-up migrate-down migrate-check migrate-history cocoindex-setup \
-        migrate-all migrate-status
+        migrate-all migrate-status hub-init
 
 UV ?= uv
 
@@ -77,6 +77,18 @@ migrate-status:
 		echo "[migrate-status] --- hub=$$hub ---"; \
 		$(UV) run alembic -x hub=$$hub current || echo "  (FAIL)"; \
 	done
+
+# === Dynamic hub init (Phase 1 v3.0 Plan 01-05 TOPO-01 part 2) ===
+# Tien dieu kien: docker compose up -d postgres (Phase 1 Plan 01 — central + cocoindex DB da ton tai)
+# + .env DATABASE_URL tro medinet_central + HUB_NAME=central (de alembic env.py
+# base DSN resolve ok).
+# Goi: make hub-init HUB=<name>
+# Vd: make hub-init HUB=phap_che
+# Script chay scripts/hub-init.sh - CREATE DB + ext + HNSW verify + alembic upgrade head.
+
+hub-init:
+	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-init HUB=<name>"; exit 2; fi
+	@bash scripts/hub-init.sh $(HUB)
 
 # === Cocoindex setup (Phase 4 Plan 04-01) ===
 # Chạy MỘT LẦN sau `make migrate-up`. Idempotent — chạy lại OK sau Plan 04-02 (flow.py).
