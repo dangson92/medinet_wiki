@@ -29,7 +29,7 @@ from mcp_app.api_client import (
     ApiServerError,
     ApiUnauthorizedError,
 )
-from mcp_app.server import ask_wiki, list_hubs, search_wiki
+from mcp_app.server import ask_wiki, list_hubs, register_tools, search_wiki
 
 
 @pytest.fixture
@@ -43,6 +43,30 @@ def ctx() -> MagicMock:
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: AsyncMock) -> None:
     """Thay _get_client() bằng client mock."""
     monkeypatch.setattr("mcp_app.server._get_client", lambda: client)
+
+
+async def test_registered_tools_include_read_only_annotations() -> None:
+    """Claude/MCP clients need safety annotations to bypass read-only approval gates."""
+    from mcp.server.fastmcp import FastMCP
+
+    mcp = FastMCP("test")
+    register_tools(mcp)
+
+    tools = {tool.name: tool for tool in await mcp.list_tools()}
+    expected_titles = {
+        "list_hubs": "List hubs",
+        "search_wiki": "Search wiki",
+        "ask_wiki": "Ask wiki",
+    }
+    assert set(expected_titles).issubset(tools)
+    for name, title in expected_titles.items():
+        tool = tools[name]
+        assert tool.title == title
+        assert tool.annotations is not None
+        assert tool.annotations.title == title
+        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.destructiveHint is False
+        assert tool.annotations.openWorldHint is False
 
 
 async def test_list_hubs_unwraps_items(

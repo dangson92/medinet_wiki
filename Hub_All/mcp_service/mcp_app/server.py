@@ -44,6 +44,7 @@ from mcp.server.auth.settings import (
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl
 
 from mcp_app.api_client import (
@@ -461,6 +462,16 @@ def _close_client_atexit() -> None:
 atexit.register(_close_client_atexit)
 
 
+def _read_only_annotations(title: str) -> ToolAnnotations:
+    """Tool safety hints consumed by Claude/MCP clients for approval gating."""
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=False,
+    )
+
+
 def register_tools(mcp: FastMCP) -> None:
     """Đăng ký 3 tool read-only lên một FastMCP instance.
 
@@ -468,9 +479,18 @@ def register_tools(mcp: FastMCP) -> None:
     (factory) — `mcp.tool()` trả lại chính hàm gốc, không bọc, nên 3 hàm
     `list_hubs`/`search_wiki`/`ask_wiki` vẫn import trực tiếp được cho unit test.
     """
-    mcp.tool()(list_hubs)
-    mcp.tool()(search_wiki)
-    mcp.tool()(ask_wiki)
+    mcp.tool(
+        title="List hubs",
+        annotations=_read_only_annotations("List hubs"),
+    )(list_hubs)
+    mcp.tool(
+        title="Search wiki",
+        annotations=_read_only_annotations("Search wiki"),
+    )(search_wiki)
+    mcp.tool(
+        title="Ask wiki",
+        annotations=_read_only_annotations("Ask wiki"),
+    )(ask_wiki)
 
 
 def _build_mcp() -> FastMCP:
