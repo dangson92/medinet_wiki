@@ -1,12 +1,27 @@
 ---
 phase: 04-cocoindex-flow-mvp-document-ingest
-verified: 2026-05-14T18:45:00Z
-status: gaps_found
-score: 3/5 success criteria verified
+verified: 2026-05-21T18:00:00Z
+status: passed
+score: 5/5 success criteria verified
 must_haves_total: 5
-must_haves_verified: 3
-must_haves_failed: 2
-re_verified_after: 04-07
+must_haves_verified: 5
+must_haves_failed: 0
+re_verified_after: 04-08
+re_verification:
+  previous_status: gaps_found
+  previous_score: 3/5
+  is_initial: false
+  gaps_closed:
+    - "SC2 — E2E test_e2e_upload_docx_to_chunks_completed PASSED 2026-05-21 sau Plan 04-08 (commit 9c017ae) vá race condition giữa SQLAlchemy commit (pool A) và cocoindex asyncpg pool snapshot REPEATABLE READ (pool B) trong trigger_cocoindex_update. Fix: initial delay 0.1s + retry loop tối đa 3 attempts với linear backoff 0.5s/1.0s."
+    - "SC5 — E2E test_e2e_content_hash_incremental_dedup PASSED 2026-05-21 cùng commit — content-hash dedup verify được sau khi SC2 đóng."
+  gaps_remaining: []
+  regressions: []
+  evidence: "uv run pytest tests/integration/test_ingest_e2e.py -v -k 'test_e2e_upload_docx_to_chunks_completed or test_e2e_content_hash' → 2 passed in 18.28s (testcontainers postgres pgvector pg16 + redis)"
+re_verified_previous:
+  previous_status: gaps_found
+  previous_score: 3/5
+  date: 2026-05-14
+  re_after_plan: 04-07
 re_verification:
   previous_status: gaps_found
   previous_score: 3/5

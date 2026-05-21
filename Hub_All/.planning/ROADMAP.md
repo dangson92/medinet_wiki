@@ -30,9 +30,9 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [x] **Phase 1: Infra Skeleton + Demolition + EXIT Criteria** — FastAPI skeleton + Docker Compose 3-service + xóa code M1 + CONVENTIONS.md ✓ (2026-05-13, 6 plans / 4 waves / 28 commits)
 - [x] **Phase 2: Database Schema + Alembic Baseline** — schema migrations cho users/hubs/documents/chunks/audit_logs/usage_events/refresh_tokens/api_keys/user_hubs/settings + HNSW vector_cosine_ops 1536-dim verified runtime ✓ (2026-05-13, 5 plans / 5 waves / 28 commits, 7/7 pytest PASS)
 - [x] **Phase 3: Auth Port + RBAC + Response Envelope** — JWT RS256 + Argon2 cross-compat + RBAC + envelope `{success, data, error, meta}` ✓ (2026-05-14, 5 plans / 4 waves / 22 commits, 62/62 pytest no regress, 29/29 critical PASS, 5/5 ROADMAP AC verified)
-- [ ] **Phase 4: CocoIndex Flow MVP + Document Ingest** — cocoindex flow LISTEN/NOTIFY + extract/chunk/embed/pgvector + status tracking
+- [x] **Phase 4: CocoIndex Flow MVP + Document Ingest** — cocoindex flow BackgroundTask + extract/chunk/embed/pgvector + status tracking ✓ (2026-05-21, 8 plans / 5 waves, E2E test_ingest_e2e PASSED testcontainers, race pool A/B đã vá Plan 04-08 debug session)
 
-🚦 **M2a EXIT GATE** — Demo upload DOCX → chunks pgvector → SELECT verify. User accept? Reject → STOP, không pivot 3.
+🚦 **M2a EXIT GATE PASSED 2026-05-21** — E2E upload DOCX VN → chunks pgvector → content-hash dedup verify thành công.
 
 ### M2b — RAG Completion
 
@@ -168,14 +168,15 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Heartbeat watchdog PASS: kill cocoindex worker giữa flow → sau 5 phút (REVISION 2 — Plan 04-05 timeout configurable Settings.watchdog_timeout_seconds=300, headroom cho cocoindex update_blocking documents lớn), `documents.status` tự động flip `processing → failed` với `error_message='timeout: no heartbeat for >300s'` CHỈ khi `last_heartbeat IS NOT NULL` (WARNING #7 fix — Plan 04-04 bootstrap last_heartbeat=NOW() lúc INSERT). KHÔNG stuck `processing` forever
   5. Content-hash incremental verify: upload cùng file 2 lần liên tiếp → lần 2 KHÔNG re-embed (cocoindex memo cache hit); edit 1 chunk content rồi upload lại → CHỈ chunks bị thay đổi re-embed (verify qua OpenAI usage log count)
 
-**Plans:** 7 plans (4 waves) — RE-PLANNED 2026-05-18 (replan from scratch — cocoindex 1.0.3 actual API + A4 BackgroundTasks REVISION 2; supersede 04-VERIFICATION.md gaps_found)
-- [ ] 04-01-PLAN.md — Migration 0002 watchdog index + Settings cocoindex_lmdb_path/watchdog_timeout_seconds + app.rag package init (Wave 1, INGEST-05/06/08)
-- [ ] 04-02-PLAN.md — Services file_extract + vn_chunker + embedder + file_store (Wave 1, INGEST-02/04)
-- [ ] 04-03-PLAN.md — CocoIndex 1.0.3 flow medinet_wiki_ingest (coco.App + VectorSchema + mount_table_target) + lifespan fail-fast setup_cocoindex (Wave 2, INGEST-01/02/03)
-- [ ] 04-04-PLAN.md — Documents router POST /upload + GET /:id + DocumentService + A4 BackgroundTasks trigger_cocoindex_update + COMMIT-after-INSERT (Wave 2, INGEST-04/05)
-- [ ] 04-05-PLAN.md — Watchdog asyncio task (5min timeout NULL-guard) + DELETE + LIST endpoints (Wave 3, INGEST-06/07/08)
-- [ ] 04-06-PLAN.md — M2a EXIT GATE: fix LMDB singleton (setup idempotent + session-scoped fixture) + E2E test suite cocoindex_app real — đóng SC2/SC5 zero-chunks gap (Wave 3, INGEST-01/02/03)
-- [ ] 04-07-PLAN.md — M2a EXIT GATE demo script (docs/m2a-exit-gate-demo.md + scripts/m2a_demo.sh) + checkpoint human-verify (Wave 4, INGEST-04/05/06/07/08)
+**Plans:** 8 plans (5 waves) — RE-PLANNED 2026-05-18 (replan from scratch — cocoindex 1.0.3 actual API + A4 BackgroundTasks REVISION 2) + Plan 04-08 (debug session gap closure 2026-05-21 — vá race pool A/pool B)
+- [x] 04-01-PLAN.md — Migration 0002 watchdog index + Settings cocoindex_lmdb_path/watchdog_timeout_seconds + app.rag package init (Wave 1, INGEST-05/06/08) ✅ 2026-05-14
+- [x] 04-02-PLAN.md — Services file_extract + vn_chunker + embedder + file_store (Wave 1, INGEST-02/04) ✅ 2026-05-14
+- [x] 04-03-PLAN.md — CocoIndex 1.0.3 flow medinet_wiki_ingest (coco.App + VectorSchema + mount_table_target) + lifespan fail-fast setup_cocoindex (Wave 2, INGEST-01/02/03) ✅ 2026-05-14
+- [x] 04-04-PLAN.md — Documents router POST /upload + GET /:id + DocumentService + A4 BackgroundTasks trigger_cocoindex_update + COMMIT-after-INSERT (Wave 2, INGEST-04/05) ✅ 2026-05-14
+- [x] 04-05-PLAN.md — Watchdog asyncio task (5min timeout NULL-guard) + DELETE + LIST endpoints (Wave 3, INGEST-06/07/08) ✅ 2026-05-14
+- [x] 04-06-PLAN.md — M2a EXIT GATE: fix LMDB singleton (setup idempotent + session-scoped fixture) + E2E test suite cocoindex_app real — đóng SC2/SC5 zero-chunks gap (Wave 3, INGEST-01/02/03) ✅ 2026-05-14
+- [x] 04-07-PLAN.md — M2a EXIT GATE demo script (docs/m2a-exit-gate-demo.md + scripts/m2a_demo.sh) + Plan 04-07 fix architectural blocker VectorSchemaProvider schema build PASS (Wave 4, INGEST-04/05/06/07/08) ✅ 2026-05-14
+- [x] 04-08-debug-fix — Gap closure (debug session 2026-05-21 `cocoindex-zero-chunks-docx-vn`): vá race condition giữa SQLAlchemy commit pool A và cocoindex asyncpg pool B REPEATABLE READ snapshot trong trigger_cocoindex_update — initial delay 0.1s + retry loop tối đa 3 attempts với linear backoff. E2E test_e2e_upload_docx_to_chunks_completed + test_e2e_content_hash_incremental_dedup PASSED (18.28s testcontainers). **🚦 M2a EXIT GATE PASS** (Wave 5, INGEST-01..08) ✅ 2026-05-21 (commit 9c017ae)
 
 ---
 
@@ -466,8 +467,8 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 1. Infra Skeleton + Demolition + EXIT Criteria | 6/6 | ✓ Complete | 2026-05-13 |
 | 2. Database Schema + Alembic Baseline | 4/5 | In progress (Plan 05 deferred Docker) | - |
 | 3. Auth Port + RBAC + Response Envelope | 0/? | Not started | - |
-| 4. CocoIndex Flow MVP + Document Ingest | 0/7 | Re-planned 2026-05-18 (7 plans / 4 waves) | - |
-| 🚦 M2a EXIT GATE | — | Pending Phase 4 | - |
+| 4. CocoIndex Flow MVP + Document Ingest | 8/8 | ✓ Complete | 2026-05-21 |
+| 🚦 M2a EXIT GATE | — | ✅ PASSED | 2026-05-21 |
 | 5. Hub + User + Audit + APIKey + Settings CRUD | 6/6 | ✓ Complete | 2026-05-17 |
 | 6. Search API Single + Cross-Hub | 4/4 | ✓ Complete | 2026-05-18 |
 | 7. Ask API + LiteLLM + Citation + Hot-Swap + Usage | 5/5 | ✓ Complete | 2026-05-18 |
@@ -477,7 +478,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 0/? | Not started | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
-**Tổng:** 8/12 phases complete (M2a: 3/4 — Phase 4 pending · M2b: 5/8 — Phase 5/6/7/8/8.1 done · Phase 8.2 inserted, chưa plan)
+**Tổng:** 11/13 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 7/9 — Phase 5/6/7/8/8.1/8.2/8.3 done · Phase 9/10 pending). M2a EXIT GATE ✅ PASSED 2026-05-21.
 
 ---
 
