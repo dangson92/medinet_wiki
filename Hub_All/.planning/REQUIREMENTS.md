@@ -78,9 +78,9 @@
 ### EVAL — Quality Gate ≥75% top-3 (4 REQ)
 
 - [x] **EVAL-01**: ✅ Plan 09-01 COMPLETE 2026-05-21 — `Hub_All/eval/dataset/sources/` 8 file (7 DOCX DMD + tri_thuc_chinh_tri.pdf) + `Hub_All/eval/dataset/scanned/` 2 scanned PDF (R4 test 415 failed_unsupported) restore byte-identical từ git history commit `0af44f0` (M1 archive). `Hub_All/eval/queries.jsonl` 12 truy vấn vàng port từ M1 + patch thêm field `hub_id="eval_hub"` mỗi dòng — schema đầy đủ `{id, query, expected_doc_id, expected_section, hub_id, notes}` (`ensure_ascii=False` giữ tiếng Việt unicode). Kèm: skeleton Python project độc lập (`pyproject.toml` + `.env.example` + `.gitignore` + `README.md` placeholder + `__init__.py`) + `scripts/seed_hub.sql` idempotent (subdomain `eval.medinet.vn` isolation marker — D-09-01-C). 3 commit atomic `89fb73f` / `c2751b5` / `6a21612`. Self-check PASS.
-- [ ] **EVAL-02**: `eval/run_eval.py` pytest-based — login admin → seed eval_hub (DELETE chunks/documents trước) → upload 10 file → wait completion → run 12 queries qua `/api/search` (WITH `hub_id` filter để measure recall thật, R2 verify) → compute top-1/3/5 + MRR + latency p50/p95/p99 → emit `eval/results.json`.
+- [x] **EVAL-02**: ✅ Plan 09-04 COMPLETE 2026-05-21 — `eval/run_eval.py` 337 dòng orchestrator end-to-end 8-step (preflight → resolve hub → cleanup → login admin + upload 10 file → settle 2s cocoindex → run 12 query → compute metrics → write results.json + EVAL.md + exit verdict) + CLI 5 args (--mock-embed/--skip-cleanup/--top-k/--output/--eval-md) + env switch `EVAL_MOCK_EMBED=1` or-logic. `eval/scripts/cleanup.py` 215 dòng mixed strategy 3 layer (`_cleanup_via_api` DELETE /api/documents/:id cocoindex auto-tombstone + `_cleanup_postgres_defensive` DELETE chunks/documents WHERE hub_id fallback + `_cleanup_redis_cache` DEL search:*/hub:*:invalidate/rate_limit:*) + idempotent + CLI --skip-* per layer. 3 commit atomic `f21cec7` / `6631301` / `a132d85`. Regression 27/27 PASS.
 - [ ] **EVAL-03**: `eval/EVAL.md` generator — Markdown report 7 section (Setup + Metrics table + Per-Query Diff + Latency + Conclusion PASS/FAIL + Recommendations + Defer ideas). Verdict logic: **PASS nếu top-3 ≥ 75% tuyệt đối** (KHÔNG có +15pp delta vì M1 abandoned). Exit code 0 PASS, 1 FAIL (CI-friendly).
-- [ ] **EVAL-04**: `Makefile` root target `make eval-all`, `make eval-clean`, `make eval-smoke`. Smoke: upload 1 sample DOCX → search → assert ≥1 chunk return + chunk content match heading. `eval/README.md` workflow 3 bước + troubleshooting + tiền điều kiện.
+- [x] **EVAL-04**: ✅ Plan 09-04 COMPLETE 2026-05-21 — `Hub_All/Makefile` thêm 8 target eval-* (install/seed/clean/smoke/all/report/readme/restore) — `eval-all` chain cleanup + run_eval real LLM, `eval-smoke` mock embedding < 60s, `eval-clean` python -m eval.scripts.cleanup, `eval-restore` git checkout 0af44f0 -- eval/dataset/ disaster recovery. Tất cả recipe TAB-indent verified byte-level. `eval/README.md` mở rộng 53 → 249 dòng 8 section (tiền điều kiện OpenAI tier paid `text-embedding-3-large@1536` ~$0.20/run + cài đặt + workflow 5 bước + cấu trúc + troubleshooting 9 case + reproducibility + tài liệu + Makefile targets table).
 
 ### FRONTEND-COMPAT — Verify React 19 Vẫn Hoạt Động (1 REQ)
 
@@ -211,9 +211,9 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | ✅ Phase 8 COMPLETE 2026-05-19 — lớp tĩnh/tự động ĐẠT: 08-01 contract diff + replay tĩnh (SC3), 08-02 fix api-side (BLOCKER /api/ai/chat + port 8180), 08-03 test golden path API SC2 + VN filename UTF-8 SC4 (2 test critical PASS), regression 109/109 unit PASS. Lớp browser SC1 (render 11 trang) / SC2-browser (citation `[1]` clickable) / SC5 (docker compose healthy) defer human UAT — `08-HUMAN-UAT.md`, chạy `/gsd-verify-work 8` |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
 | EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | ✅ Plan 09-01 done 2026-05-21 — restore M1 0af44f0 |
-| EVAL-02 | Phase 9 (run_eval.py pytest) | Pending |
+| EVAL-02 | Phase 9 (run_eval.py pytest) | ✅ Plan 09-04 done 2026-05-21 — orchestrator 8-step + cleanup mixed 3 layer |
 | EVAL-03 | Phase 9 (EVAL.md generator + verdict gate ≥75%) | Pending |
-| EVAL-04 | Phase 9 (Makefile + eval-smoke + README) | Pending |
+| EVAL-04 | Phase 9 (Makefile + eval-smoke + README) | ✅ Plan 09-04 done 2026-05-21 — 8 target Makefile + README 249 dòng 8 section |
 | HARD-01 | Phase 10 (structlog JSON + X-Request-Id) | Pending |
 | HARD-02 | Phase 10 (Prometheus /metrics) | Pending |
 | HARD-03 | Phase 10 (integration test ≥50% critical path + CI) | Pending |
