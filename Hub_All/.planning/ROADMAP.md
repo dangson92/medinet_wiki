@@ -461,9 +461,16 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   2. `GET /metrics` endpoint Prometheus format: counter (`requests_total`, `errors_total`) + histogram (`request_duration_seconds`, `search_latency_seconds`, `ingest_duration_seconds`); scrape thử `curl /metrics` trả text/plain valid Prometheus
   3. Integration test suite ≥50% critical path coverage: pytest + testcontainers Postgres + Redis chạy CI GitHub Actions PASS; bao gồm test cho auth happy + hub isolation + ingest VN filename + search hub filter + ask citation parsing
   4. `README.md` + `DEPLOY.md` cập nhật cho stack Python: backup script documented `pg_dump --schema=public --schema=cocoindex medinet_central > backup.sql` + `pg_dump medinet_cocoindex > backup_cocoindex.sql`; `.env.example` đủ mọi key (DATABASE_URL, COCOINDEX_DATABASE_URL, REDIS_URL, OPENAI_API_KEY, GEMINI_API_KEY, JWT_PRIVATE_KEY_PATH, AES_KEY, APP_NAMESPACE)
-  5. `Hub_All/CLAUDE.md` (root + Hub_All level) update reflect stack Python; remove all references Go backend; thêm section "M2 done — pivot tới v3.0 Multi-subdomain SPA hoặc v4.0 MCP Server"
+  5. `Hub_All/CLAUDE.md` (root + Hub_All level) update reflect stack Python; remove all references Go backend; thêm section "M2 done — pivot tới v3.0 Multi-Hub Split"
 
-**Plans:** TBD
+**Plans:** 6 plans / 4 waves
+
+- [ ] 10-01-PLAN.md — structlog JSON + ContextVar + RequestIdMiddleware mở rộng + cocoindex flow log propagation (Wave 1, HARD-01)
+- [ ] 10-02-PLAN.md — Prometheus /metrics endpoint + 5 metric Counter/Histogram + PrometheusMiddleware + instrument search/ingest (Wave 2, HARD-02 — phụ thuộc 10-01 do cùng đụng app/main.py)
+- [ ] 10-03-PLAN.md — 5 acceptance test critical path + pytest-cov gate ≥50% trên 10 module critical (Wave 2, HARD-03)
+- [ ] 10-04-PLAN.md — Đóng CRIT-01 Phase 8.3 audit: tách 2 CORS policy MCP (metadata * vs sensitive whitelist) + MultiPolicyCORSMiddleware (Wave 2, HARD-02 — độc lập mcp_service/)
+- [ ] 10-05-PLAN.md — README.md + DEPLOY.md + 2 .env.example đầy đủ + CLAUDE.md M2 closeout + v3.0 transition reference (Wave 3, HARD-04)
+- [ ] 10-06-PLAN.md — GitHub Actions CI: .github/workflows/test.yml (lint + mypy + critical test với cov gate) + lint.yml secret detection (Wave 4, HARD-03 — phụ thuộc 10-05 do cùng đụng CONVENTIONS.md)
 
 ---
 
@@ -484,7 +491,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 8.2 MCP Service — Tách Process Độc Lập | 5/5 | ✓ Complete (verify human_needed — SC4) | 2026-05-19 |
 | 8.3 MCP OAuth 2.0 + Deploy Public HTTPS | 9/9 | ✓ Complete | 2026-05-21 |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 5/5 | ✓ Complete (Wave 1+2+3: 09-01 ✅ foundation, 09-02 ✅ lib+metrics, 09-03 ✅ report+gate, 09-04 ✅ orchestrator+Makefile+README, 09-05 ✅ pytest smoke regression CI gate — framework end-to-end runnable + pytest CI gate `-m critical` < 60s) | 2026-05-21 |
-| 10. Hardening + Observability + Docs | 0/? | Not started | - |
+| 10. Hardening + Observability + Docs | 0/6 | Planned (Phase 10 plan files created) | - |
 
 **Tổng:** 12/14 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 8/10 — Phase 5/6/7/8/8.1/8.2/8.3/9 done · Phase 8.2 + Phase 10 pending). Phase 9 COMPLETE 5/5 plans 2026-05-21. M2a EXIT GATE ✅ PASSED 2026-05-21.
 
