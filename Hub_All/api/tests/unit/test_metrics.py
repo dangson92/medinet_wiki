@@ -16,11 +16,10 @@ KHÔNG dễ unregister giữa test.
 """
 from __future__ import annotations
 
-import re
 import time
 
 import pytest
-from prometheus_client import REGISTRY, Counter, Histogram, generate_latest
+from prometheus_client import REGISTRY, Counter, Histogram
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
@@ -38,40 +37,23 @@ from app.observability.middleware import PrometheusMiddleware
 
 
 def _get_counter_value(metric_name: str, **labels: str) -> float:
-    """Đọc giá trị Counter từ default REGISTRY qua regex parse generate_latest()."""
-    output = generate_latest(REGISTRY).decode()
-    label_pattern = ",".join(
-        f'{k}="{re.escape(v)}"' for k, v in sorted(labels.items())
-    )
-    # Prometheus label order theo alphabet — match label set bất kỳ thứ tự.
-    line_re = re.compile(
-        rf"^{re.escape(metric_name)}\{{({label_pattern}|.*?)\}} (\d+\.\d+|\d+)$",
-        re.MULTILINE,
-    )
-    best = 0.0
-    for m in line_re.finditer(output):
-        # Verify mọi label expected có trong line match.
-        line_labels = m.group(1)
-        if all(f'{k}="{v}"' in line_labels for k, v in labels.items()):
-            best = max(best, float(m.group(2)))
-    return best
+    """Đọc Counter qua `REGISTRY.get_sample_value()` API ổn định prometheus_client.
+
+    Counter expose sample `<name>_total` (KHÔNG phải `<name>`). Plan 10-02:
+    `REQUESTS_TOTAL = Counter("requests_total", ...)` → prometheus_client lưu
+    base name = "requests" + tự append `_total` cho sample → caller pass
+    `metric_name="requests_total"` (đã có _total) thì pass nguyên vẹn.
+    Trả 0.0 nếu chưa có sample (label combo chưa xuất hiện).
+    """
+    value = REGISTRY.get_sample_value(metric_name, labels)
+    return float(value) if value is not None else 0.0
 
 
 def _get_histogram_bucket(metric_name: str, le: str, **labels: str) -> float:
-    """Đọc bucket count của Histogram (`<name>_bucket{le="..."}`)."""
-    output = generate_latest(REGISTRY).decode()
-    bucket_metric = f"{metric_name}_bucket"
-    for line in output.splitlines():
-        if not line.startswith(bucket_metric):
-            continue
-        if f'le="{le}"' not in line:
-            continue
-        if not all(f'{k}="{v}"' in line for k, v in labels.items()):
-            continue
-        m = re.search(r"\}\s+(\d+\.\d+|\d+)$", line)
-        if m:
-            return float(m.group(1))
-    return 0.0
+    """Đọc bucket cumulative count của Histogram `<name>_bucket{le="..."}`."""
+    bucket_labels = {**labels, "le": le}
+    value = REGISTRY.get_sample_value(f"{metric_name}_bucket", bucket_labels)
+    return float(value) if value is not None else 0.0
 
 
 @pytest.mark.critical
@@ -110,17 +92,21 @@ def test_requests_total_inc_appears_in_generate_latest() -> None:
     assert after - before == pytest.approx(1.0, abs=1e-6)
 
 
-def test_search_latency_time_observe_falls_in_25ms_bucket() -> None:
-    """Test 3: SEARCH_LATENCY.time() block sleep 10ms → bucket le=0.025 tăng 1."""
+def test_search_latency_time_observe_falls_in_50ms_bucket() -> None:
+    """Test 3: SEARCH_LATENCY.time() block sleep 10ms → bucket le=0.05 tăng 1.
+
+    SEARCH_LATENCY buckets = (0.05, 0.1, 0.2, 0.4, 0.8, 1.5, 3.0, 5.0) — bucket
+    nhỏ nhất là 0.05 (50ms). 10ms quan sát rơi vào mọi bucket >=50ms → bucket
+    le=0.05 tăng đúng 1.
+    """
     before = _get_histogram_bucket(
-        "search_latency_seconds", le="0.025", hub_scope="single"
+        "search_latency_seconds", le="0.05", hub_scope="single"
     )
     with SEARCH_LATENCY.labels(hub_scope="single").time():
         time.sleep(0.01)
     after = _get_histogram_bucket(
-        "search_latency_seconds", le="0.025", hub_scope="single"
+        "search_latency_seconds", le="0.05", hub_scope="single"
     )
-    # 10ms quan sát rơi vào mọi bucket le >= 10ms — bucket le=0.025 tăng đúng 1.
     assert after - before == pytest.approx(1.0, abs=1e-6)
 
 
