@@ -219,3 +219,117 @@ def test_protected_resource_metadata(oauth_env) -> None:
         resp = client.get("/.well-known/oauth-protected-resource")
     assert resp.status_code == 200
     assert isinstance(_json.loads(resp.text), dict)
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.3 Plan 09 — gap closure wave 9 (HIGH-09 CSRF end-to-end test)
+# ---------------------------------------------------------------------------
+
+
+def test_login_form_contains_hidden_csrf_token(oauth_env) -> None:
+    """GET /login render HTML có hidden csrf_token đúng giá trị seed (HIGH-09).
+
+    Audit 2026-05-21 HIGH-09: CSRF token sinh ở provider.authorize, embed vào
+    login form hidden, verify ở /login/callback. Test verify giá trị render
+    đúng — đây là input cho verify ở callback.
+    """
+    import asyncio
+
+    from mcp_app.server import _get_oauth_store, build_asgi_app
+
+    from .conftest import fake_pending_authorize
+
+    app = build_asgi_app()
+    with TestClient(app) as client:
+        store = _get_oauth_store()
+        txn = asyncio.new_event_loop().run_until_complete(
+            fake_pending_authorize(
+                store, txn="txn-csrf-render", csrf_token="csrf-secret-xyz"
+            )
+        )
+        resp = client.get(f"/login?txn={txn}")
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'name="csrf_token"' in body
+    assert 'value="csrf-secret-xyz"' in body
+    assert 'type="hidden"' in body
+
+
+@respx.mock
+def test_login_callback_rejects_missing_csrf(oauth_env) -> None:
+    """POST /login/callback thiếu csrf_token → render lại form; KHÔNG gọi /api/auth/login (HIGH-09).
+
+    CSRF verify đi TRƯỚC login call (secrets.compare_digest). Nếu CSRF fail →
+    KHÔNG có HTTP request đến /api/auth/login. Test assert login_route.call_count == 0
+    để chứng minh guard.
+    """
+    import asyncio
+
+    from mcp_app.server import _get_oauth_store, build_asgi_app
+
+    from .conftest import fake_pending_authorize
+
+    # respx route explicit để đếm call_count.
+    login_route = respx.post(f"{_API_BASE_URL}/api/auth/login")
+
+    app = build_asgi_app()
+    with TestClient(app) as client:
+        store = _get_oauth_store()
+        txn = asyncio.new_event_loop().run_until_complete(
+            fake_pending_authorize(
+                store, txn="txn-csrf-miss", csrf_token="real-csrf"
+            )
+        )
+        resp = client.post(
+            "/login/callback",
+            data={
+                "txn": txn,
+                # KHÔNG có csrf_token field
+                "email": "u@m.vn",
+                "password": "p",
+            },
+        )
+    assert resp.status_code == 200  # render lại form (không 302)
+    body = resp.text
+    assert "không hợp lệ" in body
+    # CSRF reject → KHÔNG gọi xuống /api/auth/login.
+    assert login_route.call_count == 0
+
+
+@respx.mock
+def test_login_callback_rejects_wrong_csrf(oauth_env) -> None:
+    """POST /login/callback csrf_token SAI → render lại form; KHÔNG gọi /api/auth/login (HIGH-09).
+
+    Verify constant-time compare (secrets.compare_digest) reject mismatch. Cùng
+    pattern test_login_callback_rejects_missing_csrf nhưng csrf_token TỒN TẠI
+    nhưng SAI giá trị.
+    """
+    import asyncio
+
+    from mcp_app.server import _get_oauth_store, build_asgi_app
+
+    from .conftest import fake_pending_authorize
+
+    login_route = respx.post(f"{_API_BASE_URL}/api/auth/login")
+
+    app = build_asgi_app()
+    with TestClient(app) as client:
+        store = _get_oauth_store()
+        txn = asyncio.new_event_loop().run_until_complete(
+            fake_pending_authorize(
+                store, txn="txn-csrf-wrong", csrf_token="real-csrf"
+            )
+        )
+        resp = client.post(
+            "/login/callback",
+            data={
+                "txn": txn,
+                "csrf_token": "ATTACKER-CSRF",  # sai
+                "email": "u@m.vn",
+                "password": "p",
+            },
+        )
+    assert resp.status_code == 200
+    body = resp.text
+    assert "không hợp lệ" in body
+    assert login_route.call_count == 0
