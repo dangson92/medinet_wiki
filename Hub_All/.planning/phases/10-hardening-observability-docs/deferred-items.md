@@ -94,3 +94,32 @@ tests cũ vẫn assert metadata `ACAO=*` đúng behavior sau Plan 10-04). KHÔNG
 patch test cũ — middleware mới giữ metadata wildcard nguyên vẹn.
 
 **Resolution:** Defer chore commit riêng — out of scope Plan 10-04.
+
+## DEF-10-02-A: 4 pre-existing integration test failures (Phase 8.3 migration 0004)
+
+**Discovered:** 2026-05-21 trong Plan 10-02 Task 2 regression check (`pytest -m critical`).
+
+**Symptom:** 4 test fail trong critical suite (85 PASS / 4 FAIL / 173 deselected):
+1. `tests/integration/test_alembic_ignores_cocoindex_schema.py::test_alembic_check_no_drift_after_upgrade`
+   — alembic phát hiện removed index `ix_mcp_oauth_clients_client_id` (migration
+   0004 add Phase 8.3 nhưng autogen check không khớp).
+2. `tests/integration/test_auth_refresh_race.py::test_refresh_happy_returns_new_pair`
+   — `KeyError: 'email'` (response shape `/api/auth/refresh` không có `user` object
+   nested — contract thay đổi sau commit `41b8d5c`).
+3. `tests/integration/test_migration_upgrade_downgrade.py::test_upgrade_creates_10_tables`
+   — sau migration 0004 (mcp_oauth_clients) số bảng = 11, test assert == 10.
+4. `tests/integration/test_phase4_migration.py::test_phase4_migration_no_drift`
+   — cùng nguyên nhân drift Phase 8.3.
+
+**Pre-existing — KHÔNG do Plan 10-02.** Verify:
+- 11/11 test mới của Plan 10-02 (6 unit `test_metrics.py` + 5 integration
+  `test_metrics_endpoint.py`) PASS.
+- 4 test fail trên đều reference schema/migration/auth contract — KHÔNG động
+  observability/metrics module mới.
+- 4 file pre-date Plan 10-02 (git log `92d966d` Phase 8.3 commit thêm migration 0004).
+
+**Phase target:** Plan 10-03 (HARD-03 — integration test coverage ≥50%) — sẽ
+phải fix để integration suite chạy clean cho coverage measure.
+
+**Workaround dùng tạm:** `pytest -m critical --ignore=...4-file-trên` để verify
+KHÔNG có regression mới do Plan 10-02.

@@ -44,7 +44,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [ ] **Phase 8.2: MCP Service — Tách Thành Process Độc Lập** *(INSERTED)* — tách MCP khỏi process FastAPI thành service riêng `Hub_All/mcp_service/` gọi API qua HTTP (đảo decision D-04 của Phase 8.1)
 - [ ] **Phase 8.3: MCP OAuth 2.0 + Deploy Public HTTPS** *(INSERTED)* — thêm lớp OAuth 2.0 + public HTTPS cho MCP Service để Claude web "Add custom connector" kết nối được tới MeWiki MCP
 - [x] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate ✓ (2026-05-21, 5 plans / 3 waves, EVAL-01..04 COMPLETE, framework end-to-end runnable `make eval-smoke` + `make eval-all` + pytest smoke regression CI gate `pytest -m critical api/tests/integration/test_eval_pipeline.py`; gate verdict ≥75% top-3 với OpenAI key thật là track standalone Wave 4 HUMAN UAT — không yêu cầu chạy trước khi đóng phase)
-- [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md (10-01 ✅ structlog DONE 2026-05-21 · 10-04 ✅ CRIT-01 CORS split DONE 2026-05-21)
+- [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md (10-01 ✅ structlog DONE 2026-05-21 · 10-02 ✅ Prometheus DONE 2026-05-21 · 10-04 ✅ CRIT-01 CORS split DONE 2026-05-21)
 
 ---
 
@@ -491,9 +491,9 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 8.2 MCP Service — Tách Process Độc Lập | 5/5 | ✓ Complete (verify human_needed — SC4) | 2026-05-19 |
 | 8.3 MCP OAuth 2.0 + Deploy Public HTTPS | 9/9 | ✓ Complete | 2026-05-21 |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 5/5 | ✓ Complete (Wave 1+2+3: 09-01 ✅ foundation, 09-02 ✅ lib+metrics, 09-03 ✅ report+gate, 09-04 ✅ orchestrator+Makefile+README, 09-05 ✅ pytest smoke regression CI gate — framework end-to-end runnable + pytest CI gate `-m critical` < 60s) | 2026-05-21 |
-| 10. Hardening + Observability + Docs | 2/6 | In progress (10-01 ✅ HARD-01 structlog · 10-04 ✅ HARD-02 CRIT-01 CORS split 2026-05-21) | - |
+| 10. Hardening + Observability + Docs | 3/6 | In progress (10-01 ✅ HARD-01 structlog · 10-02 ✅ HARD-02 Prometheus /metrics + middleware + instrument · 10-04 ✅ HARD-02 CRIT-01 CORS split 2026-05-21) | - |
 
-**Tổng:** 12/14 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 8/10 — Phase 5/6/7/8/8.1/8.2/8.3/9 done · Phase 10 in progress 2/6 plans). Phase 9 COMPLETE 5/5 plans 2026-05-21. Phase 10 Plan 10-01 ✅ structlog + Plan 10-04 ✅ CRIT-01 CORS DONE 2026-05-21. M2a EXIT GATE ✅ PASSED 2026-05-21.
+**Tổng:** 12/14 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 8/10 — Phase 5/6/7/8/8.1/8.2/8.3/9 done · Phase 10 in progress 3/6 plans). Phase 9 COMPLETE 5/5 plans 2026-05-21. Phase 10 Plan 10-01 ✅ structlog + Plan 10-02 ✅ Prometheus + Plan 10-04 ✅ CRIT-01 CORS DONE 2026-05-21. M2a EXIT GATE ✅ PASSED 2026-05-21.
 
 ---
 

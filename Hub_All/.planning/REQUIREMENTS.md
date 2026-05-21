@@ -93,7 +93,7 @@
 ### HARDENING — Observability + Production Ready (4 REQ)
 
 - [x] **HARD-01** ✅ (Plan 10-01, 2026-05-21): structlog JSON output với fields match Go `log/slog` (`level`, `msg`, `ts`, `request_id`, `user_id`, `hub_id`, `latency_ms`). `X-Request-Id` middleware sinh UUID4 nếu thiếu, propagate xuống cocoindex flow logs qua ContextVar `request_id_var` + `asyncio.create_task` copy_context.
-- [ ] **HARD-02**: Prometheus metrics placeholder — `/metrics` endpoint với counter (requests_total, errors_total) + histogram (request_duration_seconds, search_latency_seconds, ingest_duration_seconds). Defer Grafana dashboard v4.0.
+- [x] **HARD-02** ✅ (Plan 10-02, 2026-05-21): Prometheus `/metrics` endpoint outside `/api/*` namespace với 5 metric (Counter requests_total + errors_total; Histogram request_duration_seconds + search_latency_seconds[hub_scope=single/cross] + ingest_duration_seconds). PrometheusMiddleware đo latency + count + resolve route template qua app.routes.matches(). Instrument search_service.search/_cross_hub + documents_service.trigger_cocoindex_update. Defer Grafana dashboard v4.0.
 - [ ] **HARD-03**: Integration test suite ≥50% critical path coverage (auth, hub, user, ingest, search, ask). pytest + testcontainers Postgres + Redis. CI gate: tests PASS trên GitHub Actions.
 - [ ] **HARD-04**: `README.md` + `DEPLOY.md` cập nhật cho stack Python. Backup script documented: `pg_dump --schema=public --schema=cocoindex medinet_central > backup.sql` + `pg_dump medinet_cocoindex > backup_cocoindex.sql`. `.env.example` đủ mọi key (DATABASE_URL, COCOINDEX_DATABASE_URL, REDIS_URL, OPENAI_API_KEY, GEMINI_API_KEY, JWT_PRIVATE_KEY_PATH, AES_KEY, APP_NAMESPACE...).
 
@@ -215,7 +215,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | EVAL-03 | Phase 9 (EVAL.md generator + verdict gate ≥75%) | ✅ Plan 09-03 done 2026-05-21 — report.py 360 dòng 7 section + gate_verdict dict 3 field |
 | EVAL-04 | Phase 9 (Makefile + eval-smoke + README + pytest smoke regression CI gate) | ✅ Plan 09-04 + 09-05 done 2026-05-21 — 8 target Makefile + README 249 dòng + pytest 3 critical test smoke regression (test_eval_pipeline.py + conftest_eval.py) |
 | HARD-01 | Phase 10 Plan 10-01 (structlog JSON + X-Request-Id) | ✅ Complete 2026-05-21 |
-| HARD-02 | Phase 10 (Prometheus /metrics) | Pending |
+| HARD-02 | Phase 10 Plan 10-02 (Prometheus /metrics + 5 metric + middleware + instrument search/ingest) | ✅ Complete 2026-05-21 |
 | HARD-03 | Phase 10 (integration test ≥50% critical path + CI) | Pending |
 | HARD-04 | Phase 10 (README + DEPLOY + backup script + .env.example) | Pending |
 
