@@ -606,7 +606,14 @@ class MedinetOAuthProvider(
                 token.client_id,
             )
             return
-        await self._store.delete_token(record["access_token"])
+        access_token_revoked = record["access_token"]
+        await self._store.delete_token(access_token_revoked)
+        # HIGH-03 cleanup (audit 2026-05-21): xoá lock entry để tránh leak.
+        # Late import chống circular — provider.py không import server.py
+        # top-level. Pattern tương tự server.py:439 `_close_client_atexit`.
+        from mcp_app.server import _release_refresh_lock
+
+        _release_refresh_lock(access_token_revoked)
         logger.info(
             "MedinetOAuthProvider revoke token, client_id=%s", token.client_id
         )

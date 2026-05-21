@@ -31,6 +31,7 @@ Transport: Streamable HTTP, stateless_http=True.
 """
 from __future__ import annotations
 
+import asyncio
 import atexit
 import logging
 from contextlib import asynccontextmanager
@@ -190,6 +191,42 @@ async def _resolve_credential(ctx: Context) -> Credential:  # type: ignore[type-
     )
 
 
+# HIGH-03 (audit 2026-05-21): asyncio.Lock per OAuth access_token cho khối
+# refresh JWT downstream. 2 tool song song cùng OAuth token + downstream JWT
+# vừa hết hạn — không lock thì tool 1 refresh OK, tool 2 refresh với token
+# đã rotate → API 401 → tool 2 fail không deterministic. Lock đảm bảo
+# single-flight refresh; tool sau đọc lại record (đã update từ tool trước).
+#
+# Memory profile: 1 Lock ~ 56 bytes (Python 3.12 CPython), key string ~80
+# byte → 1 token entry ~ 136 byte. 1000 user concurrent ~ 136 KB — chấp
+# nhận được. Cleanup wire từ provider.revoke_token qua late import.
+_refresh_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_refresh_lock(oauth_token: str) -> asyncio.Lock:
+    """Trả asyncio.Lock cho oauth_token — lazy create. Single-flight refresh JWT."""
+    lock = _refresh_locks.get(oauth_token)
+    if lock is None:
+        lock = asyncio.Lock()
+        _refresh_locks[oauth_token] = lock
+    return lock
+
+
+def _release_refresh_lock(oauth_token: str) -> None:
+    """Xoá lock entry khỏi pool — gọi từ provider.revoke_token (qua late import)
+    để tránh memory leak khi user revoke token.
+
+    Best-effort: lock đang held → caller chờ ở `async with` ngoài → pop chỉ xoá
+    reference trong dict; lock object tự GC khi không còn ref ngoài. KHÔNG raise
+    nếu key không tồn tại (pop default).
+
+    HIGH-03 cleanup: wire qua provider.revoke_token với pattern late import
+    `from mcp_app.server import _release_refresh_lock` (xem
+    `_close_client_atexit:439 import asyncio` cho pattern tương tự).
+    """
+    _refresh_locks.pop(oauth_token, None)
+
+
 async def _call_api(
     cred: Credential,
     method: str,
@@ -205,6 +242,11 @@ async def _call_api(
       JWT downstream qua `/api/auth/refresh` → lưu rotation CẢ access + refresh
       vào store (Pitfall 5) → retry 1 lần với JWT mới. Refresh fail (None) →
       re-raise `ApiUnauthorizedError` (tool map ToolError MCP_UNAUTHORIZED).
+
+    HIGH-03 (audit 2026-05-21): khối refresh JWT bọc `async with _get_refresh_lock`
+    → single-flight refresh per access_token. Tool 1 vào lock refresh + lưu;
+    tool 2 chờ lock, đọc lại record (đã update) → thấy downstream JWT mới →
+    KHÔNG refresh lần 2.
     """
     client = _get_client()
 
@@ -222,25 +264,41 @@ async def _call_api(
     except ApiUnauthorizedError:
         logger.info("Downstream JWT 401 — thử refresh JWT rồi retry")
         store = _get_oauth_store()
-        record = await store.load_token(cred.oauth_token or "")
-        if record is None:
-            raise
-        new_pair = await client.refresh_jwt(record["downstream_refresh_token"])
-        if new_pair is None:
-            # Refresh token cũng hết hạn → user phải re-connect.
-            raise
-        if not all(new_pair.get(k) for k in ("access_token", "refresh_token")):
-            logger.error("refresh_jwt trả payload thiếu access/refresh token")
-            raise ApiUnauthorizedError(
-                "Phản hồi refresh JWT thiếu trường bắt buộc"
-            ) from None
-        # Pitfall 5 — lưu đè CẢ downstream JWT + refresh token mới.
-        await store.update_downstream_jwt(
-            cred.oauth_token or "",
-            new_pair["access_token"],
-            new_pair["refresh_token"],
-        )
-        return await _do(new_pair["access_token"])
+        oauth_token = cred.oauth_token or ""
+
+        # HIGH-03: single-flight refresh per access_token. Tool 1 vào lock,
+        # refresh + lưu; tool 2 chờ lock, đọc lại record (đã update) → thấy
+        # downstream JWT mới → KHÔNG refresh lại lần 2.
+        async with _get_refresh_lock(oauth_token):
+            record = await store.load_token(oauth_token)
+            if record is None:
+                raise
+
+            # Re-check: nếu tool trước đã refresh, downstream_jwt khác cred.value
+            # → retry với JWT mới ngay (skip refresh).
+            if record["downstream_jwt"] != cred.value:
+                logger.info(
+                    "Downstream JWT đã được tool song song refresh — retry "
+                    "với JWT mới"
+                )
+                return await _do(record["downstream_jwt"])
+
+            new_pair = await client.refresh_jwt(record["downstream_refresh_token"])
+            if new_pair is None:
+                # Refresh token cũng hết hạn → user phải re-connect.
+                raise
+            if not all(new_pair.get(k) for k in ("access_token", "refresh_token")):
+                logger.error("refresh_jwt trả payload thiếu access/refresh token")
+                raise ApiUnauthorizedError(
+                    "Phản hồi refresh JWT thiếu trường bắt buộc"
+                ) from None
+            # Pitfall 5 — lưu đè CẢ downstream JWT + refresh token mới.
+            await store.update_downstream_jwt(
+                oauth_token,
+                new_pair["access_token"],
+                new_pair["refresh_token"],
+            )
+            return await _do(new_pair["access_token"])
 
 
 def _jwt(cred: Credential, value: str) -> str | None:
