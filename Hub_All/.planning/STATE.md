@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: STARTED 2026-05-21 (`/gsd-new-milestone v3.0`). REQUIREMENTS.md (29 REQ-ID v1) + ROADMAP.md (7 phase reset numbering, traceability 100%) committed. v3.0-a EXIT GATE giữa Phase 3 và 4 (1 hub con + tổng + JWT SSO + golden path). Next: `/gsd-discuss-phase 1` Multi-DB topology + per-hub Alembic.
-last_updated: "2026-05-21T16:42:00.000Z"
+status: Phase 1 PLANNED 2026-05-21. 5 plans / 3 waves, 4 REQ TOPO-01..04 coverage 100%. Plan checker iteration 2/3 PASSED (4 blocker + 5 warning fixed, 3 skip). [BLOCKING] schema push task gated SAFE (Option B `make hub-init` preserve M2; Option A reset only with env confirm). Next: `/gsd-execute-phase 1` Multi-DB topology execution.
+last_updated: "2026-05-21T17:30:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -21,16 +21,31 @@ progress:
 
 ## Current Position
 
-- **Phase:** Not started (defining requirements + roadmap)
-- **Plan:** —
-- **Status:** Defining requirements
-- **Last activity:** 2026-05-21 — Milestone v3.0 STARTED (`/gsd-new-milestone v3.0`). PROJECT.md updated (current milestone + 6 D-V3 LOCKED + R-V3-1..6 + E-V3-1..5). STATE.md reset. REQUIREMENTS.md viết mới 29 REQ-ID v1 (TOPO/FACTOR/SSO/SYNC/PROXY/SETTINGS/MIGRATE). ROADMAP.md viết mới 7 phase reset numbering + traceability 100% + v3.0-a/v3.0-b split. v2.0 phase dirs archived sang `.planning/milestones/v2.0-full-rag-rewrite/phases/`.
+- **Phase:** 1 — Multi-DB Topology + Per-hub Alembic (PLANNED — 5 plans ready cho execute)
+- **Plan:** 5 plans (01-01..01-05) ở `.planning/phases/01-multi-db-topology/`
+- **Status:** Ready to execute
+- **Last activity:** 2026-05-21 — `/gsd-plan-phase 1` chạy (SKIP `/gsd-discuss-phase 1`, dùng ROADMAP seeded recommendations cho gray areas). Planner spawn → 5 plan / 3 wave (commit `1ac0ae7`). Plan-checker iteration 1/3 found 4 BLOCKER + 8 WARNING. Planner revision iteration 1/3 fixed 4 BLOCKER + 5 WARNING (commit `b19f5bf`). Plan-checker iteration 2/3 PASSED — no regression, TOPO-01..04 coverage 100%, [BLOCKING] schema push SAFE (Option B preserve M2 volume).
+
+## Phase 1 Plans Summary
+
+| Plan | Wave | Objective | REQ | Tasks |
+|------|------|-----------|-----|-------|
+| 01-01 | 1 | Postgres init-db.sh refactor 4 DB + vector ext + HNSW 1536-dim verify | TOPO-01 (part 1) | 2 |
+| 01-02 | 1 | Settings.hub_name + DSN validator + per-hub resolver | TOPO-04 (part 1) | 3 (1 TDD) |
+| 01-03 | 2 | Per-hub Alembic env -x hub + make migrate-all + alembic-head-check.sh | TOPO-02 (part 1) | 3 (1 TDD) |
+| 01-04 | 2 | Cocoindex flow `medinet_<hub>_ingest` + APP_NAMESPACE `medinet_<hub>_prod` | TOPO-03 | 2 (1 TDD) |
+| 01-05 | 3 | hub-init.sh dynamic + integration test E-V3-3 + CI workflow + [BLOCKING] schema push | TOPO-01/02/04 (part 2) | 4 (1 TDD, 1 BLOCKING) |
+
+**Gray-area decisions LOCKED (seeded từ ROADMAP, không qua discuss-phase 1):**
+- GA-Phase1-A: imperative bash loop `SELECT pg_database WHERE datname` + conditional CREATE (Postgres không support `IF NOT EXISTS` cho CREATE DATABASE).
+- GA-Phase1-B: APP_NAMESPACE per-hub `medinet_<hub>_prod`; giữ `cocoindex_db_schema="cocoindex"` cố định (R5 + P7 carry forward). M2 cocoindex state reset acceptable cho v3.0-a (re-ingest qua content_hash idempotent + Phase 7 sẽ migrate formally).
+- GA-Phase1-C: `make hub-init HUB=<name>` dynamic add — preserve M2 central volume (không cần docker compose down).
 
 ## Next Action
 
-1. Review `REQUIREMENTS.md` (29 REQ-ID v1 — TOPO/FACTOR/SSO/SYNC/PROXY/SETTINGS/MIGRATE) — chốt scope.
-2. Review `ROADMAP.md` (7 phase × ~4-5 plan; v3.0-a Phase 1-3 vs v3.0-b Phase 4-7 split; v3.0-a EXIT GATE giữa Phase 3-4).
-3. `/gsd-discuss-phase 1` — Multi-DB topology + per-hub Alembic. Gray area chốt: cocoindex flow naming per-hub vs APP_NAMESPACE per-hub; Alembic head verification CI; init script multi-DB creation idempotent.
+1. (Optional) `cat .planning/phases/01-multi-db-topology/*-PLAN.md` — review 5 plans trước khi execute.
+2. `/gsd-execute-phase 1` — execute 5 plans theo wave order (W1 parallel 01+02 → W2 parallel 03+04 → W3 final 05 với BLOCKING schema push).
+3. (Optional after execute) `/gsd-verify-work 1` — UAT 4 success criteria + E-V3-3 hub isolation.
 
 ## Accumulated Context (carry forward từ v2.0)
 
