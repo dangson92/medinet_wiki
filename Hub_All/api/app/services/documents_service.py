@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_engine
 from app.models.auth import User
+from app.observability.metrics import INGEST_DURATION
 from app.repositories.hub_isolation import HubIsolationError, verify_hub_access
 from app.schemas.documents import (
     TERMINAL_STATUSES,
@@ -557,7 +558,14 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
         last_attempt = 0
         for attempt in range(_TRIGGER_MAX_ATTEMPTS):
             last_attempt = attempt + 1
+            # Plan 10-02 HARD-02: wrap update_blocking bằng INGEST_DURATION
+            # histogram (KHÔNG label — cardinality control). Mỗi attempt observe
+            # 1 lần — retry duration log tách per-attempt.
+            _ingest_start = asyncio.get_event_loop().time()
             await asyncio.to_thread(cocoindex_app.update_blocking)
+            INGEST_DURATION.observe(
+                asyncio.get_event_loop().time() - _ingest_start
+            )
             _struct_logger.info(
                 "trigger_cocoindex_update_blocking_complete",
                 doc_id=str(doc_id),

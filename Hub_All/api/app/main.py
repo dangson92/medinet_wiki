@@ -338,15 +338,21 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     # Middleware order — P11 PITFALL (FastAPI executes last-added FIRST cho
     # incoming request). Order REVERSED từ Go Gin. Outer-to-inner cho REQUEST:
     #   1) ErrorHandler   (outermost — catch mọi exception kể cả CORS leak)
-    #   2) RequestId      (gắn X-Request-Id sớm để log downstream có ID)
-    #   3) SecurityHeaders (X-Content-Type-Options, X-Frame-Options, ...)
-    #   4) CORS           (preflight OPTIONS + Access-Control-Allow-*)
-    #   5) [Phase 5 AUX-03] rate_limit (slowapi — placeholder stub Phase 3,
+    #   2) Prometheus     (Plan 10-02 HARD-02 — đo latency + count metric.
+    #      Wrap toàn bộ middleware downstream + router. Đặt giữa RequestId
+    #      và ErrorHandler — request_id đã set khi metric ghi, exception
+    #      re-raise lên ErrorHandler render envelope sau khi metric ghi xong)
+    #   3) RequestId      (gắn X-Request-Id sớm để log downstream có ID)
+    #   4) SecurityHeaders (X-Content-Type-Options, X-Frame-Options, ...)
+    #   5) CORS           (preflight OPTIONS + Access-Control-Allow-*)
+    #   6) [Phase 5 AUX-03] rate_limit (slowapi — placeholder stub Phase 3,
     #      Plan 03-04 KHÔNG wire; full enable Phase 5)
-    #   6) router handler (innermost)
+    #   7) router handler (innermost)
     #
     # Add order = REVERSED (innermost trước, outermost sau):
-    #   add CORS → add SecurityHeaders → add RequestId → add ErrorHandler
+    #   add CORS → add SecurityHeaders → add RequestId → add Prometheus → add ErrorHandler
+    from app.observability import PrometheusMiddleware
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
@@ -356,6 +362,7 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(PrometheusMiddleware)
     app.add_middleware(ErrorHandlerMiddleware)  # LAST add = OUTERMOST
 
     # Mount auth router (Phase 3 AUTH-01..03 — login/refresh/logout/me).
@@ -556,6 +563,24 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
             return resp.ok(data=checks)
         return resp.service_unavailable(
             message=f"Dịch vụ chưa sẵn sàng: {checks}"
+        )
+
+    @app.get("/metrics")
+    async def metrics_endpoint() -> Any:
+        """Prometheus scrape endpoint (HARD-02 Plan 10-02).
+
+        Outside `/api/*` namespace per Prometheus convention (cùng cấp `/healthz`).
+        KHÔNG protect bằng JWT — Prometheus scrape internal network; production
+        deploy đặt sau reverse proxy/firewall whitelist IP scrape server.
+        Content-Type: `text/plain; version=0.0.4; charset=utf-8` (Prometheus
+        exposition format chuẩn — `prometheus_client.CONTENT_TYPE_LATEST`).
+        """
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+        from starlette.responses import Response as StarletteResponse
+
+        return StarletteResponse(
+            content=generate_latest(),
+            media_type=CONTENT_TYPE_LATEST,
         )
 
     return app

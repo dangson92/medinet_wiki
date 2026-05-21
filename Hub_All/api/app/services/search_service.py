@@ -27,6 +27,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.observability.metrics import SEARCH_LATENCY
 from app.repositories.hub_isolation import HubIsolationError
 from app.schemas.search import (
     SearchRequest,
@@ -227,7 +228,21 @@ class SearchService:
         Trả dict (`SearchResponse.model_dump(mode="json")`) — router wrap envelope.
         Empty result (user chưa assign hub / hub chưa có chunk) → `results: []`,
         KHÔNG raise.
+
+        Plan 10-02 HARD-02: wrap toàn body bằng `SEARCH_LATENCY` histogram
+        (label `hub_scope="single"`) đo thời gian thực sự bao gồm cả empty-result
+        early-return + cache hit + SQL query.
         """
+        with SEARCH_LATENCY.labels(hub_scope="single").time():
+            return await self._search_single_impl(body=body, user=user)
+
+    async def _search_single_impl(
+        self,
+        *,
+        body: SearchRequest,
+        user: UserWithHubs,
+    ) -> dict[str, Any]:
+        """Implementation `search()` — tách để wrap SEARCH_LATENCY ở public method."""
         t0 = time.perf_counter()
         top_k = _resolve_top_k(body.top_k)
         hub_ids = intersect_hubs(body.hub_ids, user.hub_ids, user.user.role)
@@ -301,7 +316,7 @@ class SearchService:
         )
         return result
 
-    async def search_cross_hub(  # noqa: C901 — chuỗi step fan-out + cache phẳng
+    async def search_cross_hub(
         self,
         *,
         body: SearchRequest,
@@ -312,11 +327,25 @@ class SearchService:
         Query SONG SONG mỗi hub qua `asyncio.gather` (mỗi hub lấy `top_k`
         riêng), aggregate toàn bộ rồi re-rank theo score desc → global top-k.
 
-        Khác `search()` (1 câu SQL union): fan-out per-hub cần danh sách hub cụ
-        thể — admin không filter → query tất cả hub `is_active = TRUE` (predicate
-        NHẤT QUÁN branch admin-all của `_run_vector_query` ở 06-01).
+        Plan 10-02 HARD-02: wrap toàn body bằng `SEARCH_LATENCY` histogram
+        (label `hub_scope="cross"`).
 
         Trả dict (`SearchResponse.model_dump(mode="json")`) — router wrap envelope.
+        """
+        with SEARCH_LATENCY.labels(hub_scope="cross").time():
+            return await self._search_cross_hub_impl(body=body, user=user)
+
+    async def _search_cross_hub_impl(  # noqa: C901 — chuỗi step fan-out + cache phẳng
+        self,
+        *,
+        body: SearchRequest,
+        user: UserWithHubs,
+    ) -> dict[str, Any]:
+        """Implementation `search_cross_hub()` — tách để wrap SEARCH_LATENCY ở public method.
+
+        Khác `_search_single_impl` (1 câu SQL union): fan-out per-hub cần danh
+        sách hub cụ thể — admin không filter → query tất cả hub `is_active = TRUE`
+        (predicate NHẤT QUÁN branch admin-all của `_run_vector_query` ở 06-01).
         """
         t0 = time.perf_counter()
         top_k = _resolve_top_k(body.top_k)
