@@ -44,7 +44,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [ ] **Phase 8.2: MCP Service — Tách Thành Process Độc Lập** *(INSERTED)* — tách MCP khỏi process FastAPI thành service riêng `Hub_All/mcp_service/` gọi API qua HTTP (đảo decision D-04 của Phase 8.1)
 - [ ] **Phase 8.3: MCP OAuth 2.0 + Deploy Public HTTPS** *(INSERTED)* — thêm lớp OAuth 2.0 + public HTTPS cho MCP Service để Claude web "Add custom connector" kết nối được tới MeWiki MCP
 - [x] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate ✓ (2026-05-21, 5 plans / 3 waves, EVAL-01..04 COMPLETE, framework end-to-end runnable `make eval-smoke` + `make eval-all` + pytest smoke regression CI gate `pytest -m critical api/tests/integration/test_eval_pipeline.py`; gate verdict ≥75% top-3 với OpenAI key thật là track standalone Wave 4 HUMAN UAT — không yêu cầu chạy trước khi đóng phase)
-- [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
+- [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md (10-01 ✅ structlog DONE 2026-05-21)
 
 ---
 
@@ -465,7 +465,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 **Plans:** 6 plans / 4 waves
 
-- [ ] 10-01-PLAN.md — structlog JSON + ContextVar + RequestIdMiddleware mở rộng + cocoindex flow log propagation (Wave 1, HARD-01)
+- [x] **10-01** ✅ (Wave 1, 2026-05-21): structlog JSON output + 3 ContextVar (request_id/user_id/hub_id) + `RequestIdMiddleware` mở rộng (set ContextVar trước call_next + đo latency_ms + emit log "request_completed" {path, method, status, latency_ms}) + lifespan step 0 gọi `configure_structlog()` TRƯỚC db_pool/redis/cocoindex init. `documents_service.trigger_cocoindex_update` thêm `_struct_logger` riêng cho scope FastAPI BackgroundTask — ContextVar propagate qua `asyncio.create_task` copy_context → cocoindex flow log carry request_id của HTTP caller. Processor chain: merge_contextvars + _add_contextvars + add_log_level + TimeStamper(iso, utc, key=ts) + EventRenamer(event→msg) + JSONRenderer. ContextVar default None TƯỜNG MINH (KHÔNG bỏ qua key — Loki/Datadog query `IS NULL` consistent). 3 commit atomic (RED + Task 1 GREEN + Task 2): `8d9d48c` 9 unit test RED ImportError, `daeb667` app/logging_config.py 100 dòng + middleware mở rộng + 9 unit test GREEN PASS (`capsys` parse JSON vì `structlog.testing.capture_logs()` BYPASS processor → KHÔNG verify được level/ts/request_id), `f52e2e4` lifespan wire + documents_service _struct_logger + Test 7 (asyncio.create_task copy_context propagate) + Test 8 (source inspect verify configure_structlog TRƯỚC db_pool init). Acceptance criteria: 11/11 unit test Plan 10-01 PASS, 130/130 unit test toàn module KHÔNG regression, ruff sạch + mypy --strict PASS 6 file, manual verify JSON log line parse được qua `json.loads`. 4 file mới + 3 file modified. Deviation 3 (Rule 1 ×1 + Rule 2 ×2): Rule 1 fix location `trigger_cocoindex_update` về `documents_service.py:475` (plan ghi `rag/setup.py` sai); Rule 2 chuyển 5 test sang `capsys` thay vì `capture_logs()` bypass; Rule 2 Test 8 source inspect thay vì testcontainers full boot. DEF-10-01-A pre-existing `test_eval_pipeline.py` collect error (psycopg missing) defer Plan 10-03. HARD-01 COMPLETE.
 - [ ] 10-02-PLAN.md — Prometheus /metrics endpoint + 5 metric Counter/Histogram + PrometheusMiddleware + instrument search/ingest (Wave 2, HARD-02 — phụ thuộc 10-01 do cùng đụng app/main.py)
 - [ ] 10-03-PLAN.md — 5 acceptance test critical path + pytest-cov gate ≥50% trên 10 module critical (Wave 2, HARD-03)
 - [ ] 10-04-PLAN.md — Đóng CRIT-01 Phase 8.3 audit: tách 2 CORS policy MCP (metadata * vs sensitive whitelist) + MultiPolicyCORSMiddleware (Wave 2, HARD-02 — độc lập mcp_service/)
@@ -491,9 +491,9 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 8.2 MCP Service — Tách Process Độc Lập | 5/5 | ✓ Complete (verify human_needed — SC4) | 2026-05-19 |
 | 8.3 MCP OAuth 2.0 + Deploy Public HTTPS | 9/9 | ✓ Complete | 2026-05-21 |
 | 9. Eval Framework + Quality Gate ≥75% top-3 | 5/5 | ✓ Complete (Wave 1+2+3: 09-01 ✅ foundation, 09-02 ✅ lib+metrics, 09-03 ✅ report+gate, 09-04 ✅ orchestrator+Makefile+README, 09-05 ✅ pytest smoke regression CI gate — framework end-to-end runnable + pytest CI gate `-m critical` < 60s) | 2026-05-21 |
-| 10. Hardening + Observability + Docs | 0/6 | Planned (Phase 10 plan files created) | - |
+| 10. Hardening + Observability + Docs | 1/6 | In progress (10-01 ✅ HARD-01 structlog JSON 2026-05-21) | - |
 
-**Tổng:** 12/14 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 8/10 — Phase 5/6/7/8/8.1/8.2/8.3/9 done · Phase 8.2 + Phase 10 pending). Phase 9 COMPLETE 5/5 plans 2026-05-21. M2a EXIT GATE ✅ PASSED 2026-05-21.
+**Tổng:** 12/14 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 8/10 — Phase 5/6/7/8/8.1/8.2/8.3/9 done · Phase 10 in progress 1/6 plans). Phase 9 COMPLETE 5/5 plans 2026-05-21. Phase 10 Plan 10-01 ✅ HARD-01 structlog DONE 2026-05-21. M2a EXIT GATE ✅ PASSED 2026-05-21.
 
 ---
 
