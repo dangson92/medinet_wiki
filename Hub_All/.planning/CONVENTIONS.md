@@ -61,6 +61,29 @@ def test_hub_a_isolation():
 - `Hub_All/.planning/research/PITFALLS.md#pitfall-9`
 - HARD-03 (Phase 10) — integration test ≥50% critical path + CI gate
 
+### Plan 10-06 CI gate status
+
+HARD-03 CI gate đã ship Phase 10 Plan 10-06 (2026-05-21):
+
+- `.github/workflows/test.yml` — pytest `-m critical -m integration` trên
+  `tests/integration/test_critical_path_coverage.py` + `--cov-fail-under=50`
+  trên 10 module critical path (`app.auth` + `app.routers.{auth,hubs,documents,search,ask}`
+  + `app.services.{documents,search,ask}_service` + `app.repositories.hub_isolation`).
+- `.github/workflows/lint.yml` — `ruff check` + `ruff format --check` toàn `app/` + `tests/`
+  + secret detection guard (grep pattern `sk-[a-zA-Z0-9]{40,}` + `AIza[a-zA-Z0-9]{32,}`
+  + `AKIA[A-Z0-9]{16}` trên 2 file `.env.example` — exit 1 nếu match).
+- Trigger: `push` + `pull_request` branch `main`.
+- Concurrency `cancel-in-progress: true` tiết kiệm phút CI free tier.
+- Runtime: <15 phút (test) + <2 phút (lint).
+- testcontainers Postgres pgvector pg16 + Redis 7 spin qua Docker socket runner
+  ubuntu-22.04 — KHÔNG cần `services:` block YAML pre-spin.
+- Mock LiteLLM qua `OPENAI_API_KEY=sk-test-placeholder` (Plan 10-03 Test 5 mock
+  `litellm.acompletion`) — CI gate zero external dep.
+
+Mọi PR PHẢI PASS cả 2 workflow trước khi merge `main`. Coverage gate `<50%` =
+workflow fail = PR block (sau khi setup branch protection trên GitHub UI, defer
+v4.0 — cần admin permission GitHub repo).
+
 ---
 
 ## 2. Naming Conventions (Python + CocoIndex)

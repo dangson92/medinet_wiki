@@ -1,0 +1,58 @@
+name: Lint — Quick feedback (<2 min)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Ruff + format check
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Lint api/
+        working-directory: Hub_All/api
+        run: |
+          uv sync --extra dev --frozen
+          uv run ruff check app tests
+          uv run ruff format --check app tests
+
+      - name: Lint mcp_service/ (optional)
+        working-directory: Hub_All/mcp_service
+        continue-on-error: true
+        run: |
+          uv sync --extra dev --frozen 2>/dev/null || pip install -e ".[dev]"
+          ruff check mcp_app tests || true
+
+      - name: Detect secret in .env.example (HARD-04 safety)
+        run: |
+          # Grep .env.example KHÔNG được có pattern key thật:
+          # - OpenAI: sk-[a-zA-Z0-9]{40,}
+          # - Gemini: AIza[a-zA-Z0-9]{32,}
+          # - AWS access: AKIA[A-Z0-9]{16}
+          if grep -rE 'sk-[a-zA-Z0-9]{40,}|AIza[a-zA-Z0-9]{32,}|AKIA[A-Z0-9]{16}' \
+              Hub_All/api/.env.example Hub_All/mcp_service/.env.example 2>/dev/null; then
+            echo "❌ Phát hiện secret thật trong .env.example — KHÔNG commit"
+            exit 1
+          fi
+          echo "✓ .env.example chỉ chứa placeholder"
