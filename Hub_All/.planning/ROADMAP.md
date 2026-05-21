@@ -43,7 +43,7 @@ M2 chia thành 2 sub-milestone để giảm rủi ro pivot lần 3 (R3 CRITICAL)
 - [x] **Phase 8.1: MCP Server — Expose Wiki Tools** *(INSERTED)* — MCP server Streamable HTTP tại `/mcp` expose 3 tool read-only (`search_wiki`/`ask_wiki`/`list_hubs`) cho AI client ngoài ✓ (2026-05-19, 3 plans / 3 waves; verify human_needed — 3/5 SC auto-verified, unit `tests/unit/mcp/` 9 PASS, regression 118 PASS, code review CR-01 đã vá; SC1/SC5 chờ human UAT — 08.1-HUMAN-UAT.md)
 - [ ] **Phase 8.2: MCP Service — Tách Thành Process Độc Lập** *(INSERTED)* — tách MCP khỏi process FastAPI thành service riêng `Hub_All/mcp_service/` gọi API qua HTTP (đảo decision D-04 của Phase 8.1)
 - [ ] **Phase 8.3: MCP OAuth 2.0 + Deploy Public HTTPS** *(INSERTED)* — thêm lớp OAuth 2.0 + public HTTPS cho MCP Service để Claude web "Add custom connector" kết nối được tới MeWiki MCP
-- [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate (Plan 09-01 ✅ 2026-05-21 foundation, 4/5 plans còn lại)
+- [ ] **Phase 9: Eval Framework + Quality Gate ≥75% top-3** — pytest-based eval + 10 file VN medical + queries.jsonl + gate (Plan 09-01 + 09-02 ✅ 2026-05-21 foundation + lib/metrics, 3/5 plans còn lại)
 - [ ] **Phase 10: Hardening + Observability + Docs** — structlog JSON + Prometheus + integration test ≥50% + DEPLOY.md
 
 ---
@@ -435,7 +435,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 
 **Plan progress:**
 - [x] **09-01** ✅ (Wave 1 foundation, 2026-05-21): Phục dựng dataset M1 0af44f0 (13 file byte-identical) + skeleton Python project độc lập với api/ (`pyproject.toml` PEP 621 + 5 prod + 4 dev dep) + `queries.jsonl` 12 dòng schema M2 (`hub_id="eval_hub"`) + `seed_hub.sql` idempotent. EVAL-01 COMPLETE. 3 task atomic (`89fb73f` / `c2751b5` / `6a21612`), 20 file mới, deviation 0.
-- [ ] **09-02** Wave 1: `lib.py` APIClient (httpx async + JWT refresh) + `metrics.py` top-K/MRR/latency p50/p95/p99.
+- [x] **09-02** ✅ (Wave 2, 2026-05-21): `lib.py` 343 dòng APIClient async httpx + JWT auto-refresh on 401 + preflight_check + get_eval_hub_id + upload_and_wait (60s/file race-tolerant, 415 scanned PDF → failed_unsupported) + EvalSettings dotenv-backed. `metrics.py` 129 dòng compute_retrieval_metrics (top-1/3/5 + MRR + per_query, match title.lower() case-insensitive D-10) + compute_latency_percentiles (statistics.quantiles n=100 stdlib KHÔNG numpy, p50/p95/p99/mean). `tests/test_metrics.py` 10 test (4 @critical) PASS 10/10. EVAL-02 COMPLETE. 2 task atomic (`0d0b5c1` / `3177ddc`), 4 file mới, deviation 2 Rule 1 (F541 ruff + test p95/p99 extrapolate range).
 - [ ] **09-03** Wave 2: `report.py` Markdown gen + `run_eval.py` orchestrator + verdict PASS/FAIL.
 - [ ] **09-04** Wave 3: Makefile target eval-* + `cleanup.py` + README full workflow.
 - [ ] **09-05** Wave 4: Run gate verdict thật (cần OpenAI key + stack chạy + checkpoint human-verify).
@@ -483,7 +483,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 | 8.1 MCP Server — Expose Wiki Tools | 3/3 | ✓ Complete (verify human_needed) | 2026-05-19 |
 | 8.2 MCP Service — Tách Process Độc Lập | 5/5 | ✓ Complete (verify human_needed — SC4) | 2026-05-19 |
 | 8.3 MCP OAuth 2.0 + Deploy Public HTTPS | 9/9 | ✓ Complete | 2026-05-21 |
-| 9. Eval Framework + Quality Gate ≥75% top-3 | 1/5 | In progress (Wave 1 foundation 09-01 ✅) | - |
+| 9. Eval Framework + Quality Gate ≥75% top-3 | 2/5 | In progress (Wave 1+2: 09-01 ✅ foundation, 09-02 ✅ lib+metrics) | - |
 | 10. Hardening + Observability + Docs | 0/? | Not started | - |
 
 **Tổng:** 11/14 phases complete (M2a: 4/4 ✅ — Phase 1/2/3/4 done · M2b: 7/10 — Phase 5/6/7/8/8.1/8.2/8.3 done · Phase 9 IN PROGRESS 1/5 plans · Phase 10 pending). M2a EXIT GATE ✅ PASSED 2026-05-21.
