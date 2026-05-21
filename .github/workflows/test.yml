@@ -19,6 +19,21 @@ jobs:
       run:
         working-directory: Hub_All/api
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: medinet
+          POSTGRES_PASSWORD: medinet_ci_pwd
+          POSTGRES_DB: medinet_central
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medinet -d medinet_central"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +54,23 @@ jobs:
 
       - name: Sync deps
         run: uv sync --extra dev --frozen
+
+      - name: Bootstrap 4 DB cho per-hub Alembic (Plan 01 init-db.sh equivalent)
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: medinet
+          PGPASSWORD: medinet_ci_pwd
+        working-directory: Hub_All
+        run: |
+          # CI service container postgres KHONG mount init-db.sh - bootstrap thu cong
+          # 3 DB hub con + CREATE EXTENSION vector (central da co qua POSTGRES_DB env)
+          for db in medinet_central medinet_hub_yte medinet_hub_duoc medinet_hub_hcns; do
+            psql -d postgres -c "SELECT 1 FROM pg_database WHERE datname='$db'" -tA | grep -q 1 || \
+              psql -d postgres -c "CREATE DATABASE $db OWNER medinet"
+            psql -d "$db" -c "CREATE EXTENSION IF NOT EXISTS vector"
+          done
+          echo "[ci-bootstrap] 4 DB ready."
 
       - name: Ruff check
         run: uv run ruff check app tests
@@ -76,6 +108,22 @@ jobs:
             --cov-report=xml \
             --cov-fail-under=50 \
             -v --tb=short
+
+      - name: Apply migrate-all + verify head SHA match (TOPO-02, R-V3-3 mitigation)
+        env:
+          DATABASE_URL: postgresql+asyncpg://medinet:medinet_ci_pwd@localhost:5432/medinet_central
+          COCOINDEX_DATABASE_URL: postgresql://medinet:medinet_ci_pwd@localhost:5432/medinet_central
+          REDIS_URL: redis://localhost:6379/0
+          HUB_NAME: central
+          # JWT keys placeholder (test mode - Plan 03 v2.0 generate keys runtime)
+          JWT_PRIVATE_KEY_PATH: ./keys/private.pem
+          JWT_PUBLIC_KEY_PATH: ./keys/public.pem
+        # working-directory default Hub_All/api (preserve M2) - make migrate-all chay tu api/
+        run: |
+          # Generate keys neu missing (CI fresh runner)
+          bash scripts/generate_keys.sh 2>/dev/null || true
+          # Apply 4 DB tuan tu + verify head SHA match (migrate-all wired alembic-head-check.sh)
+          make migrate-all
 
       - name: Upload coverage report
         if: always()
