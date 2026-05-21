@@ -13,10 +13,11 @@ cục bộ (clients/codes/tokens/pending) + lifetime token OAuth.
 from __future__ import annotations
 
 import functools
+from typing import Annotated
 from urllib.parse import urlparse
 
-from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -64,6 +65,43 @@ class Settings(BaseSettings):
     # Khớp với segment cuối của `oauth_issuer_url` (vd issuer .../mcp →
     # prefix "mcp"). Sửa cả 2 cùng lúc khi đổi deploy mode.
     path_prefix: str = ""
+
+    # CRIT-01 fix (audit 2026-05-21 — Plan 10-04): tách 2 CORS policy.
+    # Metadata path (/.well-known/*) → wildcard origin "*" per RFC 8414 §3.1.
+    # Sensitive path (/token, /authorize, /revoke, /register, /mcp[/*]) →
+    # whitelist origin (chỉ echo Access-Control-Allow-Origin nếu match).
+    # Default whitelist cover Claude web + MCP Inspector + dev localhost
+    # Inspector port 6274. Ops thêm origin custom qua env
+    # `MCP_OAUTH_SENSITIVE_ALLOWED_ORIGINS=https://a,https://b` comma-separated.
+    #
+    # `validation_alias` ép pydantic-settings đọc đúng env
+    # `MCP_OAUTH_SENSITIVE_ALLOWED_ORIGINS` thay vì auto-derive từ
+    # `env_prefix=MCP_` + field name (sẽ ra `MCP_MCP_OAUTH_...` sai).
+    #
+    # `NoDecode` annotation TẮT JSON-decode mặc định của pydantic-settings cho
+    # field list[str] — cho phép validator `mode="before"` nhận RAW string env
+    # và split comma-separated (pydantic-settings default cố parse JSON).
+    mcp_oauth_sensitive_allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: [
+            "https://claude.ai",
+            "https://inspector.modelcontextprotocol.io",
+            "http://localhost:6274",
+            "http://127.0.0.1:6274",
+        ],
+        validation_alias="MCP_OAUTH_SENSITIVE_ALLOWED_ORIGINS",
+    )
+
+    @field_validator("mcp_oauth_sensitive_allowed_origins", mode="before")
+    @classmethod
+    def _split_sensitive_origins(cls, v: object) -> object:
+        """Parse env string comma-separated → list[str].
+
+        Pydantic-settings default đọc list từ JSON. Ép parse string
+        "a,b,c" → ["a", "b", "c"] cho ops set env var thuận tay.
+        """
+        if isinstance(v, str):
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v
 
     @field_validator("api_base_url", mode="after")
     @classmethod

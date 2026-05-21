@@ -660,21 +660,25 @@ def build_asgi_app() -> Any:
     # (localhost:6274) + Claude web (claude.ai) fetch cross-origin → cần
     # `Access-Control-Allow-Origin`.
     #
-    # CRIT-02 (audit 2026-05-21): CHỈ add CORS Ở MỘT TẦNG. Trước fix:
-    # subdomain mode add ở inner; path-prefix mode add ở CẢ inner (dòng cũ) +
-    # wrapper (dòng dưới) → response duplicate `Access-Control-Allow-Origin`
-    # → browser reject (CORS spec: header duplicate). Toàn bộ OAuth flow vỡ
-    # với Claude web + MCP Inspector ở path-prefix deploy chính.
+    # CRIT-02 (audit 2026-05-21 — đã đóng Plan 08.3-07): CHỈ add CORS Ở MỘT
+    # TẦNG. Subdomain mode add ở inner (return ngay sau); path-prefix mode
+    # add ở wrapper outer THÔI.
     #
-    # Fix: subdomain mode add ở inner (return ngay sau); path-prefix mode add
-    # ở wrapper outer THÔI (dòng `_add_cors_middleware` cho `wrapper` ở dưới).
+    # CRIT-01 (audit 2026-05-21 — Plan 10-04): thay 1 hàm `_add_cors_middleware`
+    # (allow_origins=["*"] cho TẤT CẢ route) bằng `_MultiPolicyCORSMiddleware`
+    # ASGI wrapper tách 2 policy theo path — metadata wildcard `*`, sensitive
+    # whitelist origin từ `settings.mcp_oauth_sensitive_allowed_origins`.
 
-    # Subdomain/authority-root deploy → trả inner bọc _BasicAuthFormShim
-    # (defense-in-depth Basic→form, xem class docstring). CORS add ở inner —
-    # request đi qua _BasicAuthFormShim → inner CORSMiddleware → SDK app.
+    # Subdomain/authority-root deploy → wrap inner bằng
+    # _MultiPolicyCORSMiddleware (ngoài) → _BasicAuthFormShim (Basic→form
+    # shim) → inner SDK app. Order: CORS chạy TRƯỚC khi Basic→form rewrite
+    # path → CORS quyết định Origin ngay từ scope ban đầu (đúng path).
     if not prefix:
-        _add_cors_middleware(inner)
-        return _BasicAuthFormShim(inner)
+        cors_wrapped = _MultiPolicyCORSMiddleware(
+            _BasicAuthFormShim(inner),
+            settings.mcp_oauth_sensitive_allowed_origins,
+        )
+        return cors_wrapped
 
     # Path-based deploy: wrap inner dưới Mount(`/<prefix>`, ...) + add 2
     # route metadata RFC 8414/9728 ở root với suffix path. Claude fetch
@@ -759,12 +763,17 @@ def build_asgi_app() -> Any:
     # wrapper — nếu không, Starlette wrapper start không trigger lifespan
     # của inner → session manager SDK không khởi tạo → transport 500.
     wrapper.router.lifespan_context = inner.router.lifespan_context
-    # CORS — áp dụng CHO wrapper (cover metadata route ở root + Mount inner)
-    # bằng cùng cấu hình với inner (subdomain mode). Lý do bắt buộc: log
-    # console của MCP Inspector cho thấy preflight tất cả `/.well-known/*`
-    # bị browser block vì thiếu `Access-Control-Allow-Origin` → fallback
-    # default endpoint ở root → `POST /token` 404 (đúng URL phải là /<prefix>/token).
-    _add_cors_middleware(wrapper)
+    # CORS — Plan 10-04 thay `_add_cors_middleware(wrapper)` (Starlette
+    # CORSMiddleware allow_origins=["*"]) bằng `_MultiPolicyCORSMiddleware`
+    # ASGI wrapper. CRIT-01: sensitive endpoint (/<prefix>/token, /<prefix>
+    # /authorize, ...) chỉ echo ACAO nếu Origin trong whitelist; metadata
+    # vẫn wildcard. Wrap NGOÀI wrapper để CORS xét scope.path GỐC (trước
+    # khi _AsgiPathShim rewrite). Lý do: malicious browser tab gọi /token
+    # với Host attacker → _AsgiPathShim sẽ rewrite thành /<prefix>/token →
+    # nhưng CORS đã chặn ở scope ban đầu, request không reach inner.
+    wrapper_with_cors = _MultiPolicyCORSMiddleware(
+        wrapper, settings.mcp_oauth_sensitive_allowed_origins
+    )
     logger.info(
         "MCP build_asgi_app — path-prefix mode prefix=%s as_metadata=%s pr_metadata=%s",
         prefix,
@@ -791,12 +800,20 @@ def build_asgi_app() -> Any:
     # Path khác (`/.well-known/*`, `/login`, `/<prefix>/...`) pass-through
     # nguyên. Lifespan/websocket scope cũng pass-through.
     #
-    # Order: _AsgiPathShim (ngoài cùng) → _BasicAuthFormShim → wrapper.
-    # _AsgiPathShim rewrite path (vd `/token` → `/mcp/token`) TRƯỚC khi
-    # _BasicAuthFormShim kiểm path → shim chỉ cần check 1 dạng path
-    # đã chuẩn hoá (sau rewrite). _BasicAuthFormShim bridge Basic→form
-    # NGAY TRƯỚC khi wrapper Router dispatch xuống inner SDK ClientAuthenticator.
-    return _AsgiPathShim(_BasicAuthFormShim(wrapper), prefix=prefix)
+    # Order: _AsgiPathShim (ngoài cùng) → _BasicAuthFormShim → _MultiPolicyCORS
+    # → wrapper. _AsgiPathShim rewrite path (vd `/token` → `/mcp/token`)
+    # TRƯỚC khi CORS kiểm path → CORS dùng path đã chuẩn hoá (sau rewrite),
+    # phù hợp với policy `/mcp/token` (sensitive). _BasicAuthFormShim bridge
+    # Basic→form NGAY TRƯỚC khi wrapper Router dispatch xuống inner SDK
+    # ClientAuthenticator.
+    #
+    # CRIT-01 Plan 10-04: CORS đặt giữa _BasicAuthFormShim và wrapper (KHÔNG
+    # ngoài cùng). Lý do: _AsgiPathShim rewrite path `/token` → `/mcp/token`
+    # → CORS check path `/mcp/token` (sensitive whitelist). Nếu CORS ngoài
+    # cùng, sẽ check path `/token` GỐC (cũng sensitive theo
+    # `_SENSITIVE_PATHS`) — vẫn đúng, nhưng đặt sau path rewrite cho phép
+    # path-prefix variant nhất quán.
+    return _AsgiPathShim(_BasicAuthFormShim(wrapper_with_cors), prefix=prefix)
 
 
 # OAuth endpoint path mà SDK MCP mount dưới inner — alias ở root (Fix B)
@@ -817,28 +834,245 @@ _BASIC_AUTH_SHIM_PATHS = frozenset(
 )
 
 
-def _add_cors_middleware(app: Any) -> None:
-    """Add Starlette CORSMiddleware lên `app` với cấu hình public OAuth AS.
+# ---------------------------------------------------------------------------
+# CRIT-01 fix (audit 2026-05-21 — Plan 10-04): _MultiPolicyCORSMiddleware
+# ---------------------------------------------------------------------------
+# Tách 2 CORS policy theo path thay vì 1 hàm `_add_cors_middleware` cũ
+# (allow_origins=["*"] cho TẤT CẢ route gồm /token + /authorize + /revoke).
+#
+# Path metadata (`/.well-known/*`) → wildcard origin "*" (RFC 8414 §3.1 + RFC
+# 9728 §3.1 cho phép vì metadata public, không có credential).
+#
+# Path sensitive (/token, /authorize, /revoke, /register, /mcp[/*]) → whitelist
+# origin từ `settings.mcp_oauth_sensitive_allowed_origins`. Origin không match
+# → KHÔNG echo ACAO → browser block (CORS spec: response thiếu ACAO → reject).
+#
+# Khai thác audit ghi nhận: malicious browser extension hoặc tab compromised
+# có thể gọi /token + transport tools từ origin bất kỳ chỉ cần biết Bearer
+# token (vd qua XSS app khác). Phòng vệ duy nhất hiện tại là token nằm trong
+# memory client OAuth — Claude/Inspector đều giữ client-side, có thể leak qua
+# XSS. Tách CORS giảm bề mặt khai thác xuống còn 4 origin whitelist.
 
-    RFC 8414 §3.1 / RFC 9728 §3.1 yêu cầu metadata endpoint hỗ trợ CORS.
-    Public AS — không dùng cookie credentials (Authorization Bearer header),
-    nên `allow_origins=*` + `allow_credentials=False` (mặc định) hợp lệ:
-    browser sẽ chấp nhận `Access-Control-Allow-Origin: *`.
+# Path metadata (wildcard origin OK per RFC 8414 §3.1 / RFC 9728 §3.1).
+# Suffix path (vd /mcp) thêm động ở build_asgi_app (issuer path component).
+_METADATA_PATHS_PREFIX = (
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/openid-configuration",
+)
 
-    `allow_methods=*` + `allow_headers=*` để cover tất cả OAuth/MCP endpoint
-    (GET metadata, POST token/register/revoke, DELETE session, OPTIONS preflight).
-    `Mcp-Session-Id` + `WWW-Authenticate` expose ra browser để client đọc được.
+# Path sensitive (whitelist origin). Cover root variant + prefix variant.
+_SENSITIVE_PATHS = frozenset(
+    {
+        "/token",
+        "/authorize",
+        "/revoke",
+        "/register",
+        "/mcp/token",
+        "/mcp/authorize",
+        "/mcp/revoke",
+        "/mcp/register",
+        "/mcp",  # transport endpoint root
+    }
+)
+
+
+def _is_metadata_path(path: str) -> bool:
+    """Check path khớp prefix metadata (cover cả suffix /mcp + variant).
+
+    Cover 3 dạng path metadata gặp trong cả 2 mode deploy:
+    1. Root suffix RFC 8414 §3 — `/.well-known/oauth-*` (subdomain mode +
+       path-prefix wrapper level).
+    2. Path-prefix mode forward đến inner SDK — `/<prefix>/.well-known/oauth-*`
+       (SDK mount metadata route ở inner, sau khi wrapper Mount forward).
+    3. OIDC alias — `/.well-known/openid-configuration` + path-prefix variant.
     """
-    from starlette.middleware.cors import CORSMiddleware
+    # Direct match (subdomain mode + wrapper level path-prefix).
+    if any(path.startswith(p) for p in _METADATA_PATHS_PREFIX):
+        return True
+    # Path-prefix mode: `/<prefix>/.well-known/...` (sau khi wrapper Mount
+    # forward request xuống inner SDK metadata route). Cover bằng substring
+    # match `.well-known/oauth-` HOẶC `.well-known/openid-configuration`.
+    return "/.well-known/oauth-" in path or "/.well-known/openid-configuration" in path
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["Mcp-Session-Id", "WWW-Authenticate"],
-        max_age=86400,
-    )
+
+def _is_sensitive_path(path: str) -> bool:
+    """Check path là sensitive OAuth endpoint hoặc transport /mcp[/*].
+
+    KHÔNG bao gồm path metadata — metadata được _is_metadata_path xét TRƯỚC
+    (caller `_build_cors_headers` check metadata trước sensitive).
+    """
+    if path in _SENSITIVE_PATHS:
+        return True
+    # /mcp/<anything> = transport stream hoặc OAuth path-prefix variant.
+    return path == "/mcp" or path.startswith("/mcp/")
+
+
+class _MultiPolicyCORSMiddleware:
+    """ASGI middleware tách CORS policy theo path (CRIT-01 fix audit 2026-05-21).
+
+    - Metadata path (`/.well-known/*`) → wildcard origin (`*`) per RFC 8414 §3.1.
+    - Sensitive path (`/token`, `/authorize`, `/revoke`, `/register`, `/mcp[/*]`)
+      → whitelist origin từ `settings.mcp_oauth_sensitive_allowed_origins`.
+    - Path khác (vd `/login`) → KHÔNG inject CORS header (Starlette router
+      handle default; login form trả HTML cho user, không cần CORS).
+
+    Defense in depth chống malicious browser extension/tab compromised gọi
+    /token + transport tools từ origin bất kỳ chỉ cần biết Bearer token leak
+    qua XSS app khác.
+
+    Implementation: ASGI wrapper (giống `_BasicAuthFormShim`), KHÔNG dùng
+    Starlette `add_middleware`. Lý do: subdomain mode chỉ có 1 app level
+    (KHÔNG có 2-level wrapper+inner như path-prefix), Starlette CORSMiddleware
+    KHÔNG support per-route policy native — phải custom logic chọn policy
+    theo path. Wrap chung 1 middleware cho cả 2 mode (đơn giản, deterministic).
+
+    Phương pháp OPTIONS preflight: trả full response trong middleware (status
+    200 + ACAO + ACAM + ACAH + Max-Age). KHÔNG forward xuống inner — Starlette
+    router default không có handler OPTIONS riêng cho route metadata/transport,
+    sẽ trả 405 hoặc 404 nếu pass-through.
+
+    Bảo mật: KHÔNG log giá trị Origin header → grep audit-clean.
+    """
+
+    def __init__(self, app: Any, sensitive_origins: list[str]) -> None:
+        self._app = app
+        # frozenset → O(1) lookup, immutable.
+        self._sensitive_origins = frozenset(sensitive_origins)
+
+    async def __call__(
+        self, scope: Any, receive: Any, send: Any
+    ) -> None:
+        if scope.get("type") != "http":
+            await self._app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        method = scope.get("method", "").upper()
+        request_origin = self._extract_origin(scope.get("headers", []))
+
+        if method == "OPTIONS":
+            # Preflight — handle full response trong middleware.
+            # Starlette router KHÔNG có default OPTIONS handler cho route
+            # metadata/transport → pass-through sẽ 405/404. Build response
+            # với CORS header tay theo policy.
+            response = self._build_preflight_response(path, request_origin)
+            await self._send_preflight(response, send)
+            return
+
+        # Non-OPTIONS request: forward xuống inner app, intercept response.start
+        # để inject CORS header theo policy.
+        #
+        # CRIT-02 regression guard (Plan 08.3-07 đã đóng): KHÔNG append header
+        # nếu inner đã set sẵn (vd MetadataHandler của SDK MCP tự inject ACAO).
+        # Duplicate ACAO → browser reject (CORS spec). Check existing header
+        # tên case-insensitive trước khi append.
+        cors_headers = self._build_cors_headers(path, request_origin)
+
+        async def _wrapped_send(message: dict[str, Any]) -> None:
+            if message.get("type") == "http.response.start" and cors_headers:
+                headers = list(message.get("headers", []))
+                # Build set tên header đã tồn tại (lower-case bytes).
+                existing_names = {
+                    (name if isinstance(name, bytes) else name.encode("latin-1")).lower()
+                    for name, _ in headers
+                }
+                for name, value in cors_headers.items():
+                    name_b = name.encode("ascii")
+                    # Skip nếu inner đã set — tránh duplicate header
+                    # (đặc biệt access-control-allow-origin).
+                    if name_b.lower() in existing_names:
+                        continue
+                    headers.append((name_b, value.encode("ascii")))
+                message = dict(message, headers=headers)
+            await send(message)
+
+        await self._app(scope, receive, _wrapped_send)
+
+    def _extract_origin(
+        self, headers: list[tuple[bytes, bytes]]
+    ) -> str | None:
+        """Trích Origin header từ scope headers (case-insensitive)."""
+        for name, value in headers:
+            name_b = name if isinstance(name, bytes) else name.encode("latin-1")
+            if name_b.lower() == b"origin":
+                value_b = (
+                    value if isinstance(value, bytes) else value.encode("latin-1")
+                )
+                return value_b.decode("latin-1")
+        return None
+
+    def _build_cors_headers(
+        self, path: str, origin: str | None
+    ) -> dict[str, str]:
+        """Trả CORS header cho response thật (non-OPTIONS) theo policy path.
+
+        - Metadata: ACAO `*` (RFC 8414 §3.1 — KHÔNG cần Origin trong request).
+        - Sensitive + origin trong whitelist: ACAO echo origin + Vary: Origin.
+        - Còn lại: rỗng (KHÔNG inject CORS header).
+        """
+        if _is_metadata_path(path):
+            return {
+                "access-control-allow-origin": "*",
+                "access-control-expose-headers": "Mcp-Session-Id, WWW-Authenticate",
+            }
+        if _is_sensitive_path(path) and origin and origin in self._sensitive_origins:
+            return {
+                "access-control-allow-origin": origin,
+                "vary": "Origin",
+                "access-control-expose-headers": "Mcp-Session-Id, WWW-Authenticate",
+            }
+        return {}
+
+    def _build_preflight_response(
+        self, path: str, origin: str | None
+    ) -> dict[str, Any]:
+        """Build preflight response (status + headers) theo policy path.
+
+        Origin/path không match whitelist → trả 200 KHÔNG có CORS header →
+        browser block CORS (response thiếu ACAO). Origin match → full
+        preflight headers (ACAO + ACAM + ACAH + Max-Age + Vary).
+        """
+        cors = self._build_cors_headers(path, origin)
+        if not cors:
+            # Origin không match hoặc path không trong policy → 200 trống,
+            # browser block CORS preflight.
+            return {"status": 200, "headers": []}
+
+        # Preflight full headers — bổ sung ACAM + ACAH + Max-Age.
+        cors["access-control-allow-methods"] = "GET, POST, OPTIONS, DELETE"
+        cors["access-control-allow-headers"] = (
+            "Authorization, Content-Type, Mcp-Session-Id, X-API-Key"
+        )
+        cors["access-control-max-age"] = "86400"
+        return {"status": 200, "headers": list(cors.items())}
+
+    async def _send_preflight(
+        self, response: dict[str, Any], send: Any
+    ) -> None:
+        """Gửi preflight response qua ASGI send (response.start + body rỗng)."""
+        headers_list = [
+            (k.encode("ascii"), v.encode("ascii"))
+            for k, v in response["headers"]
+        ]
+        await send(
+            {
+                "type": "http.response.start",
+                "status": response["status"],
+                "headers": headers_list,
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"",
+                "more_body": False,
+            }
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate attr về inner app — uvicorn introspect không vỡ."""
+        return getattr(self._app, name)
 
 
 class _BasicAuthFormShim:
