@@ -52,10 +52,19 @@
 3. Cocoindex flow `medinet_<hub>_ingest` startup logs OK ở từng hub con (APP_NAMESPACE `medinet_<hub>_prod` không đụng nhau).
 4. Test integration: `HUB_NAME=yte` deploy KHÔNG truy cập được `medinet_hub_duoc` qua DB connection (E-V3-3 enforce DB-level).
 
-**Discuss-phase gray areas (chốt ở `/gsd-discuss-phase 1`):**
-- Init script multi-DB creation idempotent (loop `CREATE DATABASE IF NOT EXISTS`) hay declarative (Alembic env_for_target_metadata helper)?
-- Cocoindex APP_NAMESPACE per-hub vs cocoindex `db_schema_name` per-hub (R5 implications).
-- `make hub-init HUB=<name>` dynamic add hub mà không down instance.
+**Discuss-phase gray areas (chốt 2026-05-21 theo planner seed defaults — KHÔNG /gsd-discuss-phase 1):**
+- GA-Phase1-A (init script style): CHỌN imperative bash loop + conditional `SELECT pg_database WHERE datname` (KHÔNG `CREATE DATABASE IF NOT EXISTS` — Postgres không support syntax đó). Extend pattern M2 `api/scripts/init-db.sh`.
+- GA-Phase1-B (cocoindex per-hub): CHỌN APP_NAMESPACE per-hub `medinet_<hub>_prod` — giữ `cocoindex_db_schema="cocoindex"` cố định (R5 + P7 carry forward).
+- GA-Phase1-C (dynamic hub add): CHỌN `make hub-init HUB=<name>` — bash script chạy CREATE DATABASE + CREATE EXTENSION vector + alembic upgrade head cho hub mới, KHÔNG cần docker compose down.
+
+**Plans:** 5 plans (3 waves — Wave 1 parallel × 2, Wave 2 parallel × 2, Wave 3 × 1)
+
+Plans:
+- [ ] 01-01-PLAN.md — Postgres init-db.sh refactor 4 DB + extension vector + HNSW 1536-dim verify (TOPO-01 part 1)
+- [ ] 01-02-PLAN.md — Settings.hub_name + per-hub DSN resolver + db/session.py verify (TOPO-04 part 1)
+- [ ] 01-03-PLAN.md — Per-hub Alembic env.py + make migrate-all + alembic-head-check.sh (TOPO-02 part 1 + R-V3-3 lint script)
+- [ ] 01-04-PLAN.md — Cocoindex flow naming per-hub + APP_NAMESPACE per-hub (TOPO-03)
+- [ ] 01-05-PLAN.md — Dynamic hub-init.sh + integration test isolation + CI workflow + [BLOCKING] schema push (TOPO-01/02/04 part 2 + R-V3-3 CI gate + E-V3-3 enforce)
 
 ---
 
