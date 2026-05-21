@@ -1,0 +1,87 @@
+name: CI — Critical path test (HARD-03)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-api:
+    name: API critical path test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Hub_All/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+          enable-cache: true
+          cache-dependency-glob: |
+            Hub_All/api/uv.lock
+            Hub_All/api/pyproject.toml
+
+      - name: Sync deps
+        run: uv sync --extra dev --frozen
+
+      - name: Ruff check
+        run: uv run ruff check app tests
+
+      - name: Mypy strict (critical modules)
+        run: |
+          uv run mypy --strict app/auth app/middleware app/observability \
+            app/services/search_service.py app/services/documents_service.py \
+            app/services/ask_service.py app/repositories/hub_isolation.py \
+            app/logging_config.py
+        continue-on-error: false
+
+      - name: Pytest critical path with coverage gate
+        env:
+          # testcontainers tự spin Postgres + Redis qua Docker socket
+          # GitHub Actions runner ubuntu-22.04 đã có Docker pre-installed
+          TC_HOST: localhost
+          # OpenAI key placeholder cho test mock (Plan 10-03 Test 5)
+          OPENAI_API_KEY: sk-test-placeholder
+          GEMINI_API_KEY: gemini-test-placeholder
+        run: |
+          uv run pytest -m critical -m integration \
+            tests/integration/test_critical_path_coverage.py \
+            --cov=app.auth \
+            --cov=app.routers.auth \
+            --cov=app.routers.hubs \
+            --cov=app.routers.documents \
+            --cov=app.routers.search \
+            --cov=app.routers.ask \
+            --cov=app.services.documents_service \
+            --cov=app.services.search_service \
+            --cov=app.services.ask_service \
+            --cov=app.repositories.hub_isolation \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=50 \
+            -v --tb=short
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: Hub_All/api/coverage.xml
+          retention-days: 30
+          if-no-files-found: ignore
