@@ -394,7 +394,7 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
   4. Kết nối thật từ Claude web: 3 tool `list_hubs`/`search_wiki`/`ask_wiki` gọi được qua connector
   5. Test suite phủ OAuth flow (token hợp lệ/hết hạn/sai scope); regression `mcp_service/` + API không vỡ
 
-**Plans:** 6 plans (6 waves — 4 gốc + 2 gap closure)
+**Plans:** 9 plans (9 waves — 4 gốc + 5 gap closure: 2 SC3 token-lifecycle + 3 audit 2026-05-21 CRIT/HIGH)
 
 - [x] 08.3-01-PLAN.md — Nền tảng: deps aiosqlite/uvicorn + config OAuth + OAuthStore SQLite + Wave 0 test scaffolding (Wave 1, MCP-01) ✅ 2026-05-19
 - [x] 08.3-02-PLAN.md — MedinetOAuthProvider 9 method + login form xác thực Medinet + wire FastMCP auth_server_provider (Wave 2, MCP-01) ✅ 2026-05-19
@@ -402,6 +402,11 @@ Demo upload DOCX VN → chunks pgvector → SELECT verify content + hub_id + vec
 - [x] 08.3-04-PLAN.md — Dockerfile mcp_service + Caddy reverse proxy auto-TLS + docker-compose + 08.3-HUMAN-UAT.md SC4 (Wave 4, MCP-01/MCP-02) ✅ 2026-05-19
 - [x] 08.3-05-PLAN.md — Gap closure: vá lỗi đúng đắn vòng đời token OAuth — claim_auth_code nguyên tử + rotate_token rowcount + kiểm hạn pending + revoke chuẩn hoá + validate payload (Wave 5, MCP-01/MCP-02)
 - [x] 08.3-06-PLAN.md — Gap closure: test replay/reuse/PKCE đóng gap SC3 token lifecycle — 11 test mới (5 store + 6 provider) chứng minh replay code/refresh reuse/code+pending hết hạn bị từ chối; regression 78→89 PASS (Wave 6, MCP-01/MCP-02) ✅ 2026-05-19
+- [ ] 08.3-07-PLAN.md — Gap closure (audit 2026-05-21): vá CRIT-02 (CORS double-add path-prefix) + CRIT-03 (client_id mismatch chain) + HIGH-01 (DCR redirect_uri whitelist) + HIGH-07 (revoke client_id check) + HIGH-08 (BasicAuthFormShim defense) + HIGH-09 (login form CSRF token) (Wave 7, MCP-01/MCP-02)
+- [ ] 08.3-08-PLAN.md — Gap closure (audit 2026-05-21): HIGH-02 refresh token family revocation (cột family_id + delete_token_family) + HIGH-03 refresh JWT concurrency lock (asyncio.Lock per access_token + re-check) (Wave 8, MCP-01/MCP-02)
+- [ ] 08.3-09-PLAN.md — Gap closure (audit 2026-05-21): test phủ TẤT CẢ fix Plan 07+08 + 3 commit MISSING (HIGH-04 OIDC alias + HIGH-05 list_hubs envelope + HIGH-06 DNS rebinding); ~15 test mới, regression mcp_service ≥104 PASS (Wave 9, MCP-01/MCP-02)
+
+> ⚠️ CRIT-01 (CORS allow_origins=* cho /token /authorize /revoke) DEFER Phase 10 hardening — cần research Starlette per-route CORS (2 sub-app). Audit 2026-05-21 Action Plan ghi rõ; xem 08.3-MCP-AUDIT-2026-05-21.md Section VIII.
 
 ---
 ### Phase 9: Eval Framework + Quality Gate ≥75% top-3
