@@ -8,7 +8,9 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down logs api-dev api-test api-lint api-keys api-install
+.PHONY: help up down logs api-dev api-test api-lint api-keys api-install \
+        eval-install eval-seed eval-clean eval-smoke eval-all eval-report \
+        eval-readme eval-restore
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Help
@@ -28,6 +30,16 @@ help: ## Hiển thị danh sách target khả dụng
 	@echo "  api-dev                 - cd api && make dev (uvicorn reload :8080)"
 	@echo "  api-test                - cd api && make test (pytest + testcontainers)"
 	@echo "  api-lint                - cd api && make lint (ruff + mypy strict)"
+	@echo ""
+	@echo "Phase 9 Eval Framework (EVAL-02 + EVAL-04):"
+	@echo "  eval-install            - cd eval && pip install -e '.[dev]'"
+	@echo "  eval-seed               - psql -f eval/scripts/seed_hub.sql (idempotent)"
+	@echo "  eval-clean              - python -m eval.scripts.cleanup (reset state)"
+	@echo "  eval-smoke              - python -m eval.run_eval --mock-embed --skip-cleanup (< 60s)"
+	@echo "  eval-all                - cleanup + run_eval real LLM (yeu cau OPENAI_API_KEY)"
+	@echo "  eval-report             - python -m eval.report eval/results.json eval/EVAL.md"
+	@echo "  eval-readme             - In quick start workflow snippet"
+	@echo "  eval-restore            - git checkout 0af44f0 -- eval/dataset/ (restore M1)"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Docker compose
@@ -60,3 +72,52 @@ api-test:
 
 api-lint:
 	$(MAKE) -C api lint
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 9 Eval Framework (EVAL-02 + EVAL-04)
+# ═══════════════════════════════════════════════════════════════════════════
+# Workflow chi tiet xem Hub_All/eval/README.md (Plan 09-04).
+#
+# Tien dieu kien gate verdict:
+#   - Docker stack chay: make up (postgres + redis + python-api port 8180)
+#   - eval_hub seed 1 lan: make eval-seed
+#   - OPENAI_API_KEY thuc (real LLM gate ~$0.20/run): export OPENAI_API_KEY=sk-...
+#
+# Smoke regression KHONG can OPENAI_API_KEY (mock embedding).
+
+eval-install:
+	cd eval && pip install -e ".[dev]"
+
+eval-seed:
+	psql -h $${DB_HOST:-localhost} -U $${DB_USER:-medinet} -d $${DB_NAME:-medinet_central} \
+		-f eval/scripts/seed_hub.sql
+
+eval-clean:
+	cd eval && python -m eval.scripts.cleanup
+
+eval-smoke:
+	cd eval && python -m eval.run_eval --mock-embed --skip-cleanup
+
+eval-all:
+	cd eval && python -m eval.scripts.cleanup
+	cd eval && python -m eval.run_eval
+
+eval-report:
+	cd eval && python -m eval.report results.json EVAL.md
+
+eval-readme:
+	@echo "Eval README: Hub_All/eval/README.md"
+	@echo ""
+	@echo "Quick start:"
+	@echo "  make eval-install   # cai deps Python eval"
+	@echo "  make eval-seed      # seed eval_hub (1 lan duy nhat)"
+	@echo "  make eval-smoke     # smoke regression < 60s (mock embedding)"
+	@echo "  make eval-all       # full gate verdict (yeu cau OPENAI_API_KEY)"
+	@echo ""
+	@echo "Tien dieu kien gate:"
+	@echo "  - Docker stack chay: make up"
+	@echo "  - OPENAI_API_KEY thuc (~\$$0.20/run cho 10 file x 25 chunk x 1536 dim)"
+	@echo "  - FAIL < 60% top-3 = trigger E5 STOP M2b (PROJECT.md EXIT)"
+
+eval-restore:
+	git checkout 0af44f0 -- eval/dataset/
