@@ -60,6 +60,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     """Async context manager quản lý startup/shutdown của FastAPI app."""
     settings = get_settings()
 
+    # 0) Plan 10-01 HARD-01: structlog JSON output — gọi configure_structlog()
+    #    TRƯỚC mọi step init khác để log của các step sau (db_pool_ready /
+    #    redis_ready / cocoindex_setup_ok) cũng đã JSON-formatted với schema
+    #    chuẩn (level/msg/ts/request_id/user_id/hub_id). Idempotent — re-call
+    #    no-op (test boot LifespanManager nhiều lần KHÔNG nhân processor).
+    from app.logging_config import configure_structlog
+
+    configure_structlog()
+
     # Khởi tạo state mặc định = chưa ready. Mỗi step set True khi thành công.
     app.state.db_pool = None
     app.state.db_ready = False

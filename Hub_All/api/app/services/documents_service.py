@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,6 +64,12 @@ from app.services.file_store import FileStore
 from app.services.search_cache import publish_invalidate
 
 logger = logging.getLogger(__name__)
+# Plan 10-01 HARD-01: structlog logger riêng cho `trigger_cocoindex_update` —
+# chạy trong FastAPI BackgroundTask → ContextVar `request_id_var` (set bởi
+# RequestIdMiddleware) propagate qua asyncio Task context snapshot → cocoindex
+# flow log thấy request_id của caller. Các service method khác giữ `logger`
+# stdlib (KHÔNG đụng — tránh side-effect rộng ngoài scope HARD-01 Plan 10-01).
+_struct_logger = structlog.get_logger(__name__)
 
 SCANNED_PDF_MESSAGE = "PDF scan chưa hỗ trợ trong M2. Khuyến nghị: chuyển sang DOCX."
 
@@ -507,10 +514,13 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
         # fail-fast, cocoindex_app=None CHỈ xảy ra trong test isolation (test KHÔNG
         # setup cocoindex full) HOẶC architectural regression. ERROR log để alerting
         # bắt được. KHÔNG silent skip — set status='failed' rõ ràng.
-        logger.error(
-            "trigger_cocoindex_update_no_app: cocoindex_app=None doc_id=%s "
-            "(Plan 04-07: lifespan fail-fast nên branch này CHỈ xảy ra trong test/regression)",
-            doc_id,
+        _struct_logger.error(
+            "trigger_cocoindex_update_no_app",
+            doc_id=str(doc_id),
+            note=(
+                "Plan 04-07 lifespan fail-fast — branch này CHỈ xảy ra trong "
+                "test/regression"
+            ),
         )
         try:
             engine = get_engine()
@@ -526,7 +536,11 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
                     {"id": str(doc_id)},
                 )
         except Exception as inner:  # noqa: BLE001
-            logger.exception("trigger_cocoindex_update_status_set_failed: %s", inner)
+            _struct_logger.exception(
+                "trigger_cocoindex_update_status_set_failed",
+                doc_id=str(doc_id),
+                error=str(inner),
+            )
         return
 
     try:
@@ -544,10 +558,10 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
         for attempt in range(_TRIGGER_MAX_ATTEMPTS):
             last_attempt = attempt + 1
             await asyncio.to_thread(cocoindex_app.update_blocking)
-            logger.info(
-                "trigger_cocoindex_update_blocking_complete: doc_id=%s attempt=%d",
-                doc_id,
-                last_attempt,
+            _struct_logger.info(
+                "trigger_cocoindex_update_blocking_complete",
+                doc_id=str(doc_id),
+                attempt=last_attempt,
             )
 
             count = await _count_chunks_for_doc(doc_id)
@@ -558,12 +572,12 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
             # Last attempt → KHÔNG sleep (fall through tới UPDATE 'failed').
             if attempt < _TRIGGER_MAX_ATTEMPTS - 1:
                 backoff = _TRIGGER_BACKOFF_BASE_SECONDS * (attempt + 1)
-                logger.info(
-                    "trigger_cocoindex_update_retry: doc_id=%s attempt=%d "
-                    "count=0 backoff=%.2fs",
-                    doc_id,
-                    last_attempt,
-                    backoff,
+                _struct_logger.info(
+                    "trigger_cocoindex_update_retry",
+                    doc_id=str(doc_id),
+                    attempt=last_attempt,
+                    count=0,
+                    backoff_seconds=backoff,
                 )
                 await asyncio.sleep(backoff)
 
@@ -579,12 +593,11 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
                     ),
                     {"count": count, "id": str(doc_id)},
                 )
-                logger.info(
-                    "trigger_cocoindex_update_completed: doc_id=%s chunks=%d "
-                    "attempts=%d",
-                    doc_id,
-                    count,
-                    last_attempt,
+                _struct_logger.info(
+                    "trigger_cocoindex_update_completed",
+                    doc_id=str(doc_id),
+                    chunks=count,
+                    attempts=last_attempt,
                 )
             else:
                 await conn.execute(
@@ -601,16 +614,16 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
                         "id": str(doc_id),
                     },
                 )
-                logger.warning(
-                    "trigger_cocoindex_update_zero_chunks: doc_id=%s attempts=%d",
-                    doc_id,
-                    last_attempt,
+                _struct_logger.warning(
+                    "trigger_cocoindex_update_zero_chunks",
+                    doc_id=str(doc_id),
+                    attempts=last_attempt,
                 )
     except Exception as exc:  # noqa: BLE001 — BackgroundTask exception swallowed
-        logger.exception(
-            "trigger_cocoindex_update_failed: doc_id=%s exc=%s",
-            doc_id,
-            exc,
+        _struct_logger.exception(
+            "trigger_cocoindex_update_failed",
+            doc_id=str(doc_id),
+            error=str(exc),
         )
         try:
             engine = get_engine()
@@ -627,8 +640,8 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
                     },
                 )
         except Exception as inner:  # noqa: BLE001
-            logger.exception(
-                "trigger_cocoindex_update_status_set_failed: doc_id=%s inner=%s",
-                doc_id,
-                inner,
+            _struct_logger.exception(
+                "trigger_cocoindex_update_status_set_failed",
+                doc_id=str(doc_id),
+                inner_error=str(inner),
             )

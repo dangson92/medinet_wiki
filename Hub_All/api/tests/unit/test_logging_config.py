@@ -164,3 +164,91 @@ def test_contextvar_copy_context_run_isolated() -> None:
     assert captured == ["rid-parent-sync"]
     # Parent KHÔNG bị child mutation (isolation).
     assert request_id_var.get() == "rid-parent-sync"
+
+
+def test_lifespan_calls_configure_structlog_idempotent() -> None:
+    """Test 8 (Task 2) — lifespan boot import `configure_structlog` + gọi an toàn.
+
+    KHÔNG boot full FastAPI lifespan (cần Postgres/Redis/cocoindex testcontainers).
+    Verify ở mức hợp đồng module:
+    - `app.main` import được TRONG QUÁ TRÌNH KHÔNG raise (configure_structlog
+      import path OK ở step 0 lifespan).
+    - Source `app/main.py` contain pattern `configure_structlog()` đúng ở đầu
+      lifespan (step 0 — TRƯỚC db_pool/redis/cocoindex init).
+    """
+    # Verify import path module OK (catch import-time errors như missing dep).
+    from app import main as app_main
+
+    assert app_main.lifespan is not None
+    # Source-level grep — verify pattern "configure_structlog()" trong main.py.
+    import inspect
+
+    source = inspect.getsource(app_main.lifespan)
+    assert "configure_structlog()" in source, (
+        "lifespan KHÔNG gọi configure_structlog() — Plan 10-01 Task 2 wire fail"
+    )
+    # Verify TRƯỚC bất kỳ init step nào (db_pool / redis / cocoindex). Tìm vị trí
+    # text "configure_structlog()" + vị trí "db_pool = None" — configure_structlog
+    # PHẢI nằm trước.
+    pos_struct = source.find("configure_structlog()")
+    pos_db = source.find("db_pool = None")
+    assert pos_struct >= 0
+    assert pos_db >= 0
+    assert pos_struct < pos_db, (
+        "configure_structlog() PHẢI gọi TRƯỚC db_pool init "
+        f"(struct@{pos_struct}, db_pool@{pos_db})"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cocoindex_flow_log_inherits_request_id(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test 7 (Task 2) — mock BackgroundTask gọi structlog.get_logger → entry có request_id parent.
+
+    Mô phỏng pattern thực tế:
+    1. RequestIdMiddleware set `request_id_var.set("rid-parent")` (parent scope).
+    2. FastAPI handler thêm BackgroundTask qua `asyncio.create_task(...)` (copy
+       context cha — Python 3.11+).
+    3. BackgroundTask gọi `_struct_logger.info("cocoindex_event", ...)` →
+       processor `_add_contextvars` đọc `request_id_var.get()` → tìm thấy giá trị
+       parent đã set → inject vào event_dict.
+
+    Đây chính là cơ chế Plan 10-01 Task 2 wire vào `documents_service.
+    trigger_cocoindex_update` — function chạy trong FastAPI BackgroundTask scope
+    nhưng log entry vẫn carry request_id của HTTP request cha.
+    """
+    configure_structlog()
+    capsys.readouterr()  # Clear pending stdout
+
+    parent_rid = "rid-cocoindex-parent-789"
+    request_id_var.set(parent_rid)
+
+    async def cocoindex_background_task() -> None:
+        # Mô phỏng `_struct_logger` trong `documents_service.py`.
+        log = structlog.get_logger("app.services.documents_service")
+        log.info("cocoindex_update_start", doc_id="abc-doc")
+        log.info("cocoindex_update_completed", doc_id="abc-doc", chunks=42)
+
+    # asyncio.create_task copy context cha — child sẽ thấy request_id_var=parent_rid.
+    task = asyncio.create_task(cocoindex_background_task())
+    await task
+
+    out = capsys.readouterr().out.strip()
+    entries = [json.loads(line) for line in out.splitlines() if line.strip()]
+    # Lọc 2 entry cocoindex (có thể trộn log khác).
+    cocoindex_entries = [
+        e for e in entries if e.get("msg", "").startswith("cocoindex_update")
+    ]
+    assert len(cocoindex_entries) == 2, (
+        f"Expect 2 cocoindex_update entries, got {len(cocoindex_entries)}: "
+        f"{[e.get('msg') for e in entries]}"
+    )
+    for entry in cocoindex_entries:
+        assert entry["request_id"] == parent_rid, (
+            f"Entry {entry['msg']} thiếu request_id parent: {entry}"
+        )
+    # Verify field structured kwargs render đúng (NOT f-string concat).
+    completed = next(e for e in cocoindex_entries if e["msg"] == "cocoindex_update_completed")
+    assert completed["doc_id"] == "abc-doc"
+    assert completed["chunks"] == 42
