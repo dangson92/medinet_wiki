@@ -45,6 +45,7 @@ def setup_cocoindex(settings: Settings) -> None:
     """Init cocoindex 1.0.3 default env + apply chunks schema + initial backfill.
 
     Sequence:
+        0. (v3.0 TOPO-03) Set APP_NAMESPACE env per-hub — `medinet_<hub>_prod`.
         1. Set COCOINDEX_DB env var (LMDB filesystem path) — Q5.
         2. Register @coco.lifespan provide asyncpg.Pool cho PG_POOL_KEY.
         3. Import app.rag.flow → register coco.App vào registry.
@@ -59,6 +60,31 @@ def setup_cocoindex(settings: Settings) -> None:
     Raises:
         RuntimeError: cocoindex.start_blocking fail (Postgres không lên / DSN sai).
     """
+    # 0) Set APP_NAMESPACE per-hub — v3.0 Plan 01-04 TOPO-03 (R5 scale per-hub).
+    #    Format: `medinet_<hub_name>_prod`. Trước v3.0 cố định "medinet_prod" cho
+    #    mọi env (M2 R5 mitigation); v3.0 mỗi hub có namespace riêng để cocoindex
+    #    internal tables `cocoindex.medinet_<hub>_prod__*` không đụng nhau giữa
+    #    các DB hub (4 process cùng instance).
+    #    P7 carry forward: `Settings.cocoindex_db_schema="cocoindex"` cố định
+    #    (KHÔNG đổi schema name) — chỉ scale namespace prefix.
+    #
+    #    M2 State Migration Note (BLOCKER 4): Sau Plan 04 ship + deploy default
+    #    HUB_NAME=central, APP_NAMESPACE đổi từ "medinet_prod" (M2) →
+    #    "medinet_central_prod" (Phase 1) → orphan toàn bộ cocoindex.medinet_prod__*
+    #    schema M2. Mitigation: post-deploy re-ingest từ documents table
+    #    (idempotent via content_hash); Phase 7 migrate data formally qua pg_dump.
+    #
+    #    Settings.app_namespace field default "medinet_prod" KHÔNG xoá — backward-compat
+    #    nếu deployer set env APP_NAMESPACE manually thì pydantic load; setup_cocoindex
+    #    GHI ĐÈ qua os.environ["APP_NAMESPACE"] ngay trước start_blocking deterministic.
+    namespaced = f"medinet_{settings.hub_name}_prod"
+    os.environ["APP_NAMESPACE"] = namespaced
+    logger.info(
+        "cocoindex_app_namespace_set: hub=%s namespace=%s",
+        settings.hub_name,
+        namespaced,
+    )
+
     # 1) Set COCOINDEX_DB (LMDB path) — Q5.
     #    Cocoindex 1.0.3 đọc env tại default_env() init time — set trước import flow.
     #    GÁN trực tiếp (không setdefault) để Settings.cocoindex_lmdb_path là single
