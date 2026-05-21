@@ -20,6 +20,8 @@
 
 ## 2. Milestone hiện tại
 
+> **M2 — v2.0 Full RAG Rewrite ✅ COMPLETE** (10/10 phase done — xem `.planning/STATE.md`) · Granularity: large · Mode: YOLO · **10 phase** · **38 REQ-ID v1**.
+
 **M2 — v2.0 Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)** · Granularity: large · Mode: YOLO · **10 phase** · **38 REQ-ID v1**.
 
 > Pivot 2026-05-13 (lần 2 trong 15 ngày): M1 cũ (Docling RAG Quality) abandoned — 28 plans code complete nhưng chưa runtime verify. M2 = bộ REQ-ID hoàn toàn mới (CORE-01..05, AUTH-01..06, INGEST-01..08, HUB-01..03, USER-01..03, AUX-01..03, SEARCH-01..04, ASK-01..05, COMPAT-01, TEARDOWN-01, EVAL-01..04, HARD-01..04).
@@ -106,6 +108,41 @@
 - Phần mô tả tiếng Việt có dấu, ngắn gọn, nói "tại sao" trước "làm gì".
 - Mỗi plan trong phase commit atomic — không gộp nhiều plan vào một commit.
 
+## 6. M2 closeout — Pivot tới v3.0 Multi-Hub Split
+
+M2 hoàn tất toàn bộ 38 REQ-ID v1 trên 10 phase (xem `.planning/STATE.md`).
+Critical path test ≥50% coverage (HARD-03 thực đo 57.75%), structlog JSON +
+Prometheus `/metrics` endpoint (HARD-01 Plan 10-01 + HARD-02 Plan 10-02),
+README + DEPLOY + 2 .env.example đầy đủ (HARD-04 Plan 10-05). MCP CRIT-01
+(CORS sensitive split) đã đóng — Phase 10 Plan 10-04 ship MultiPolicyCORSMiddleware
+tách metadata wildcard (RFC 8414 §3.1) vs sensitive whitelist (claude.ai +
+Inspector + 2 localhost dev). Backend Go cũ ARCHIVED qua git tag `m1-go-archived`
+(2026-05-14 TEARDOWN-01 pull-in) — stack hiện tại Python ONLY.
+
+**Next milestone:** **v3.0 — Multi-Hub Split** (subpath routing `wiki.domain.com/<hub>`,
+multi-DB Postgres riêng cùng instance, cocoindex flow per-hub đẩy chunks+vector
+lên hub tổng làm read replica). Architectural decision LOCKED 2026-05-21:
+
+- **D-V3-01:** DB topology = Postgres database riêng cùng instance (`medinet_central` +
+  `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`)
+- **D-V3-02:** Dataflow hub con → hub tổng = chunks + vector (denormalized read
+  replica, sync 1 chiều — KHÔNG re-embed ở hub tổng)
+- **D-V3-03:** Scoping = milestone-level (KHÔNG nhét vào M2 dưới dạng phase đơn lẻ)
+- **D-V3-04:** M2 closeout = bắt buộc trước v3.0 (Phase 10 done là tiền đề)
+
+**Trigger v3.0:** `/gsd-new-milestone v3.0` sau khi Phase 10 ship full (HARD-04 +
+Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
+
+**Reference:** `.planning/seeds/v3.0-multi-hub-split.md` (7 phase đề xuất ~35 plan,
+4 risk register R-V3-1..4, 4 EXIT criteria E-V3-1..4 preview).
+
+**Open question chốt ở `/gsd-discuss-milestone v3.0`:**
+
+- **GA-V3-A** Auth SSO design — JWT keypair share giữa central + sub-hubs qua JWKS endpoint từ hub tổng? Refresh token blacklist Redis chung?
+- **GA-V3-B** System settings sync — `rag_config` / `api_keys` / `hub_registry` ở tổng, hub con đọc qua HTTP pull on-demand vs push webhook?
+- **GA-V3-C** Reverse proxy + frontend prefix detect — Caddy strip `/<hub>` prefix? Frontend 1 build dùng chung detect prefix qua `window.location.pathname.split('/')[1]` vs build per-hub `VITE_HUB_NAME=yte`? D6 ("KHÔNG sửa frontend") expire chính thức ở v3.0-05.
+- **GA-V3-D** Migration data từ `medinet_central` cũ split sang DB hub con — `pg_dump` per `WHERE hub_id` HOẶC snapshot + replay cocoindex flow rebuild từ `file_store`?
+
 ---
 
-*Cập nhật: 2026-05-13 (pivot M2 — Full RAG Rewrite) · Project: MEDWIKI · Phase 1 đang execute.*
+*Cập nhật: 2026-05-21 (Phase 10 Plan 10-05 — HARD-04 docs closeout). Project: MEDWIKI. M2 v2.0 done — pivot v3.0 Multi-Hub Split (seed `.planning/seeds/v3.0-multi-hub-split.md`).*

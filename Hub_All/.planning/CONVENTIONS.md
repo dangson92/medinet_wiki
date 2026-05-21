@@ -332,6 +332,20 @@ log.info("login", email=email, password=password)  # password leak!
 - Match Go `log/slog` JSON output cho ops dashboard reuse
 - `Hub_All/.planning/research/STACK.md` — structlog 25.x recommendation
 
+### Plan 10-01 status
+
+HARD-01 đã ship Phase 10 Plan 10-01 (2026-05-21):
+
+- `app/logging_config.py` — `configure_structlog()` factory idempotent + 3 ContextVar (`request_id_var`, `user_id_var`, `hub_id_var` default None tường minh — Loki/Datadog query `IS NULL` consistent)
+- `app/middleware/request_id.py` — set ContextVar trong `dispatch()` + đo `latency_ms` qua `time.perf_counter()` + emit log `request_completed` với 10 field schema
+- Wire vào `app/main.py` lifespan step 0 (gọi `configure_structlog()` TRƯỚC db_pool/redis/cocoindex init) + cocoindex BackgroundTask log qua `app/services/documents_service.py:_struct_logger` (ContextVar propagation qua `asyncio.create_task` copy_context)
+- Processor chain: `merge_contextvars` + `_add_contextvars` custom + `add_log_level` + `TimeStamper(iso, utc, key=ts)` + `EventRenamer("msg")` rename `event`→`msg` match Go log/slog + `JSONRenderer`
+- 11 unit/integration test PASS (8 trong `test_logging_config.py` + 3 trong `test_request_id_middleware.py`)
+
+Mọi log mới TRONG `app/` PHẢI dùng `structlog.get_logger(__name__)` thay vì
+`logging.getLogger(__name__)` — JSON output + ContextVar tự inject `request_id`.
+Migrate service module cũ sang structlog defer v4.0 (DEF-10-01-B — out of scope HARD-01).
+
 ---
 
 ## Reference Documents
