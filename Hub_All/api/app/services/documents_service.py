@@ -27,6 +27,11 @@ Module-level helper trigger_cocoindex_update (A4):
 - Exception → status='failed' + error_message + last_heartbeat=NOW().
 
 Plan 04-05 EXTEND: list + delete + watchdog logic.
+
+Plan 04-08 GAP CLOSURE (debug session cocoindex-zero-chunks-docx-vn 2026-05-21):
+- trigger_cocoindex_update thêm initial delay + retry loop để khắc phục race
+  condition giữa SQLAlchemy commit và cocoindex asyncpg pool snapshot
+  (REPEATABLE READ). Xem `.planning/debug/cocoindex-zero-chunks-docx-vn.md`.
 """
 from __future__ import annotations
 
@@ -60,6 +65,20 @@ from app.services.search_cache import publish_invalidate
 logger = logging.getLogger(__name__)
 
 SCANNED_PDF_MESSAGE = "PDF scan chưa hỗ trợ trong M2. Khuyến nghị: chuyển sang DOCX."
+
+# Plan 04-08 GAP CLOSURE — race fix knobs cho trigger_cocoindex_update.
+# Initial delay đảm bảo SQLAlchemy COMMIT của FastAPI request propagate visibility
+# cho cocoindex asyncpg pool (pool tách biệt — setup.py:83-87). Cocoindex source
+# dùng REPEATABLE READ → snapshot tại BEGIN time; nếu BEGIN trước commit visible
+# → fetch_rows yield 0 rows → 0 chunks. 100ms đủ cho local stack (verified manual)
+# và KHÔNG đáng kể so với 5s SLA.
+_TRIGGER_INITIAL_DELAY_SECONDS = 0.1
+# Retry attempts (eventual consistency). Mỗi attempt re-run update_blocking() →
+# main_fn re-exec → fresh fetch_rows snapshot. Backoff tăng dần để absorb commit
+# propagation latency cao bất thường.
+_TRIGGER_MAX_ATTEMPTS = 3
+_TRIGGER_BACKOFF_BASE_SECONDS = 0.5
+
 
 # Cột SELECT chung cho get + list — thứ tự khớp _row_to_response().
 _DOC_COLUMNS = (
@@ -436,6 +455,23 @@ class DocumentService:
 
 # === A4 helper module-level — router gọi qua FastAPI BackgroundTasks add_task ===
 
+async def _count_chunks_for_doc(doc_id: UUID) -> int:
+    """Helper count chunks WHERE document_id=:id qua app SQLAlchemy engine.
+
+    Tách thành helper để retry loop trong trigger_cocoindex_update gọi lại
+    nhiều lần mà KHÔNG nhân bản SQL string + boilerplate engine.begin().
+    """
+    engine = get_engine()
+    async with engine.begin() as conn:
+        count_row = (
+            await conn.execute(
+                text("SELECT COUNT(*) FROM chunks WHERE document_id = :id"),
+                {"id": str(doc_id)},
+            )
+        ).fetchone()
+    return int(count_row[0]) if count_row else 0
+
+
 async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
     """A4 helper — chạy cocoindex update_blocking + set documents status sau khi xong.
 
@@ -443,18 +479,21 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
         cocoindex_app: coco.App instance (Plan 04-03 lưu ở app.state.cocoindex_app).
         doc_id: document_id vừa INSERT (router pass qua add_task args).
 
-    Sequence:
-    1. await asyncio.to_thread(cocoindex_app.update_blocking) — chạy cocoindex
-       flow blocking trong background thread (KHÔNG block FastAPI event loop).
-       Cocoindex re-fetch ALL documents rows + memo skip rows unchanged + process
-       row mới (status='pending').
-    2. SELECT COUNT(*) FROM chunks WHERE document_id=:id.
-    3. Nếu count > 0 → UPDATE documents SET status='completed' chunk_count=:count
-       last_heartbeat=NOW() (refresh cho watchdog NULL guard).
-    4. Nếu count = 0 → UPDATE documents SET status='failed'
-       error_message='cocoindex flow generated 0 chunks' last_heartbeat=NOW().
-    5. Exception → UPDATE documents SET status='failed'
-       error_message='cocoindex update failed: {exc}' last_heartbeat=NOW().
+    Sequence (Plan 04-08 GAP CLOSURE — race fix):
+    1. await asyncio.sleep(INITIAL_DELAY) — defensive bracket cho race window
+       giữa SQLAlchemy commit (FastAPI request thread) và cocoindex asyncpg
+       pool snapshot (separate pool — setup.py:83-87). Cocoindex source dùng
+       REPEATABLE READ → snapshot tại BEGIN time; cần row INSERT đã visible
+       cho cocoindex pool trước khi BEGIN. Xem debug session
+       `.planning/debug/cocoindex-zero-chunks-docx-vn.md`.
+    2. RETRY LOOP (tối đa _TRIGGER_MAX_ATTEMPTS lần với backoff): mỗi attempt
+       gọi `await asyncio.to_thread(cocoindex_app.update_blocking)` → main_fn
+       re-exec → fresh `pg_source.fetch_rows()` snapshot. Nếu count chunks > 0
+       → break, set 'completed'. Nếu count = 0 → backoff + retry. Cocoindex
+       memo skip rows đã xử lý — retry idempotent + cheap.
+    3. Sau loop: nếu count > 0 UPDATE 'completed' chunk_count; ngược lại UPDATE
+       'failed' với error_message rõ ràng (kèm attempt count).
+    4. Exception → UPDATE 'failed' + error_message.
 
     Cocoindex 1.0.3 KHÔNG expose per-row callback hook → CẦN strategy này
     (post-update count chunks → set status). Documented inter-plan dependency với
@@ -491,21 +530,46 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
         return
 
     try:
-        # 1) Run cocoindex update blocking trong thread executor.
-        await asyncio.to_thread(cocoindex_app.update_blocking)
-        logger.info("trigger_cocoindex_update_blocking_complete: doc_id=%s", doc_id)
+        # Plan 04-08 race fix step 1: initial delay để commit propagate sang
+        # cocoindex pool. 100ms đủ cho local stack (verified), và KHÔNG đáng kể
+        # so với 5s SLA ROADMAP SC2.
+        await asyncio.sleep(_TRIGGER_INITIAL_DELAY_SECONDS)
 
-        # 2-4) Count chunks → set status.
+        # Plan 04-08 race fix step 2: retry loop với eventual consistency. Mỗi
+        # attempt re-run update_blocking() → cocoindex memo skip rows đã ship →
+        # cheap re-execute. Nếu attempt 1 race miss (snapshot trước commit
+        # visible), attempt 2-3 sẽ thấy row + ship chunks.
+        count = 0
+        last_attempt = 0
+        for attempt in range(_TRIGGER_MAX_ATTEMPTS):
+            last_attempt = attempt + 1
+            await asyncio.to_thread(cocoindex_app.update_blocking)
+            logger.info(
+                "trigger_cocoindex_update_blocking_complete: doc_id=%s attempt=%d",
+                doc_id,
+                last_attempt,
+            )
+
+            count = await _count_chunks_for_doc(doc_id)
+            if count > 0:
+                # Success path — break immediately.
+                break
+
+            # Last attempt → KHÔNG sleep (fall through tới UPDATE 'failed').
+            if attempt < _TRIGGER_MAX_ATTEMPTS - 1:
+                backoff = _TRIGGER_BACKOFF_BASE_SECONDS * (attempt + 1)
+                logger.info(
+                    "trigger_cocoindex_update_retry: doc_id=%s attempt=%d "
+                    "count=0 backoff=%.2fs",
+                    doc_id,
+                    last_attempt,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+
+        # Plan 04-08 race fix step 3: set final status dựa trên count cuối cùng.
         engine = get_engine()
         async with engine.begin() as conn:
-            count_row = (
-                await conn.execute(
-                    text("SELECT COUNT(*) FROM chunks WHERE document_id = :id"),
-                    {"id": str(doc_id)},
-                )
-            ).fetchone()
-            count = int(count_row[0]) if count_row else 0
-
             if count > 0:
                 await conn.execute(
                     text(
@@ -516,23 +580,31 @@ async def trigger_cocoindex_update(cocoindex_app: Any, doc_id: UUID) -> None:
                     {"count": count, "id": str(doc_id)},
                 )
                 logger.info(
-                    "trigger_cocoindex_update_completed: doc_id=%s chunks=%d",
+                    "trigger_cocoindex_update_completed: doc_id=%s chunks=%d "
+                    "attempts=%d",
                     doc_id,
                     count,
+                    last_attempt,
                 )
             else:
                 await conn.execute(
                     text(
                         "UPDATE documents SET status='failed', "
-                        "error_message='cocoindex flow generated 0 chunks', "
-                        "last_heartbeat=NOW(), updated_at=NOW() "
+                        "error_message=:err, last_heartbeat=NOW(), updated_at=NOW() "
                         "WHERE id = :id"
                     ),
-                    {"id": str(doc_id)},
+                    {
+                        "err": (
+                            f"cocoindex flow generated 0 chunks after "
+                            f"{last_attempt} attempts"
+                        ),
+                        "id": str(doc_id),
+                    },
                 )
                 logger.warning(
-                    "trigger_cocoindex_update_zero_chunks: doc_id=%s",
+                    "trigger_cocoindex_update_zero_chunks: doc_id=%s attempts=%d",
                     doc_id,
+                    last_attempt,
                 )
     except Exception as exc:  # noqa: BLE001 — BackgroundTask exception swallowed
         logger.exception(
