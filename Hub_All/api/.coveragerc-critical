@@ -1,0 +1,92 @@
+# Coverage config cho HARD-03 critical-path gate (Plan 10-03).
+#
+# Scope CỐ ĐỊNH 10 module critical path — KHÔNG bao toàn codebase (defer
+# comprehensive coverage v4.0 — out of scope HARD-03).
+#
+# CI gate (Plan 10-06): pytest --cov-config=.coveragerc-critical --cov-fail-under=50.
+#
+# Lý do tách file riêng (KHÔNG inline pyproject.toml):
+# - Plan 10-02 đang chạy parallel Wave 2 modify pyproject.toml (thêm
+#   prometheus-client dep) → zero-file-overlap policy.
+# - .coveragerc-critical chuyên-trách cho gate critical — pytest-cov auto-load
+#   khi pass `--cov-config=.coveragerc-critical`.
+#
+# Pattern: `source` cụ thể từng package + omit non-critical service/router.
+# Coverage 7.x dot-path source bug trên Windows (numpy reimport) → dùng
+# absolute package list + omit từ broader scope.
+
+[run]
+# Source = `app` package root. Quét toàn app, omit non-critical bên dưới.
+# `source = app` để tránh dot-path nested bug coverage 7.14 Windows.
+source = app
+
+# Omit non-critical module — chỉ giữ 10 file critical path HARD-03:
+#   - app/auth/*.py (5 file)
+#   - app/routers/{documents,hubs,search,ask}.py (4 file)
+#   - app/services/{documents_service,search_service,ask_service,ask_prompt}.py
+#   - app/repositories/hub_isolation.py
+# Tổng = 10 file critical (success_criteria 6 module + 4 module phụ trợ).
+#
+# Path Windows native — backslash separator. Coverage 7.x trên Windows
+# resolve omit pattern qua `fnmatch` với OS native separator.
+omit =
+    */app/main.py
+    */app/config.py
+    */app/__init__.py
+    */app/logging_config.py
+    */app/db/*
+    */app/models/*
+    */app/schemas/*
+    */app/middleware/*
+    */app/observability/*
+    */app/pkg/*
+    */app/rag/*
+    */app/routers/__init__.py
+    */app/routers/ai_chat.py
+    */app/routers/api_keys.py
+    */app/routers/audit_logs.py
+    */app/routers/mcp_oauth.py
+    */app/routers/profile.py
+    */app/routers/rag_config.py
+    */app/routers/sync.py
+    */app/routers/system_settings.py
+    */app/routers/usage.py
+    */app/routers/users.py
+    */app/services/__init__.py
+    */app/services/api_key_service.py
+    */app/services/audit_query_service.py
+    */app/services/audit_service.py
+    */app/services/embedder.py
+    */app/services/file_extract.py
+    */app/services/file_store.py
+    */app/services/hub_service.py
+    */app/services/mcp_oauth_service.py
+    */app/services/rag_config_service.py
+    */app/services/search_cache.py
+    */app/services/system_settings_service.py
+    */app/services/usage_service.py
+    */app/services/user_service.py
+    */app/services/vn_chunker.py
+    */app/services/watchdog.py
+    */app/repositories/__init__.py
+
+# Branch coverage — đo cả nhánh if/else (gắt hơn line coverage).
+branch = false
+
+[report]
+# Skip line trống + decorator + import statement.
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:
+    \.\.\.
+
+# Show missing line numbers in terminal report.
+show_missing = true
+
+# Sort by coverage % ascending — module thấp nhất ở đầu (dễ thấy gap).
+sort = Cover
+
+# Precision 1 decimal.
+precision = 1
