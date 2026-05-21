@@ -12,102 +12,122 @@ Threat model cover (xem 01-02-PLAN.md `<threat_model>`):
 - T-01-02-03 Elevation of Privilege: hub con cố ý trỏ central → ValidationError
 - T-01-02-04 Tampering: resolve_database_url với base_dsn sai → ValueError
 
-NOTE: conftest.py autouse `_env` fixture đã set `COCOINDEX_DATABASE_URL`,
-`REDIS_URL`, `APP_ENV`, `DATABASE_URL` mặc định. Test instantiate Settings
-trực tiếp với kwargs sẽ override env. Để bảo đảm `hub_name` đọc từ env
-HUB_NAME (Test 6), dùng `monkeypatch.setenv("HUB_NAME", ...)`.
+NOTE: dùng `monkeypatch.setenv()` để control env vars (consistent với mọi test
+khác trong api/tests/). conftest.py autouse `_env` fixture set sẵn baseline,
+override qua monkeypatch theo từng test scenario. KHÔNG instantiate Settings
+trực tiếp với kwargs (mypy strict không reconcile được với pydantic-settings
+internal `__init__` union types — 64 errors).
 """
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-from app.config import Settings, resolve_database_url
+from app.config import Settings, get_settings, resolve_database_url
 
-# Stub các required field khác (cocoindex_database_url, redis_url) để Settings init OK
-# trong test instantiate trực tiếp. conftest._env autouse cũng set sẵn nhưng đây
-# explicit kwargs để test scenario rõ ràng (DSN cocoindex/redis không phải focus).
-VALID_BASE: dict[str, str] = {
-    "cocoindex_database_url": "postgresql://u:p@h:5432/medinet_cocoindex",
-    "redis_url": "redis://localhost:6379/0",
-}
+
+def _set_env(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    hub_name: str | None = None,
+    database_url: str | None = None,
+) -> None:
+    """Helper set env vars rồi clear cache get_settings — để Settings load tươi.
+
+    None → giữ giá trị conftest set sẵn (hub_name → KHÔNG set env → default;
+    database_url → conftest default). Truyền giá trị explicit để override.
+    """
+    if hub_name is not None:
+        monkeypatch.setenv("HUB_NAME", hub_name)
+    if database_url is not None:
+        monkeypatch.setenv("DATABASE_URL", database_url)
+    get_settings.cache_clear()
 
 
 # === Test 1: central default DSN khớp medinet_central ===
-def test_central_matches_central_dsn_ok() -> None:
-    """Settings(hub_name='central', DSN /medinet_central) — instantiate OK."""
-    s = Settings(
+def test_central_matches_central_dsn_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HUB_NAME=central + DSN /medinet_central — instantiate OK."""
+    _set_env(
+        monkeypatch,
         hub_name="central",
         database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
-        **VALID_BASE,
     )
+    s = Settings()
     assert s.hub_name == "central"
     assert s.database_url.endswith("/medinet_central")
 
 
 # === Test 2: hub yte với DSN medinet_hub_yte ===
-def test_yte_matches_yte_dsn_ok() -> None:
-    """Settings(hub_name='yte', DSN /medinet_hub_yte) — instantiate OK."""
-    s = Settings(
+def test_yte_matches_yte_dsn_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HUB_NAME=yte + DSN /medinet_hub_yte — instantiate OK."""
+    _set_env(
+        monkeypatch,
         hub_name="yte",
         database_url="postgresql+asyncpg://u:p@h:5432/medinet_hub_yte",
-        **VALID_BASE,
     )
+    s = Settings()
     assert s.hub_name == "yte"
     assert s.database_url.endswith("/medinet_hub_yte")
 
 
 # === Test 3: hub yte trỏ medinet_central → ValidationError (E-V3-3) ===
-def test_yte_mismatch_central_raises() -> None:
+def test_yte_mismatch_central_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """T-01-02-01 Spoofing — HUB_NAME=yte + DSN central → fail-fast.
 
     Lỗi nguy hiểm nhất: hub con vô tình truy cập aggregated data central.
     Validator phải raise startup, KHÔNG defer runtime.
     """
+    _set_env(
+        monkeypatch,
+        hub_name="yte",
+        database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
+    )
     with pytest.raises(ValidationError, match="DSN mismatch hub_name"):
-        Settings(
-            hub_name="yte",
-            database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
-            **VALID_BASE,
-        )
+        Settings()
 
 
 # === Test 4: hub duoc trỏ medinet_hub_yte → ValidationError (cross-hub) ===
-def test_duoc_mismatch_yte_dsn_raises() -> None:
+def test_duoc_mismatch_yte_dsn_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """T-01-02-02 Information Disclosure — cross-hub DSN typo bị reject startup."""
+    _set_env(
+        monkeypatch,
+        hub_name="duoc",
+        database_url="postgresql+asyncpg://u:p@h:5432/medinet_hub_yte",
+    )
     with pytest.raises(ValidationError, match="DSN mismatch hub_name"):
-        Settings(
-            hub_name="duoc",
-            database_url="postgresql+asyncpg://u:p@h:5432/medinet_hub_yte",
-            **VALID_BASE,
-        )
+        Settings()
 
 
 # === Test 5: hub_name không thuộc Literal → ValidationError ===
-def test_invalid_hub_name_raises() -> None:
-    """Literal restrict 4 giá trị — bất kỳ value khác (typo, hub mới chưa register)
-    → ValidationError. Bảo vệ chống Plan 04 hub-init forget update Literal.
+def test_invalid_hub_name_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Literal restrict 4 giá trị — bất kỳ value khác (typo, hub mới chưa
+    register) → ValidationError. Bảo vệ chống Plan 05 hub-init forget update
+    Literal.
     """
+    _set_env(
+        monkeypatch,
+        hub_name="invalid_hub",
+        database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
+    )
     with pytest.raises(ValidationError):
-        Settings(
-            hub_name="invalid_hub",  # type: ignore[arg-type]
-            database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
-            **VALID_BASE,
-        )
+        Settings()
 
 
 # === Test 6: Default hub_name = 'central' nếu env HUB_NAME không set ===
 def test_default_hub_name_is_central(monkeypatch: pytest.MonkeyPatch) -> None:
-    """M2 backward-compat — Settings() không truyền hub_name → default 'central'.
+    """M2 backward-compat — Settings() không có HUB_NAME env → default 'central'.
 
-    Phải đảm bảo env HUB_NAME không có (conftest._env không set HUB_NAME, nhưng
-    người chạy local có thể có HUB_NAME export sẵn). Explicit `delenv` để chắc.
+    conftest._env không set HUB_NAME (chỉ DATABASE_URL/REDIS_URL/...). Explicit
+    `delenv` đảm bảo người chạy local đã export HUB_NAME cũng bị clear.
     """
     monkeypatch.delenv("HUB_NAME", raising=False)
-    s = Settings(
+    _set_env(
+        monkeypatch,
         database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
-        **VALID_BASE,
     )
+    s = Settings()
     assert s.hub_name == "central"
 
 
@@ -129,8 +149,8 @@ def test_resolve_database_url_central_passthrough() -> None:
 
 # === Bonus coverage: resolve_database_url với base_dsn sai → ValueError ===
 def test_resolve_database_url_invalid_base_raises() -> None:
-    """T-01-02-04 Tampering — base_dsn không kết thúc /medinet_central → caller
-    misuse, raise ValueError với message rõ.
+    """T-01-02-04 Tampering — base_dsn không kết thúc /medinet_central →
+    caller misuse, raise ValueError với message rõ.
     """
     bad_base = "postgresql+asyncpg://u:p@h:5432/medinet_hub_yte"
     with pytest.raises(ValueError, match="medinet_central"):
@@ -138,17 +158,20 @@ def test_resolve_database_url_invalid_base_raises() -> None:
 
 
 # === Bonus coverage: DSN có query string vẫn validate đúng ===
-def test_dsn_with_query_string_validates() -> None:
+def test_dsn_with_query_string_validates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Validator strip `?option=value` trước khi check suffix — DSN production
     thường có `?sslmode=require` hoặc tương tự.
     """
-    s = Settings(
+    _set_env(
+        monkeypatch,
         hub_name="yte",
         database_url=(
             "postgresql+asyncpg://u:p@h:5432/medinet_hub_yte?sslmode=require"
         ),
-        **VALID_BASE,
     )
+    s = Settings()
     assert s.hub_name == "yte"
 
 
@@ -157,4 +180,6 @@ def test_resolve_database_url_preserves_query() -> None:
     """Helper preserve query string khi đổi segment database name."""
     base = "postgresql+asyncpg://u:p@h:5432/medinet_central?sslmode=require"
     result = resolve_database_url(base, "duoc")
-    assert result == "postgresql+asyncpg://u:p@h:5432/medinet_hub_duoc?sslmode=require"
+    assert result == (
+        "postgresql+asyncpg://u:p@h:5432/medinet_hub_duoc?sslmode=require"
+    )

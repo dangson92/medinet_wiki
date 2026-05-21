@@ -11,13 +11,21 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set env vars tối thiểu cho `Settings` load được trong unit test."""
+    """Set env vars tối thiểu cho `Settings` load được trong unit test.
+
+    v3.0 Plan 01-02 — `Settings._enforce_hub_dsn_match` validator yêu cầu
+    `DATABASE_URL` kết thúc bằng `/medinet_central` khi `HUB_NAME="central"`
+    (default). Test stub DSN dùng `medinet_central` thay vì `test` để pass
+    validator. Test cần stub `HUB_NAME="<hub>"` phải set rõ qua
+    `monkeypatch.setenv("HUB_NAME", ...)` + `DATABASE_URL` khớp pattern.
+    """
     monkeypatch.setenv(
-        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test"
+        "DATABASE_URL",
+        "postgresql+asyncpg://test:test@localhost:5432/medinet_central",
     )
     monkeypatch.setenv(
         "COCOINDEX_DATABASE_URL",
-        "postgresql://test:test@localhost:5432/test_cocoindex",
+        "postgresql://test:test@localhost:5432/medinet_cocoindex",
     )
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("APP_ENV", "dev")

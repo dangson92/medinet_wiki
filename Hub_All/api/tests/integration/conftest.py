@@ -49,16 +49,41 @@ def postgres_container() -> Iterator[PostgresContainer]:
 
     `driver=None` ngam dinh `postgresql+psycopg2://` (sync driver — psycopg2-binary).
     Async migration test dung asyncpg qua DSN replace trong fixture `alembic_cfg`.
+
+    v3.0 Plan 01-02 — `Settings._enforce_hub_dsn_match` validator yeu cau
+    DATABASE_URL ket thuc `/medinet_central` khi HUB_NAME=central (default test).
+    Container auto-create DB `test` (POSTGRES_DB default); ta tao them
+    `medinet_central` voi cung extension de test fixture co the doi DSN
+    sang `/medinet_central` ma khong rebuild image.
     """
     with PostgresContainer("pgvector/pgvector:pg16", driver=None) as pg:
         sync_url = pg.get_connection_url().replace(
             "postgresql+psycopg2://", "postgresql://"
         )
+        # Enable ext tren DB `test` (default container) — backward compat
+        # cho test cu chua migrate sang DSN medinet_central.
         eng = create_engine(sync_url)
         with eng.begin() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
         eng.dispose()
+        # Tao them DB `medinet_central` + enable ext — Plan 01-02 validator
+        # yeu cau DSN suffix khop hub_name. CREATE DATABASE phai chay
+        # AUTOCOMMIT ngoai transaction.
+        admin_eng = create_engine(sync_url, isolation_level="AUTOCOMMIT")
+        with admin_eng.connect() as conn:
+            existing = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname='medinet_central'")
+            ).scalar()
+            if not existing:
+                conn.execute(text("CREATE DATABASE medinet_central"))
+        admin_eng.dispose()
+        central_url = sync_url.rsplit("/", 1)[0] + "/medinet_central"
+        central_eng = create_engine(central_url)
+        with central_eng.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+        central_eng.dispose()
         yield pg
 
 
@@ -76,10 +101,16 @@ def alembic_cfg(
     sync_url = postgres_container.get_connection_url().replace(
         "postgresql+psycopg2://", "postgresql://"
     )
-    async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://")
+    # v3.0 Plan 01-02 — Swap DB segment cuoi sang /medinet_central de pass
+    # Settings._enforce_hub_dsn_match (HUB_NAME default "central"). DB
+    # medinet_central da duoc tao trong postgres_container fixture.
+    central_sync_url = sync_url.rsplit("/", 1)[0] + "/medinet_central"
+    async_url = central_sync_url.replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
 
     monkeypatch.setenv("DATABASE_URL", async_url)
-    monkeypatch.setenv("COCOINDEX_DATABASE_URL", sync_url)
+    monkeypatch.setenv("COCOINDEX_DATABASE_URL", central_sync_url)
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("APP_ENV", "dev")
 
@@ -122,16 +153,22 @@ def auth_env(
     """Set env vars cho create_app() trỏ vào containers + key paths.
 
     KHÔNG dùng port 6379 default Redis local — testcontainers map random port.
+
+    v3.0 Plan 01-02 — DSN swap sang /medinet_central de pass validator
+    (xem `postgres_container` fixture pre-create DB).
     """
     sync_url = postgres_container.get_connection_url().replace(
         "postgresql+psycopg2://", "postgresql://"
     )
-    async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://")
+    central_sync_url = sync_url.rsplit("/", 1)[0] + "/medinet_central"
+    async_url = central_sync_url.replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
     redis_host = redis_container.get_container_host_ip()
     redis_port = redis_container.get_exposed_port(6379)
 
     monkeypatch.setenv("DATABASE_URL", async_url)
-    monkeypatch.setenv("COCOINDEX_DATABASE_URL", sync_url)
+    monkeypatch.setenv("COCOINDEX_DATABASE_URL", central_sync_url)
     monkeypatch.setenv("REDIS_URL", f"redis://{redis_host}:{redis_port}/0")
     monkeypatch.setenv("APP_ENV", "dev")
     monkeypatch.setenv("JWT_PRIVATE_KEY_PATH", "keys/private.pem")
@@ -166,15 +203,19 @@ async def app_with_auth(
     # không cần redis cho migration). Plan 03-05 cần override REDIS_URL +
     # JWT keys + CORS để create_app dùng testcontainer Redis. Set TẠI ĐÂY
     # đảm bảo override xảy ra SAU alembic_cfg.
+    # v3.0 Plan 01-02 — DSN swap sang /medinet_central de pass validator.
     sync_url = postgres_container.get_connection_url().replace(
         "postgresql+psycopg2://", "postgresql://"
     )
-    async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://")
+    central_sync_url = sync_url.rsplit("/", 1)[0] + "/medinet_central"
+    async_url = central_sync_url.replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
     redis_host = redis_container.get_container_host_ip()
     redis_port = redis_container.get_exposed_port(6379)
 
     monkeypatch.setenv("DATABASE_URL", async_url)
-    monkeypatch.setenv("COCOINDEX_DATABASE_URL", sync_url)
+    monkeypatch.setenv("COCOINDEX_DATABASE_URL", central_sync_url)
     monkeypatch.setenv("REDIS_URL", f"redis://{redis_host}:{redis_port}/0")
     monkeypatch.setenv("APP_ENV", "dev")
     monkeypatch.setenv("JWT_PRIVATE_KEY_PATH", "keys/private.pem")
