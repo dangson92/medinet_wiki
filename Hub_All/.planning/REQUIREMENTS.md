@@ -105,19 +105,19 @@
 
 ## Traceability
 
-Sẽ filled bởi gsd-roadmapper ở `ROADMAP.md` — map mỗi REQ-ID → 1 phase (1-to-1, không có REQ orphan, không có REQ map nhiều phase).
+100% coverage REQ → phase. Mapping 1-to-1 (mỗi REQ map đúng 1 phase, không có REQ orphan).
 
-| REQ-ID | Phase | Mapping confirm |
+| REQ-ID | Phase | Confirm |
 |---|---|---|
-| TOPO-01..04 | Phase 1 | (sẽ ghi ở ROADMAP.md) |
-| FACTOR-01..03 | Phase 2 | (sẽ ghi ở ROADMAP.md) |
-| SSO-01..04 | Phase 3 | (sẽ ghi ở ROADMAP.md) |
-| SYNC-01..05 | Phase 4 | (sẽ ghi ở ROADMAP.md) |
-| PROXY-01..04 | Phase 5 | (sẽ ghi ở ROADMAP.md) |
-| SETTINGS-01..04 | Phase 6 | (sẽ ghi ở ROADMAP.md) |
-| MIGRATE-01..05 | Phase 7 | (sẽ ghi ở ROADMAP.md) |
+| TOPO-01..04 | Phase 1 | Multi-DB topology + per-hub Alembic |
+| FACTOR-01..03 | Phase 2 | Hub-con codebase factor |
+| SSO-01..04 | Phase 3 | Auth SSO + hub_ids trong JWT (GA-V3-A chốt) |
+| SYNC-01..05 | Phase 4 | Cross-hub data sync (GA-V3-D part 1 chốt) |
+| PROXY-01..04 | Phase 5 | Reverse proxy + frontend subpath (GA-V3-C chốt, D-V3-06 D6 expire) |
+| SETTINGS-01..04 | Phase 6 | System settings sync (GA-V3-B chốt) |
+| MIGRATE-01..05 | Phase 7 | Migration + smoke E2E (GA-V3-D part 2 chốt) |
 
-**Tổng:** 4 + 3 + 4 + 5 + 4 + 4 + 5 = **29 REQ-ID v1**. 100% coverage qua 7 phase.
+**Tổng:** 4 + 3 + 4 + 5 + 4 + 4 + 5 = **29 REQ-ID v1**. 100% coverage qua 7 phase. Full mapping chi tiết: `.planning/ROADMAP.md` Traceability section.
 
 ---
 

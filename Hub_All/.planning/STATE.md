@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: STARTED 2026-05-21 (`/gsd-new-milestone v3.0`). Defining requirements + roadmap. Phase numbering reset về 1 (D-V3-05). Next: `/gsd-discuss-phase 1` Multi-DB topology + per-hub Alembic.
+status: STARTED 2026-05-21 (`/gsd-new-milestone v3.0`). REQUIREMENTS.md (29 REQ-ID v1) + ROADMAP.md (7 phase reset numbering, traceability 100%) committed. v3.0-a EXIT GATE giữa Phase 3 và 4 (1 hub con + tổng + JWT SSO + golden path). Next: `/gsd-discuss-phase 1` Multi-DB topology + per-hub Alembic.
 last_updated: "2026-05-21T16:42:00.000Z"
 progress:
   total_phases: 7
@@ -24,7 +24,7 @@ progress:
 - **Phase:** Not started (defining requirements + roadmap)
 - **Plan:** —
 - **Status:** Defining requirements
-- **Last activity:** 2026-05-21 — Milestone v3.0 started (`/gsd-new-milestone v3.0`); phase numbering reset về 1; v2.0 phase dirs archived sang `.planning/milestones/v2.0-full-rag-rewrite/phases/`
+- **Last activity:** 2026-05-21 — Milestone v3.0 STARTED (`/gsd-new-milestone v3.0`). PROJECT.md updated (current milestone + 6 D-V3 LOCKED + R-V3-1..6 + E-V3-1..5). STATE.md reset. REQUIREMENTS.md viết mới 29 REQ-ID v1 (TOPO/FACTOR/SSO/SYNC/PROXY/SETTINGS/MIGRATE). ROADMAP.md viết mới 7 phase reset numbering + traceability 100% + v3.0-a/v3.0-b split. v2.0 phase dirs archived sang `.planning/milestones/v2.0-full-rag-rewrite/phases/`.
 
 ## Next Action
 
