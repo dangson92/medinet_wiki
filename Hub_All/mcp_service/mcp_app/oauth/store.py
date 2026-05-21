@@ -61,6 +61,7 @@ _SCHEMA_STATEMENTS = (
         downstream_jwt TEXT NOT NULL,
         downstream_refresh_token TEXT NOT NULL,
         user_payload TEXT NOT NULL,
+        family_id TEXT,
         expires_at INTEGER NOT NULL
     )
     """,
@@ -103,6 +104,10 @@ class OAuthStore:
         HIGH-09 migration: thêm cột csrf_token cho oauth_pending nếu DB cũ
         không có. SQLite không hỗ trợ ALTER TABLE ... ADD COLUMN IF NOT EXISTS
         — phải kiểm PRAGMA table_info trước.
+
+        HIGH-02 Plan 08 migration: thêm cột family_id (NULLABLE — back-compat
+        DB cũ; token cũ NULL coi như family riêng) cho oauth_tokens nếu DB
+        cũ không có.
         """
         if self._conn is None:
             # Đảm bảo thư mục cha tồn tại (bỏ qua khi :memory: hoặc không có dirname).
@@ -121,6 +126,16 @@ class OAuthStore:
             await self._conn.execute(
                 "ALTER TABLE oauth_pending ADD COLUMN csrf_token TEXT "
                 "NOT NULL DEFAULT ''"
+            )
+        # HIGH-02 Plan 08 migration — DB cũ chưa có family_id; coi như NULL
+        # (mỗi token 1 family riêng).
+        async with self._conn.execute(
+            "PRAGMA table_info(oauth_tokens)"
+        ) as cursor:
+            cols_tokens = {row[1] for row in await cursor.fetchall()}
+        if "family_id" not in cols_tokens:
+            await self._conn.execute(
+                "ALTER TABLE oauth_tokens ADD COLUMN family_id TEXT"
             )
         await self._conn.commit()
         logger.info("OAuthStore khởi tạo schema — 4 bảng sẵn sàng")
@@ -274,15 +289,25 @@ class OAuthStore:
         downstream_jwt: str,
         downstream_refresh_token: str,
         user_payload: dict,
-        expires_at: int,
+        family_id: str | None = None,
+        expires_at: int = 0,
     ) -> None:
-        """Lưu OAuth token kèm downstream JWT + refresh + user payload."""
+        """Lưu OAuth token kèm downstream JWT + refresh + user payload + family_id.
+
+        HIGH-02 (audit 2026-05-21): family_id gán lúc exchange_authorization_code
+        (token đầu tiên trong chain), giữ nguyên qua mỗi rotate. Khi reuse phát
+        hiện → delete_token_family xoá cả chain (RFC 6749 §10.4).
+
+        Default family_id=None — back-compat test cũ; provider mới truyền non-None.
+        expires_at default 0 chỉ cho phép default sau dấu phẩy của family_id —
+        caller production LUÔN truyền expires_at non-zero (kwarg).
+        """
         conn = self._require_conn()
         await conn.execute(
             "INSERT OR REPLACE INTO oauth_tokens "
             "(access_token, refresh_token, client_id, scopes, downstream_jwt, "
-            "downstream_refresh_token, user_payload, expires_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "downstream_refresh_token, user_payload, family_id, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 access_token,
                 refresh_token,
@@ -291,6 +316,7 @@ class OAuthStore:
                 downstream_jwt,
                 downstream_refresh_token,
                 json.dumps(user_payload),
+                family_id,
                 expires_at,
             ),
         )
@@ -299,7 +325,7 @@ class OAuthStore:
 
     @staticmethod
     def _row_to_token(row: tuple) -> dict:
-        """Map row oauth_tokens → dict."""
+        """Map row oauth_tokens → dict (9 cột — family_id HIGH-02 Plan 08)."""
         return {
             "access_token": row[0],
             "refresh_token": row[1],
@@ -308,12 +334,13 @@ class OAuthStore:
             "downstream_jwt": row[4],
             "downstream_refresh_token": row[5],
             "user_payload": json.loads(row[6]),
-            "expires_at": row[7],
+            "family_id": row[7],
+            "expires_at": row[8],
         }
 
     _TOKEN_COLUMNS = (
         "access_token, refresh_token, client_id, scopes, downstream_jwt, "
-        "downstream_refresh_token, user_payload, expires_at"
+        "downstream_refresh_token, user_payload, family_id, expires_at"
     )
 
     async def load_token(self, access_token: str) -> dict | None:
@@ -381,6 +408,10 @@ class OAuthStore:
         rotate (rowcount != 1) — caller PHẢI coi đây là refresh-token reuse và từ
         chối (CR-02, RFC 6749 §10.4). Khác update_oauth_token: định vị theo
         refresh_token + kiểm rowcount thay vì WHERE access_token đã hết hạn.
+
+        HIGH-02 Plan 08: KHÔNG đụng cột family_id — preserve nguyên giá trị
+        gán lúc exchange_authorization_code. Provider exchange_refresh_token
+        khi rowcount=0 sẽ gọi delete_token_family để thu hồi cả chain.
         """
         conn = self._require_conn()
         cursor = await conn.execute(
@@ -398,6 +429,25 @@ class OAuthStore:
             "DELETE FROM oauth_tokens WHERE access_token = ?", (access_token,)
         )
         await conn.commit()
+
+    async def delete_token_family(self, family_id: str) -> int:
+        """Xoá tất cả OAuth token thuộc cùng family (chain rotate cũ + mới).
+
+        HIGH-02 (audit 2026-05-21, RFC 6749 §10.4): refresh token reuse phát
+        hiện → AS PHẢI thu hồi cả family vì không phân biệt được kẻ tấn công
+        và client thật. Trả số dòng xoá (chỉ dùng để log).
+
+        Lưu ý: family_id NULL (DB cũ) → KHÔNG xoá (mỗi token NULL coi như
+        family riêng — back-compat). family_id chuỗi rỗng cũng treat như NULL.
+        """
+        if not family_id:
+            return 0
+        conn = self._require_conn()
+        cursor = await conn.execute(
+            "DELETE FROM oauth_tokens WHERE family_id = ?", (family_id,)
+        )
+        await conn.commit()
+        return cursor.rowcount
 
     # --- oauth_pending ---
 
