@@ -7,8 +7,12 @@ Verify:
    thành 3 field `request_id` / `user_id` / `hub_id` (default None — KHÔNG bỏ qua key).
 4. Tính idempotent — gọi `configure_structlog()` nhiều lần KHÔNG raise + KHÔNG nhân processor.
 
-Test 7 (cocoindex propagation — Task 2) thêm sau khi `documents_service.trigger_cocoindex_update`
-đổi sang structlog logger.
+NOTE: `structlog.testing.capture_logs()` bypass TOÀN BỘ processor chain → KHÔNG
+thấy được level/ts/msg/request_id. Để test full chain, capture stdout qua
+`capsys` + parse JSON (đây mới là render thực tế production).
+
+Test 7 + 8 (cocoindex propagation + integration boot lifespan) ở Task 2 sau khi
+`documents_service.trigger_cocoindex_update` đổi sang structlog.
 """
 from __future__ import annotations
 
@@ -32,45 +36,47 @@ ISO_8601_PATTERN = re.compile(
 )
 
 
-def _capture_one_entry(logger_kwargs: dict[str, object] | None = None) -> dict:
-    """Capture 1 structlog entry qua `structlog.testing.capture_logs`.
+def _emit_and_parse_last_json(
+    capsys: pytest.CaptureFixture[str], event: str = "test_event", **kwargs: object
+) -> dict[str, object]:
+    """Emit 1 log call qua structlog production chain → capture stdout → parse JSON.
 
-    capture_logs context manager bypass renderer cuối cùng — vẫn run các processor
-    upstream (merge_contextvars + _add_contextvars + add_log_level + TimeStamper).
-    Trả về dict event_dict cuối cùng (trước JSONRenderer).
+    Dùng capsys fixture của pytest. Structlog `PrintLoggerFactory` in stdout — capsys
+    bắt được. Trả entry JSON parse được (dòng cuối nếu nhiều entry).
     """
     configure_structlog()
     log = structlog.get_logger("test_logging_config")
-    with structlog.testing.capture_logs() as captured:
-        log.info("test_event", **(logger_kwargs or {}))
-    assert len(captured) == 1, f"Expect 1 captured entry, got {len(captured)}"
-    return captured[0]
+    log.info(event, **kwargs)
+    captured = capsys.readouterr().out.strip()
+    assert captured, "stdout trống — structlog KHÔNG emit"
+    last_line = captured.splitlines()[-1]
+    parsed = json.loads(last_line)
+    assert isinstance(parsed, dict)
+    return parsed
 
 
-def test_configure_structlog_emits_json_shape(capsys: pytest.CaptureFixture[str]) -> None:
-    """Test 1 — configure_structlog() rồi logger.info → stdout 1 dòng JSON parse được."""
-    configure_structlog()
-    log = structlog.get_logger("test_logging_config")
-    log.info("hello_world", custom_field=42)
-    captured_stdout = capsys.readouterr().out.strip()
-    # Mỗi entry = 1 dòng. Lấy dòng cuối (test trước có thể đã emit).
-    last_line = captured_stdout.splitlines()[-1] if captured_stdout else ""
-    entry = json.loads(last_line)
-    assert entry["event"] == "hello_world" or entry.get("msg") == "hello_world"
-    # structlog JSONRenderer default key "event"; PROJECT CONVENTIONS muốn "msg".
-    # Implementation rename event → msg qua `EventRenamer("msg")` processor.
-    assert entry.get("msg") == "hello_world"
+def test_configure_structlog_emits_json_shape(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test 1 — configure_structlog() → logger.info → stdout 1 dòng JSON đủ level/msg/ts."""
+    entry = _emit_and_parse_last_json(capsys, "hello_world", custom_field=42)
+    # PROJECT CONVENTIONS yêu cầu key "msg" (match Go log/slog), không phải structlog
+    # default "event". Implementation rename qua `EventRenamer("msg")` processor.
+    assert entry["msg"] == "hello_world"
     assert entry["level"] == "info"
-    assert ISO_8601_PATTERN.match(entry["ts"]), f"ts không phải ISO-8601 UTC: {entry['ts']}"
+    assert isinstance(entry["ts"], str)
+    assert ISO_8601_PATTERN.match(str(entry["ts"])), f"ts KHÔNG ISO-8601 UTC: {entry['ts']}"
     assert entry["custom_field"] == 42
 
 
-def test_contextvar_propagation_into_log() -> None:
-    """Test 2 — set request_id_var / user_id_var → log có field tương ứng."""
+def test_contextvar_propagation_into_log(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test 2 — set request_id_var / user_id_var → log entry có 2 field tương ứng."""
     token_r = request_id_var.set("rid-test-123")
     token_u = user_id_var.set("uid-abc-456")
     try:
-        entry = _capture_one_entry()
+        entry = _emit_and_parse_last_json(capsys)
         assert entry["request_id"] == "rid-test-123"
         assert entry["user_id"] == "uid-abc-456"
         assert entry["hub_id"] is None  # KHÔNG set → default None tường minh
@@ -79,53 +85,54 @@ def test_contextvar_propagation_into_log() -> None:
         user_id_var.reset(token_u)
 
 
-def test_contextvar_default_none_explicit() -> None:
-    """Test 3 — ContextVar default None → log entry có field None TƯỜNG MINH.
+def test_contextvar_default_none_explicit(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test 3 — ContextVar default → log entry có field None TƯỜNG MINH.
 
-    KHÔNG missing key — schema log ổn định cho Loki/Datadog query field exists.
+    KHÔNG missing key — schema log ổn định cho Loki/Datadog `request_id IS NULL`
+    query consistent.
     """
-    # Default state — KHÔNG set ContextVar nào.
-    entry = _capture_one_entry()
+    # Đảm bảo ContextVar default (test khác có thể leak nếu thiếu reset — phòng thủ).
+    request_id_var.set(None)
+    user_id_var.set(None)
+    hub_id_var.set(None)
+    entry = _emit_and_parse_last_json(capsys)
     assert entry["request_id"] is None
     assert entry["user_id"] is None
     assert entry["hub_id"] is None
 
 
-def test_configure_structlog_idempotent() -> None:
+def test_configure_structlog_idempotent(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Test 4 — gọi configure_structlog() nhiều lần KHÔNG raise + KHÔNG nhân processor."""
     configure_structlog()
     configure_structlog()
     configure_structlog()
     # Verify chain processor vẫn hoạt động — log entry vẫn parse được + có level/msg/ts.
-    entry = _capture_one_entry()
+    entry = _emit_and_parse_last_json(capsys, "idempotent_check")
     assert entry["level"] == "info"
-    assert "msg" in entry or "event" in entry  # capture_logs bypass EventRenamer
-    # capture_logs() bypass JSONRenderer + EventRenamer ⇒ event key vẫn còn.
-    # Cho stdout test "msg" — đã verify ở Test 1.
+    assert entry["msg"] == "idempotent_check"
+    assert ISO_8601_PATTERN.match(str(entry["ts"]))
 
 
 def test_contextvar_propagation_across_asyncio_task() -> None:
-    """Test 5 — `copy_context().run()` (FastAPI BackgroundTasks pattern) copy ContextVar.
-
-    Mô phỏng FastAPI BackgroundTasks dùng `contextvars.copy_context()` để snapshot
-    parent context khi tạo task con. Khi task con chạy, `request_id_var.get()` PHẢI
-    trả về giá trị parent đã set TRƯỚC khi tạo task.
+    """Test 5 — `asyncio.create_task()` copy context cha → child thấy giá trị parent.
 
     Đây chính là cơ chế propagate `request_id` xuống cocoindex flow log (Plan 10-01
-    Task 2 — `trigger_cocoindex_update` gọi qua FastAPI BackgroundTasks).
+    Task 2 — `trigger_cocoindex_update` chạy qua FastAPI BackgroundTasks dùng cùng
+    cơ chế asyncio Task context snapshot).
     """
     captured_value: list[str | None] = []
 
     async def child_task() -> None:
-        # Child đọc ContextVar — phải thấy giá trị parent set.
         captured_value.append(request_id_var.get())
 
     async def parent() -> None:
         token = request_id_var.set("rid-parent-async")
         try:
-            # asyncio.create_task() tự copy context — đây là cùng pattern FastAPI
-            # BackgroundTasks dùng (BackgroundTasks gọi `await coro()` trong context
-            # của request handler).
+            # asyncio.create_task() tự copy context (Python 3.11+ default).
             task = asyncio.create_task(child_task())
             await task
         finally:
@@ -138,11 +145,10 @@ def test_contextvar_propagation_across_asyncio_task() -> None:
 
 
 def test_contextvar_copy_context_run_isolated() -> None:
-    """Test 6 — `contextvars.copy_context().run()` chạy callable trong snapshot.
+    """Test 6 — `contextvars.copy_context().run()` snapshot + isolation parent.
 
-    Pattern dùng cho synchronous BackgroundTask (Starlette BackgroundTask sync mode):
-    parent snapshot context → run sync fn → fn đọc ContextVar thấy parent value.
-    Verify thêm: mutation trong child KHÔNG leak ra parent (isolation).
+    Pattern dùng cho synchronous BackgroundTask (Starlette BackgroundTask sync mode).
+    Verify: mutation trong child KHÔNG leak ra parent.
     """
     request_id_var.set("rid-parent-sync")
     captured: list[str | None] = []
@@ -155,7 +161,6 @@ def test_contextvar_copy_context_run_isolated() -> None:
     ctx = contextvars.copy_context()
     ctx.run(child_sync)
 
-    # Child đã thấy parent value khi vào snapshot.
     assert captured == ["rid-parent-sync"]
     # Parent KHÔNG bị child mutation (isolation).
     assert request_id_var.get() == "rid-parent-sync"

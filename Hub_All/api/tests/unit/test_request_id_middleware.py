@@ -5,21 +5,24 @@ Verify:
 - Client gửi `X-Request-Id: <bất kỳ>` → middleware echo nguyên trị (KHÔNG validate).
 - Sau `call_next`, middleware emit 1 structlog entry "request_completed" với
   field `{request_id, path, method, status, latency_ms}` — `latency_ms` >= 0 int.
-- ContextVar `request_id_var` được SET trước call_next (verify qua endpoint
-  đọc `request_id_var.get()` và bind vào response).
+- ContextVar `request_id_var` được SET trước call_next (endpoint đọc + bind vào response).
+
+NOTE: `structlog.testing.capture_logs()` bypass processor chain → KHÔNG kiểm được
+request_id/level/ts. Capture stdout qua capsys + parse JSON là cách verify full
+processor chain production.
 
 Test dùng `httpx.AsyncClient + ASGITransport` boot mini Starlette app chỉ với
 RequestIdMiddleware + 1 route GET / — KHÔNG cần DB/Redis.
 """
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import AsyncIterator
 
 import httpx
 import pytest
 import pytest_asyncio
-import structlog
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -63,7 +66,7 @@ async def test_missing_header_generates_uuid4(client: httpx.AsyncClient) -> None
     assert resp.status_code == 200
     rid = resp.headers.get(REQUEST_ID_HEADER)
     assert rid is not None, "Response thiếu header X-Request-Id"
-    assert UUID4_PATTERN.match(rid), f"X-Request-Id không phải UUID4: {rid!r}"
+    assert UUID4_PATTERN.match(rid), f"X-Request-Id KHÔNG phải UUID4: {rid!r}"
     body = resp.json()
     assert body["rid_state"] == rid
     assert body["rid_ctx"] == rid, "ContextVar request_id_var KHÔNG được set bởi middleware"
@@ -82,23 +85,46 @@ async def test_existing_header_echoed_verbatim(client: httpx.AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
-async def test_request_completed_log_emitted(client: httpx.AsyncClient) -> None:
-    """Test — sau call_next, middleware emit log entry 'request_completed' đủ field."""
-    with structlog.testing.capture_logs() as captured:
-        resp = await client.get("/")
+async def test_request_completed_log_emitted(
+    client: httpx.AsyncClient, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Test — sau call_next, middleware emit log entry 'request_completed' đủ field.
+
+    Verify qua capsys + parse JSON stdout (production processor chain — bypass
+    KHÔNG được dùng vì cần check field request_id từ ContextVar merge).
+    """
+    # Clear bất kỳ stdout pending từ fixture/test khác.
+    capsys.readouterr()
+
+    resp = await client.get("/")
     assert resp.status_code == 200
-
-    # Lọc entry "request_completed" — middleware emit, các log khác (nếu có) bỏ qua.
-    entries = [e for e in captured if e.get("event") == "request_completed"]
-    assert len(entries) >= 1, (
-        f"KHÔNG thấy log 'request_completed' (captured={[e.get('event') for e in captured]})"
-    )
-    entry = entries[-1]
-
     rid = resp.headers[REQUEST_ID_HEADER]
+
+    captured_stdout = capsys.readouterr().out.strip()
+    assert captured_stdout, "Middleware KHÔNG emit log gì lên stdout"
+
+    # Tìm dòng "request_completed" — middleware emit, có thể có log khác trộn.
+    matching: list[dict] = []
+    for line in captured_stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("msg") == "request_completed":
+            matching.append(obj)
+
+    assert matching, (
+        f"KHÔNG thấy log 'request_completed' trong stdout. "
+        f"Lines: {captured_stdout.splitlines()}"
+    )
+    entry = matching[-1]
     assert entry["request_id"] == rid
     assert entry["path"] == "/"
     assert entry["method"] == "GET"
     assert entry["status"] == 200
     assert isinstance(entry["latency_ms"], int)
     assert entry["latency_ms"] >= 0
+    assert entry["level"] == "info"
