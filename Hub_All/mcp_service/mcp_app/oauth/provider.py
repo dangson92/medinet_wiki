@@ -55,6 +55,70 @@ _AUTH_CODE_TTL = 600
 # OAuthStore.cleanup_expired. WR-02: complete_authorization phải kiểm hạn.
 _PENDING_TTL = 600
 
+# Whitelist host cho redirect_uri DCR — khớp _DEFAULT_REDIRECT_URIS của
+# api/app/services/mcp_oauth_service.py (Claude web + MCP Inspector).
+# HIGH-01 (audit 2026-05-21): DCR mở cho client_id/secret nhưng redirect_uri
+# PHẢI validate — code interception attack nếu attacker đăng ký redirect_uri
+# trỏ về domain mình. PKCE bảo vệ một phần nhưng không đủ khi attacker có
+# verifier của chính mình.
+_ALLOWED_REDIRECT_HOSTS = frozenset(
+    {
+        "claude.ai",
+        "inspector.modelcontextprotocol.io",
+        "localhost",
+        "127.0.0.1",
+    }
+)
+# Suffix wildcard host — host.endswith(f".{suffix}") match subdomain.
+_ALLOWED_REDIRECT_HOST_SUFFIXES = (".claude.ai", ".modelcontextprotocol.io")
+
+
+def _is_loopback_host(host: str) -> bool:
+    """True nếu host là loopback (cho phép scheme http)."""
+    return host in ("localhost", "127.0.0.1")
+
+
+def _validate_redirect_uri(uri: AnyUrl) -> None:
+    """Validate redirect_uri DCR — raise OAuthStoreError nếu không hợp lệ.
+
+    Quy tắc (HIGH-01):
+    - scheme ∈ {"http", "https"}.
+    - scheme == "http" CHỈ khi host là loopback (localhost / 127.0.0.1).
+    - host nằm trong _ALLOWED_REDIRECT_HOSTS HOẶC kết thúc bằng
+      _ALLOWED_REDIRECT_HOST_SUFFIXES.
+    KHÔNG log giá trị URL thô — chỉ log host + scheme + lý do reject.
+    """
+    scheme = (uri.scheme or "").lower()
+    host = (uri.host or "").lower()
+    if scheme not in ("http", "https"):
+        logger.warning(
+            "register_client reject redirect_uri scheme=%s (chỉ http/https)",
+            scheme,
+        )
+        raise OAuthStoreError(
+            f"redirect_uri scheme '{scheme}' không hợp lệ (cần http/https)"
+        )
+    if scheme == "http" and not _is_loopback_host(host):
+        logger.warning(
+            "register_client reject http redirect_uri host=%s (chỉ loopback)",
+            host,
+        )
+        raise OAuthStoreError(
+            f"redirect_uri scheme http chỉ được dùng cho loopback, host={host}"
+        )
+    if host in _ALLOWED_REDIRECT_HOSTS:
+        return
+    if any(host.endswith(suffix) for suffix in _ALLOWED_REDIRECT_HOST_SUFFIXES):
+        return
+    logger.warning(
+        "register_client reject redirect_uri host=%s scheme=%s (whitelist miss)",
+        host,
+        scheme,
+    )
+    raise OAuthStoreError(
+        f"redirect_uri host '{host}' không nằm trong whitelist"
+    )
+
 
 class MedinetOAuthProvider(
     OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]
@@ -157,11 +221,18 @@ class MedinetOAuthProvider(
             return None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        """Lưu client DCR. DCR mở (D-01) — KHÔNG từ chối client."""
+        """Lưu client DCR. DCR mở (D-01) — KHÔNG từ chối client_id, NHƯNG redirect_uri PHẢI whitelist.
+
+        HIGH-01 (audit 2026-05-21): code interception attack nếu attacker đăng ký
+        redirect_uri trỏ về domain mình. PKCE bảo vệ một phần nhưng không đủ khi
+        attacker tự sinh PKCE pair từ đầu (attacker có verifier).
+        """
         client_id = client_info.client_id
         if client_id is None:
             # SDK sinh client_id trước khi gọi register_client; phòng vệ thêm.
             raise OAuthStoreError("register_client thiếu client_id")
+        for redirect_uri in client_info.redirect_uris:
+            _validate_redirect_uri(redirect_uri)
         await self._store.save_client(
             client_id, client_info.model_dump(mode="json")
         )
@@ -275,9 +346,26 @@ class MedinetOAuthProvider(
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> AuthorizationCode | None:
-        """Đọc authorization code. None nếu không tồn tại / hết hạn."""
+        """Đọc authorization code. None nếu không tồn tại / hết hạn / khác client.
+
+        CRIT-03 sub-fix 2 (audit 2026-05-21): kiểm record.client_id == client.client_id —
+        chặn nhánh load → exchange của chain attack (attacker A đoán code của victim B,
+        SDK gọi load_authorization_code(client=A, code_của_B) → trả AuthorizationCode
+        bind client_id=B; SDK không phân biệt). Trả None thay vì raise để giữ semantics
+        "code không tồn tại" — không leak thông tin attacker đoán đúng code.
+        """
         record = await self._store.load_auth_code(authorization_code)
         if record is None:
+            return None
+        if record["client_id"] != client.client_id:
+            # CRIT-03: code phát cho client khác — trả None như "không tồn tại"
+            # (không raise để không leak thông tin code đoán đúng).
+            logger.warning(
+                "load_authorization_code client_id mismatch — "
+                "record_client_id=%s requesting_client_id=%s",
+                record["client_id"],
+                client.client_id,
+            )
             return None
         if record["expires_at"] < self._now():
             logger.info("MedinetOAuthProvider authorization code expired")
@@ -307,6 +395,23 @@ class MedinetOAuthProvider(
         if record is None:
             raise OAuthStoreError(
                 "Authorization code không tồn tại hoặc đã dùng"
+            )
+        # CRIT-03 (audit 2026-05-21): code phát cho client A — chặn client B
+        # exchange. Chain attack: SDK ClientAuthenticator verify B:secret_B OK,
+        # rồi exchange với code của A → trước fix, SDK không kiểm mismatch →
+        # B nhận token bind danh tính của A (cross-client code exchange).
+        # Kết hợp với _BasicAuthFormShim (HIGH-08) — shim inject client_id từ
+        # Basic header, không kiểm mismatch ở chỗ này → HIGH-08 hết ý nghĩa
+        # khai thác sau khi fix CRIT-03.
+        if record["client_id"] != client.client_id:
+            logger.warning(
+                "exchange_authorization_code client_id mismatch — "
+                "record_client_id=%s requesting_client_id=%s",
+                record["client_id"],
+                client.client_id,
+            )
+            raise OAuthStoreError(
+                "Authorization code không thuộc client này"
             )
         # Code đã bị xoá nguyên tử — nếu save_token lỗi, code KHÔNG còn để replay.
         # Kiểm hạn TẠI exchange: load_authorization_code đã kiểm expires_at,
@@ -370,6 +475,20 @@ class MedinetOAuthProvider(
         record = await self._store.load_token_by_refresh(refresh_token.token)
         if record is None:
             raise OAuthStoreError("Refresh token không tồn tại hoặc đã dùng")
+        # HIGH-08 (audit 2026-05-21): defense-in-depth — refresh_token đối tượng
+        # SDK truyền có client_id; record từ store có client_id. SDK thường
+        # ràng buộc đúng ở route /token, nhưng phòng vệ thêm tại provider
+        # (RFC 6749 §4.1.3 / §6).
+        if record["client_id"] != client.client_id:
+            logger.warning(
+                "exchange_refresh_token client_id mismatch — "
+                "record_client_id=%s requesting_client_id=%s",
+                record["client_id"],
+                client.client_id,
+            )
+            raise OAuthStoreError(
+                "Refresh token không thuộc client này"
+            )
 
         new_access = self._new_opaque()
         new_refresh = self._new_opaque()
@@ -428,13 +547,32 @@ class MedinetOAuthProvider(
 
         SDK truyền AccessToken hoặc RefreshToken — xoá record tương ứng. Xoá theo
         record nên thu hồi đồng thời cả access lẫn refresh của cùng token.
+
+        HIGH-07 (audit 2026-05-21, RFC 7009 §2.1+§2.2): "token was issued to
+        the client making the revocation request" — kiểm record.client_id ==
+        token.client_id; mismatch → silent no-op (KHÔNG xoá, KHÔNG raise) per
+        §2.2 ("invalid tokens do not cause an error response").
         """
         if isinstance(token, RefreshToken):
             record = await self._store.load_token_by_refresh(token.token)
         else:
             record = await self._store.load_token(token.token)
-        if record is not None:
-            await self._store.delete_token(record["access_token"])
+        if record is None:
+            logger.info(
+                "MedinetOAuthProvider revoke token — không tìm thấy record, "
+                "client_id=%s",
+                token.client_id,
+            )
+            return
+        if record["client_id"] != token.client_id:
+            logger.warning(
+                "revoke_token client_id mismatch — silent no-op "
+                "record_client_id=%s requesting_client_id=%s",
+                record["client_id"],
+                token.client_id,
+            )
+            return
+        await self._store.delete_token(record["access_token"])
         logger.info(
             "MedinetOAuthProvider revoke token, client_id=%s", token.client_id
         )
