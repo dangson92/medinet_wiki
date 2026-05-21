@@ -29,14 +29,21 @@ def test_cocoindex_app_registered() -> None:
 
 
 def test_cocoindex_app_name_snake_case() -> None:
-    """R5 + P2: cocoindex_app name snake_case 'medinet_wiki_ingest'."""
+    """R5 + P2: cocoindex_app name snake_case `medinet_<hub>_ingest`.
+
+    v3.0 Plan 01-04 TOPO-03 — App name resolve per-hub qua Settings.hub_name.
+    Default HUB_NAME=central (conftest `_env` autouse) → name='medinet_central_ingest'.
+    M2 hard-code `medinet_wiki_ingest` đã bỏ — Plan 01-04 (BLOCKER 4 fix).
+    """
     from app.rag.flow import cocoindex_app
 
     # Cocoindex 1.0.3 App instance expose .name hoặc ._name attribute.
     name = getattr(cocoindex_app, "name", None) or getattr(
         cocoindex_app, "_name", None
     )
-    assert name == "medinet_wiki_ingest", f"App name sai: {name!r}"
+    # Default HUB_NAME=central (tests/conftest.py `_env` autouse stub) →
+    # cocoindex_app.name = 'medinet_central_ingest' (v3.0 Plan 01-04).
+    assert name == "medinet_central_ingest", f"App name sai: {name!r}"
 
 
 def test_cocoindex_app_is_app_class() -> None:

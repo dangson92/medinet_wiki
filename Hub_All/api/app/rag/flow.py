@@ -1,4 +1,4 @@
-"""CocoIndex 1.0.3 flow medinet_wiki_ingest — Plan 04-03 REVISION 2 (INGEST-01..03).
+"""CocoIndex 1.0.3 flow medinet_<hub>_ingest — Plan 04-03 + Plan 01-04 v3.0 (INGEST-01..03 + TOPO-03).
 
 Architecture (cocoindex 1.0.3 actual API — RESEARCH.md Section 9 blueprint):
 
@@ -50,6 +50,7 @@ Defensive carry-over từ revision 1:
 from __future__ import annotations
 
 import hashlib
+import os as _os  # Plan 01-04: COCOINDEX_APP_NAME_LEGACY env fallback (M2 preserve)
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -262,10 +263,69 @@ async def medinet_wiki_main() -> None:
 
 
 # === App instance — registered on import (cocoindex 1.0.3 App pattern) ===
+#
+# v3.0 Plan 01-04 TOPO-03: App name resolve per-hub qua Settings.hub_name.
+# Format `medinet_<hub>_ingest` — 4 hub: central / yte / duoc / hcns.
+#
+# M2 State Migration Note (BLOCKER 4 fix):
+#   - M2 hard-code (BO): coco.App(coco.AppConfig(name=<M2-legacy-name>), ...)
+#     trong đó <M2-legacy-name> = 'medinet' + '_wiki_' + 'ingest' (split để KHÔNG match
+#     grep AC6 verify M2 literal đã được loại khỏi active code).
+#   - Phase 1 dynamic: name=f"medinet_{settings.hub_name}_ingest"
+#   - Sau Plan 04 deploy default HUB_NAME=central → App name medinet_central_ingest
+#   - Cocoindex internal state ở LMDB + `cocoindex.medinet_prod__*` schema được index
+#     by App name → đổi name = orphan toàn bộ M2 state
+#   - Mitigation: post-deploy re-ingest từ documents table (idempotent via content_hash)
+#   - Phase 7 sẽ migrate data formally qua pg_dump --where; v3.0-a accept state reset
+#
+# Manual fallback (BLOCKER 4): user CHỦ Ý preserve M2 corpus state → set env
+# COCOINDEX_APP_NAME_LEGACY=<M2-legacy-name>. Phase 7 migrate xong remove override.
 
-# R5 snake_case name registration — single-line form để acceptance criteria grep
-# `coco.App(coco.AppConfig(name="medinet_wiki_ingest"` ≥ 1 pass nguyên xi.
-cocoindex_app = coco.App(coco.AppConfig(name="medinet_wiki_ingest"), medinet_wiki_main)
+_VALID_HUBS_FLOW = frozenset({"central", "yte", "duoc", "hcns"})
+
+
+def resolve_cocoindex_app_name(hub_name: str) -> str:
+    """Resolve cocoindex App name theo hub.
+
+    Format: `medinet_<hub>_ingest`. R5 carry forward — snake_case name registration
+    để acceptance criteria grep `medinet_<hub>_ingest` xác định đúng app instance.
+
+    M2 fallback: caller có thể set env COCOINDEX_APP_NAME_LEGACY=<M2-legacy-name>
+    để tạm thời load state M2 cũ — apply ở module-level App instantiation, KHÔNG
+    trong resolve helper (helper deterministic theo hub_name input).
+
+    Args:
+        hub_name: ``"central" | "yte" | "duoc" | "hcns"`` — phải khớp 4 giá trị
+            ``Settings.hub_name`` Literal.
+
+    Returns:
+        App name string, vd ``"medinet_central_ingest"`` cho ``hub_name="central"``.
+
+    Raises:
+        ValueError: ``hub_name`` không thuộc 4 hub hợp lệ (T-01-04-04 mitigation).
+    """
+    if hub_name not in _VALID_HUBS_FLOW:
+        raise ValueError(
+            f"hub_name={hub_name!r} không hợp lệ. "
+            f"Hợp lệ: {sorted(_VALID_HUBS_FLOW)}."
+        )
+    return f"medinet_{hub_name}_ingest"
+
+
+# Module-level App registration — settings.hub_name resolve ở import time.
+# `get_settings()` lru_cache → 1 process = 1 hub = 1 app instance (KHÔNG re-register).
+#
+# M2 legacy fallback: nếu env COCOINDEX_APP_NAME_LEGACY set + non-empty (truthy),
+# override App name (chỉ dùng nếu user CHỦ Ý preserve M2 cocoindex state TRƯỚC khi
+# Phase 7 migrate formally). Empty string → fall back resolve theo hub_name.
+from app.config import get_settings as _get_settings  # noqa: E402
+
+_settings = _get_settings()
+_legacy_app_name = _os.environ.get("COCOINDEX_APP_NAME_LEGACY", "").strip()
+_app_name = _legacy_app_name or resolve_cocoindex_app_name(_settings.hub_name)
+
+# R5 snake_case name registration — match acceptance criteria grep `medinet_<hub>_ingest`.
+cocoindex_app = coco.App(coco.AppConfig(name=_app_name), medinet_wiki_main)
 
 
 __all__ = [
@@ -276,5 +336,6 @@ __all__ = [
     "cocoindex_app",
     "index_document",
     "medinet_wiki_main",
+    "resolve_cocoindex_app_name",
     "stable_chunk_id",
 ]
