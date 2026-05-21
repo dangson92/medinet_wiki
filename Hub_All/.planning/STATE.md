@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: Phase 1 PLANNED 2026-05-21. 5 plans / 3 waves, 4 REQ TOPO-01..04 coverage 100%. Plan checker iteration 2/3 PASSED (4 blocker + 5 warning fixed, 3 skip). [BLOCKING] schema push task gated SAFE (Option B `make hub-init` preserve M2; Option A reset only with env confirm). Next: `/gsd-execute-phase 1` Multi-DB topology execution.
-last_updated: "2026-05-21T17:30:00.000Z"
+status: Phase 1 EXECUTING 2026-05-21. 5 plans / 3 waves wave-based execution. Wave 1 (Plans 01+02) parallel worktree → Wave 2 (Plans 03+04) parallel worktree → Wave 3 (Plan 05) sequential với [BLOCKING] schema push. Default Option B `make hub-init` preserve M2 central volume.
+last_updated: "2026-05-21T17:35:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 0
