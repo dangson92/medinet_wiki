@@ -1,0 +1,43 @@
+[project]
+name = "medinet-eval"
+version = "0.1.0"
+description = "Eval framework + quality gate ≥75% top-3 cho Medinet Wiki M2 RAG (Phase 9)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "httpx>=0.28,<1",
+    "psycopg[binary]>=3.1,<4",
+    "python-dotenv>=1.0,<2",
+    "tabulate>=0.9,<1",
+    "redis>=5.0,<6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.24,<1",
+    "ruff>=0.6,<1",
+    "respx>=0.21,<1",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eval*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "critical: critical-path eval test (CI gate)",
+    "smoke: smoke regression < 60s",
+]
