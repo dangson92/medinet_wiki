@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     app_port: int = 8180
     log_level: str = "info"
     log_format: Literal["json", "console"] = "json"
+
+    # Hub identity — v3.0 TOPO-04 (Phase 1 multi-DB topology).
+    # central = aggregator (medinet_central DB), yte/duoc/hcns = sub-hub
+    # (medinet_hub_<name> DB cùng instance). Process biết mình deploy
+    # hub nào để chọn DSN + cocoindex flow name (Plan 04) + Alembic
+    # target (Plan 03). Default "central" giữ M2 backward-compat.
+    hub_name: Literal["central", "yte", "duoc", "hcns"] = "central"
 
     # Postgres — KHÔNG default (bắt buộc qua env)
     database_url: str = Field(...)
@@ -148,8 +155,88 @@ class Settings(BaseSettings):
                     )
         return v
 
+    @model_validator(mode="after")
+    def _enforce_hub_dsn_match(self) -> Settings:
+        """E-V3-3 enforce — `hub_name` phải khớp database name trong DSN.
+
+        Chống: deploy với `HUB_NAME=yte` nhưng `DATABASE_URL` trỏ
+        `medinet_hub_duoc` (cross-hub) hoặc tệ hơn `medinet_central`
+        (hub con đọc/ghi aggregated data) → process truy cập sai data
+        hub. Fail-fast ở startup, KHÔNG defer runtime.
+
+        Quy ước DSN suffix:
+        - `hub_name == "central"`  → DSN phải kết thúc `/medinet_central`
+        - `hub_name == "<hub>"`    → DSN phải kết thúc `/medinet_hub_<hub>`
+
+        Cho phép DSN query string (`?option=value`, vd `?sslmode=require`)
+        — strip trước khi check suffix.
+
+        Threat model cover: T-01-02-01 (Spoofing), T-01-02-02 (Info Disclosure),
+        T-01-02-03 (EoP).
+        """
+        # Strip query string nếu có
+        dsn_path = self.database_url.split("?", 1)[0].rstrip("/")
+        expected_db = (
+            "medinet_central"
+            if self.hub_name == "central"
+            else f"medinet_hub_{self.hub_name}"
+        )
+        if not dsn_path.endswith(f"/{expected_db}"):
+            actual_db = dsn_path.rsplit("/", 1)[-1]
+            raise ValueError(
+                f"DSN mismatch hub_name: HUB_NAME={self.hub_name!r} yêu cầu "
+                f"database {expected_db!r} nhưng DATABASE_URL trỏ "
+                f"{actual_db!r}. E-V3-3 enforce — KHÔNG fallback central."
+            )
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:
     """Singleton settings instance — cache để tránh re-parse env mỗi lần gọi."""
     return Settings()
+
+
+def resolve_database_url(base_dsn: str, hub_name: str) -> str:
+    """Resolve DSN central → DSN hub con bằng cách thay tên database cuối path.
+
+    Dùng cho:
+    - `make migrate-all` loop apply Alembic per-hub (Plan 03 consume qua
+      `-x hub=<name>`).
+    - `make hub-init HUB=<name>` dynamic add hub (Plan 05).
+
+    Logic:
+    - `hub_name == "central"` → trả nguyên `base_dsn` (no-op).
+    - `hub_name == "<hub>"`   → thay segment `medinet_central` thành
+      `medinet_hub_<hub>`.
+
+    Preserve query string (`?option=value`) nếu có.
+
+    Args:
+        base_dsn: DSN trỏ `medinet_central`
+            (vd ``postgresql+asyncpg://u:p@h:5432/medinet_central``).
+        hub_name: ``"central" | "yte" | "duoc" | "hcns"``.
+
+    Returns:
+        DSN đã resolve — `medinet_central` thay bằng
+        `medinet_hub_<name>` (nếu `hub_name != "central"`).
+
+    Raises:
+        ValueError: `base_dsn` không kết thúc bằng `/medinet_central`
+            → caller dùng sai input (T-01-02-04 Tampering mitigation).
+    """
+    if hub_name == "central":
+        return base_dsn
+    # Strip query string trước khi thay segment để giữ nguyên query.
+    if "?" in base_dsn:
+        path_part, query_part = base_dsn.split("?", 1)
+        query_suffix = f"?{query_part}"
+    else:
+        path_part, query_suffix = base_dsn, ""
+    if not path_part.endswith("/medinet_central"):
+        raise ValueError(
+            f"base_dsn phải kết thúc bằng '/medinet_central' để resolve "
+            f"per-hub; nhận: {path_part!r}"
+        )
+    new_path = path_part[: -len("medinet_central")] + f"medinet_hub_{hub_name}"
+    return new_path + query_suffix
