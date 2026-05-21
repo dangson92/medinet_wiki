@@ -1,5 +1,7 @@
 # Medinet Wiki API — dev tasks
-.PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov clean migrate-up migrate-down migrate-check migrate-history cocoindex-setup
+.PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov clean \
+        migrate-up migrate-down migrate-check migrate-history cocoindex-setup \
+        migrate-all migrate-status
 
 UV ?= uv
 
@@ -49,6 +51,32 @@ migrate-check:
 
 migrate-history:
 	uv run alembic history --verbose
+
+# === Per-hub Alembic migration (Phase 1 v3.0 TOPO-02) ===
+# Yeu cau prereq: docker compose up -d postgres (Phase 1 Plan 01 — 4 DB da tao)
+# + .env DATABASE_URL tro medinet_central + HUB_NAME=central.
+# Tu loop 4 hub: central + yte + duoc + hcns.
+# Moi hub apply tuan tu qua `alembic -x hub=<name> upgrade head`.
+# Sau loop goi scripts/alembic-head-check.sh verify head SHA match 4 DB
+# (R-V3-3 drift mitigation).
+
+HUBS_ALL ?= central yte duoc hcns
+
+migrate-all:
+	@echo "[migrate-all] Apply Alembic upgrade head tuan tu 4 DB..."
+	@for hub in $(HUBS_ALL); do \
+		echo "[migrate-all] === hub=$$hub ==="; \
+		$(UV) run alembic -x hub=$$hub upgrade head || exit 1; \
+	done
+	@echo "[migrate-all] DONE. Verify head SHA match qua scripts/alembic-head-check.sh"
+	@bash scripts/alembic-head-check.sh
+
+migrate-status:
+	@echo "[migrate-status] Show alembic current per hub..."
+	@for hub in $(HUBS_ALL); do \
+		echo "[migrate-status] --- hub=$$hub ---"; \
+		$(UV) run alembic -x hub=$$hub current || echo "  (FAIL)"; \
+	done
 
 # === Cocoindex setup (Phase 4 Plan 04-01) ===
 # Chạy MỘT LẦN sau `make migrate-up`. Idempotent — chạy lại OK sau Plan 04-02 (flow.py).
