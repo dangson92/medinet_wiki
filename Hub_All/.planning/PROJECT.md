@@ -1,12 +1,12 @@
 # Medinet Wiki — Hub_All
 
 **Mã dự án:** MEDWIKI
-**Giai đoạn:** Post-v2.0 closeout (M2 shipped 2026-05-21) — chờ trigger `/gsd-new-milestone v3.0` Multi-Hub Split
-**Shipped:** **v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)** ✅ 2026-05-21 (13 phase / ~75 plan / 38 REQ-ID — xem `.planning/milestones/v2.0-full-rag-rewrite/`)
-**Next Milestone:** **v3.0 — Multi-Hub Split** (LOCKED 4 D-V3 + 4 GA-V3 open — seed `.planning/seeds/v3.0-multi-hub-split.md`)
-**Defer:** v4.0 = Production Hardening + Advanced RAG (OCR VN, streaming SSE, cross-dim swap, coverage >80%, ...)
+**Giai đoạn:** **v3.0 Multi-Hub Split STARTED** 2026-05-21 — defining requirements + roadmap
+**Current Milestone:** **v3.0 — Multi-Hub Split** (started 2026-05-21, phase numbering reset về 1, granularity large, mode YOLO)
+**Shipped:** **v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)** ✅ 2026-05-21 (13 phase / ~75 plan / 38 REQ-ID — archive `.planning/milestones/v2.0-full-rag-rewrite/`)
+**Defer:** v4.0 = Production Hardening + Advanced RAG (OCR VN, streaming SSE, cross-dim swap, coverage >80%, ...). v4.1+ = Hybrid BM25 + reranker + local embedding (SEED-001) + version history & concurrent editing.
 **Abandoned:** v1.0 = RAG Quality with Docling (2026-05-13 — xem `MILESTONES.md`)
-**Ngày khởi tạo GSD:** 2026-04-28 · **Pivot 2:** 2026-05-13 · **v2.0 shipped:** 2026-05-21
+**Ngày khởi tạo GSD:** 2026-04-28 · **Pivot 2:** 2026-05-13 · **v2.0 shipped:** 2026-05-21 · **v3.0 started:** 2026-05-21
 
 ---
 
@@ -22,7 +22,37 @@ Medinet Wiki là hệ thống quản lý tri thức nội bộ đa-Hub (3 Hub: y
 
 Core value không đổi qua các milestone — chỉ cách triển khai thay đổi (Go-native → Docling sidecar → CocoIndex + FastAPI). Khi RAG chất lượng ổn định, các milestone sau (Multi-subdomain SPA, MCP Server, AI Post) mới có giá trị thực tế.
 
-## Current State: v2.0 SHIPPED ✅ 2026-05-21
+## Current Milestone: v3.0 Multi-Hub Split
+
+**Goal:** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL (1 DB `medinet_central` + `WHERE hub_id`) sang **multi-tenancy PHYSICAL** — mỗi hub con có **process + Postgres database riêng cùng 1 instance**, hub tổng đóng vai trò aggregator nhận chunks + vector từ hub con (sync 1 chiều) để search cross-hub tập trung. URL subpath `wiki.domain.com/<ten_hub>`.
+
+**Target features (7 phase, ~30 REQ-ID, phase numbering reset về 1):**
+
+- **Phase 1 — Multi-DB topology + per-hub Alembic:** DB factory `medinet_hub_<name>` cùng instance, Alembic migration set per-hub, cocoindex flow naming per-hub (`medinet_<hub>_ingest`).
+- **Phase 2 — Hub-con codebase factor:** 1 codebase deploy được nhiều lần với env `HUB_NAME=<name>`; strip system settings router (rag-config / api-keys / hub-registry) khi `HUB_NAME != "central"`.
+- **Phase 3 — Auth SSO + hub_ids trong JWT (GA-V3-A):** JWT keypair share giữa central + sub-hub qua JWKS endpoint, refresh token blacklist Redis chung, E4 reinforced.
+- **Phase 4 — Cross-hub data sync (D-V3-02):** Chunks + vector push từ hub con → `medinet_central.chunks` (cocoindex target thứ 2 / logical replication / outbox + worker — chốt ở `/gsd-discuss-phase 4`); idempotent on retry; checksum verify chống drift.
+- **Phase 5 — Reverse proxy + frontend subpath (GA-V3-C):** Caddy route `wiki.domain.com/<hub>/api/*` → upstream container đúng, frontend detect prefix → build URL, **D6 expire chính thức** (frontend rewrite được phép).
+- **Phase 6 — System settings sync (GA-V3-B):** Hub con đọc rag-config / api-keys từ central qua HTTP pull on-demand + Redis cache 60s + pub/sub invalidate (< 30s propagate).
+- **Phase 7 — Migration + smoke E2E (GA-V3-D):** Split `medinet_central` cũ → DB hub con (blue/green per-hub), MCP service re-point central, full smoke 3 hub con + tổng healthy.
+
+**Key context (LOCKED 2026-05-21, không đảo chiều mà không re-discuss):**
+
+- **D-V3-01:** Postgres database riêng cùng instance (1 instance, N database — `medinet_central` + `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`). Bỏ phương án "schema riêng" (đụng R5/P7) và "instance riêng" (ops × N).
+- **D-V3-02:** Dataflow hub con → tổng = **chunks + vector denormalized** sync 1 chiều. Hub tổng KHÔNG re-embed. Cost: storage 2× / benefit: cross-hub 1 DB nhanh, không federated HTTP fan-out.
+- **D-V3-03:** Milestone-level scoping (KHÔNG nhét vào M2 dưới dạng 1 phase đơn lẻ — đã shipped v2.0 trước).
+- **D-V3-04:** M2 closeout precondition — Phase 9 gate verdict (HUMAN UAT) + retrospective hoàn tất TRƯỚC v3.0 start. ✓ 2026-05-21: M2 100% COMPLETE, HUMAN UAT defer track standalone (KHÔNG block v3.0 start theo user trigger).
+
+**Open gray areas (chốt ở `/gsd-discuss-phase` tương ứng):**
+
+- **GA-V3-A** (Phase 3): JWT shared keypair vs JWKS endpoint vs cookie domain `.medinet.vn` cho SSO.
+- **GA-V3-B** (Phase 6): rag-config sync — HTTP pull / push webhook / env var local (trade-off latency vs simplicity vs consistency).
+- **GA-V3-C** (Phase 5): Frontend prefix detect — 1 build dùng chung detect từ pathname vs build per-hub `VITE_HUB_NAME=yte`. D6 expire formally.
+- **GA-V3-D** (Phase 4 + 7): Sync mechanism (cocoindex target thứ 2 / Postgres logical replication / outbox + worker) + migration strategy (`pg_dump` per `hub_id` vs snapshot + replay cocoindex flow).
+
+Seed full reference: `.planning/seeds/v3.0-multi-hub-split.md` (4 R-V3 risk + 4 E-V3 exit criteria preview).
+
+## v2.0 SHIPPED ✅ 2026-05-21 (Carry-over context)
 
 **Status:** M2 v2.0 100% COMPLETE — 13 phase / ~75 plan / 38 REQ-ID done. Tag git `v2.0` (annotated, local — push remote defer user trigger).
 
@@ -45,27 +75,19 @@ Core value không đổi qua các milestone — chỉ cách triển khai thay đ
 
 Full details: `.planning/milestones/v2.0-full-rag-rewrite/ROADMAP.md`
 
-## Next Milestone Goals: v3.0 Multi-Hub Split
-
-**Trigger:** `/gsd-new-milestone v3.0` sau khi user verify v2.0 closeout (HUMAN UAT Phase 9 gate verdict + retrospective).
-
-**Goal:** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL (1 DB `medinet_central` + `WHERE hub_id`) sang **multi-tenancy PHYSICAL** — mỗi hub con có **process + Postgres database riêng cùng 1 instance**, hub tổng đóng vai trò aggregator nhận chunks + vector từ hub con (sync 1 chiều) để search cross-hub tập trung. URL subpath `wiki.domain.com/<ten_hub>`.
-
-**LOCKED architectural decisions (2026-05-21):**
-- **D-V3-01:** Postgres database riêng cùng instance (`medinet_central` + `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`). Backup chung, network đơn giản, cocoindex flow ngắn.
-- **D-V3-02:** Dataflow hub con → tổng = **chunks + vector denormalized** sync 1 chiều (cocoindex target thứ 2 / Postgres logical replication / outbox + worker — chốt ở `/gsd-discuss-phase`). Hub tổng KHÔNG re-embed.
-- **D-V3-03:** Milestone-level scoping — KHÔNG nhét vào M2 dưới dạng 1 phase.
-- **D-V3-04:** M2 closeout precondition — Phase 9 gate ≥75% + retrospective phải xong TRƯỚC v3.0 start.
-
-**Open questions (chốt ở `/gsd-discuss-milestone v3.0`):**
-- **GA-V3-A:** Auth SSO design (JWT shared secret / OIDC / cookie domain `.medinet.vn`).
-- **GA-V3-B:** System settings sync (rag-config global vs per-hub override; api_keys vs `X-API-Key` propagation).
-- **GA-V3-C:** Reverse proxy frontend prefix detect (Caddy/nginx `/{ten_hub}` → đúng SPA bundle + JWT issuer per subpath).
-- **GA-V3-D:** Migration data từ `medinet_central` cũ — partition table theo `hub_id` → physical split.
-
-Seed full: `.planning/seeds/v3.0-multi-hub-split.md` (7 phase ~35 plan + 4 R-V3 risk + 4 E-V3 exit criteria)
-
 ## Requirements
+
+### Active (v3.0 scope — see `.planning/REQUIREMENTS.md` for full REQ-IDs)
+
+7 category × 4-5 REQ trên 7 phase (phase numbering reset về 1):
+
+- **TOPO-01..04** (Phase 1): Multi-DB factory `medinet_hub_<name>` + per-hub Alembic + cocoindex flow naming per-hub.
+- **FACTOR-01..03** (Phase 2): 1 codebase deploy nhiều lần với `HUB_NAME`; strip system settings ở hub con.
+- **SSO-01..04** (Phase 3): JWKS share central → hub con; refresh token Redis chung; `hub_ids` JWT claim; E4 reinforced.
+- **SYNC-01..05** (Phase 4): Chunks+vector push hub con → central; idempotent retry; checksum verify; mechanism chốt discuss-phase.
+- **PROXY-01..04** (Phase 5): Caddy subpath route; frontend prefix detect; D6 expire formally; per-hub branding.
+- **SETTINGS-01..04** (Phase 6): rag-config HTTP pull + Redis cache + pub/sub invalidate < 30s; api_keys lookup central.
+- **MIGRATE-01..05** (Phase 7): `pg_dump` per `hub_id` → DB con; blue/green per-hub; MCP re-point; smoke E2E 3 hub + tổng.
 
 ### Validated (M2 v2.0 shipped 2026-05-21 — 38/38 REQ-ID done)
 
@@ -79,17 +101,6 @@ Seed full: `.planning/seeds/v3.0-multi-hub-split.md` (7 phase ~35 plan + 4 R-V3 
 - ✓ Frontend React 19 KHÔNG sửa (D6) — verify-only smoke 11 trang + VN filename UTF-8 — v2.0 (COMPAT-01)
 - ✓ TEARDOWN Go backend xoá + tag `m1-go-archived` backup — v2.0 (TEARDOWN-01, pull-in 2026-05-14)
 
-### Active (chờ trigger v3.0 Multi-Hub Split)
-
-Sẽ liệt kê chi tiết ở `/gsd-new-milestone v3.0` — tham chiếu seed `.planning/seeds/v3.0-multi-hub-split.md`. Tóm tắt:
-
-- [ ] **HUB-V3-01..N**: Tách hub con (y_te, dược, HCNS) thành process + Postgres database riêng cùng instance (D-V3-01)
-- [ ] **SYNC-V3**: Dataflow hub con → hub tổng = chunks + vector denormalized sync 1 chiều (D-V3-02)
-- [ ] **AUTH-V3**: SSO across subpath `wiki.domain.com/<ten_hub>` (GA-V3-A chốt)
-- [ ] **PROXY-V3**: Reverse proxy frontend prefix detect (GA-V3-C chốt)
-- [ ] **SETTINGS-V3**: rag-config global vs per-hub override (GA-V3-B chốt)
-- [ ] **MIGRATE-V3**: Data migration `medinet_central` cũ → physical split (GA-V3-D chốt)
-
 ### Validated (brownfield — đã thay thế hoàn toàn ở M2, giữ làm lịch sử)
 
 > ⚠️ Các capability dưới đây là scope cần xây trong M2. Go backend đã xóa 2026-05-14 (TEARDOWN-01 pull-in) — **KHÔNG còn "port từ Go source"**. Contract của mỗi capability lấy từ: (1) `frontend/src/services/api.ts` (URL path + request/response types — D6 ràng buộc), (2) response envelope `{success, data, error, meta}`, (3) git tag `m1-go-archived` nếu cần tra cứu shape Go cũ. Thiết kế fresh bằng Python, KHÔNG dịch 1-1 logic Go.
@@ -102,25 +113,40 @@ Sẽ liệt kê chi tiết ở `/gsd-new-milestone v3.0` — tham chiếu seed `
 - **React SPA đầy đủ** (Dashboard, HubRegistry, DocumentIngestion, SyncQueue, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — **KHÔNG đổi frontend** (chỉ giữ tương thích URL)
 - **Cross-hub search API** — FastAPI
 
-### Out of Scope (M2)
+### Out of Scope (v3.0)
 
-- **Docling integration** — gỡ hoàn toàn theo quyết định D4 (xem Key Decisions). Risk: scanned PDF tiếng Việt + bảng phức tạp sẽ regress so với M1. Mitigation: M2 ship với supported formats giới hạn (DOCX/TXT/MD/PDF text-only), revisit Docling/Tesseract ở milestone hardening nếu user feedback regress.
-- **Frontend rewrite / Multi-subdomain SPA** — defer sang v3.0.
-- **MCP Server** — defer sang v4.0.
-- **Migration data từ ChromaDB cũ** — M1 chưa production, không có user upload thật. Clean slate.
-- **Test coverage tổng quát** — milestone hardening riêng. M2 chỉ test critical path (auth + ingest + search + ask).
-- **Hybrid retrieval BM25** — Phase 2 PRD (defer).
-- **Version history & concurrent editing** — Phase 3 PRD (defer).
-- **Đổi embedding model sang local (sentence-transformers / BGE-M3)** — giữ OpenAI/Gemini.
-- **Khắc phục CONCERNS bảo mật cũ** (`.gitignore` root, GCP key audit, AES_KEY rotation, XSS token storage) — hardening riêng (v4.0).
+- **OCR Vietnamese revisit (Docling/Tesseract)** — defer v4.0. v3.0 vẫn dùng whitelist `{.docx, .txt, .md, .pdf text-only}` + `failed_unsupported` (R4 carry forward).
+- **Cross-dim embedding swap (1536 ↔ 3072)** — defer v4.0. v3.0 vẫn PIN dim 1536 (R1 + R7 carry forward).
+- **Streaming `/api/ask` SSE** — defer v4.0.
+- **Comprehensive coverage >80%** — defer v4.0. v3.0 giữ gate ≥50% critical-path (HARD-03 carry forward).
+- **Hybrid retrieval BM25 + reranker** — defer v4.1.
+- **Local embedding model (sentence-transformers / BGE-M3)** — defer v4.1 (SEED-001 dormant).
+- **Version history & concurrent editing** — defer v4.1.
+- **Khắc phục CONCERNS bảo mật cũ** (.gitignore root, GCP key audit, AES_KEY rotation, XSS token storage) — defer v4.0.
+- **Branch protection rule GitHub repo enforce 2 workflow trước merge main** — admin permission, defer v4.0.
+- **Schema riêng per hub trong cùng DB** — bỏ phương án này (đụng R5/P7 — cocoindex `db_schema_name` cố định). Locked D-V3-01.
+- **Instance Postgres riêng per hub** — bỏ phương án này (ops × N). Locked D-V3-01.
+- **Federated HTTP fan-out cho cross-hub search** — bỏ phương án này (latency × N hub). Locked D-V3-02 (chunks+vector denormalized).
+- **Hub tổng re-embed chunks từ hub con** — KHÔNG re-embed; lưu sẵn vector 1536-dim từ hub con. Locked D-V3-02.
+
+### Out of Scope (M2 — đã đóng, giữ làm lịch sử)
+
+- **Docling integration** — gỡ hoàn toàn ở v2.0 (D4). Risk regress scanned PDF tiếng Việt đã accept (R4 mitigation: `failed_unsupported` enum).
+- **Frontend rewrite / Multi-subdomain SPA** — defer sang v3.0 (đang scope ở Phase 5).
+- **MCP Server** — đã ship trong v2.0 (Phase 8.1/8.2/8.3).
+- **Migration data từ ChromaDB cũ** — M1 chưa production, clean slate (đã thực thi).
+- **Test coverage tổng quát** — defer v4.0 (v2.0 chỉ test critical path 57.75%).
+- **Hybrid retrieval BM25 + version history** — defer v4.0/v4.1.
+- **Local embedding model** — defer v4.1 (SEED-001).
 
 ## Context
 
-**Tech stack mục tiêu (M2):**
-- Backend: **Python 3.11+ · FastAPI · cocoindex v1.0.3+ · asyncpg/SQLAlchemy · python-jose · passlib[argon2] · redis-py · LiteLLM**
-- Vector store: **Postgres pgvector** (cùng instance Postgres 16 với hub/user/audit data)
-- Frontend: **React 19 · Vite 6 · TypeScript 5.8 · Tailwind v4** (KHÔNG đổi)
-- Infra: Docker Compose — `postgres+pgvector` + `redis` + `python-api` (3 service, giảm từ 4)
+**Tech stack v3.0 (kế thừa v2.0 — KHÔNG đổi runtime):**
+- Backend: **Python 3.12 · FastAPI 0.136.1 · cocoindex 1.0.3 · asyncpg/SQLAlchemy 2 async · pwdlib Argon2 · PyJWT RS256 · redis-py · LiteLLM**
+- Vector store: **Postgres pgvector pg16** — multi-DB cùng instance (`medinet_central` + `medinet_hub_<name>` × N)
+- Frontend: **React 19 · Vite 6 · TypeScript 5.8 · Tailwind v4** — **D6 expire ở Phase 5** (frontend rewrite được phép cho prefix detect + per-hub branding)
+- Infra: Docker Compose mở rộng — 1 Postgres (multi-DB) + 1 Redis + N+1 process FastAPI (1 central + N hub con) + Caddy reverse proxy subpath + MCP service re-point central
+- Reverse proxy: **Caddy auto-TLS** (đã ship v2.0 Phase 8.3) — extend route `wiki.domain.com/<hub>/api/*` (Phase 5)
 
 **Codebase cũ đã xóa khỏi working tree:**
 - `Hub_All/backend/` (toàn bộ Go) — xóa 2026-05-14 (TEARDOWN-01 pull-in sớm hơn Phase 8); backup git tag `m1-go-archived`
@@ -134,78 +160,96 @@ Sẽ liệt kê chi tiết ở `/gsd-new-milestone v3.0` — tham chiếu seed `
 - Bảng phức tạp: M1 giải bằng Docling table HTML preservation. M2 cần giải pháp khác (camelot/pdfplumber? hoặc accept loss).
 - Heading regex Go ALL CAPS dễ false positive với tiếng Việt: tự nhiên giải vì cocoindex chunker khác.
 
-## Constraints
+## Constraints (v3.0)
 
-- **Tech stack:** Python 3.11+ (cocoindex yêu cầu) — KHÔNG Go trong code mới
-- **Vector store:** Postgres pgvector — KHÔNG ChromaDB/Qdrant trong M2 (revisit sau)
-- **Frontend:** KHÔNG sửa React app — chỉ giữ tương thích URL `/api/*`
-- **JWT compatibility:** Token cũ (nếu có user đăng nhập) cần verify được sau khi rewrite — keypair `backend/keys/` reuse
-- **Database schema:** Reuse Postgres schema sẵn có (users, hubs, documents, audit_logs) — chỉ thêm cột pgvector + drop ChromaDB-only cols (`chroma_collection`, `extractor_used`)
-- **Performance:** Search Hub riêng < 800ms p95, cross-hub < 1.5s p95, CRUD < 300ms p95 (PRD v1.3 giữ nguyên)
-- **OCR Vietnamese:** Đã gỡ Docling → **không hỗ trợ scanned PDF tiếng Việt trong M2** (documented risk). Format hỗ trợ ở M2: DOCX, TXT, MD, PDF text-only. Scanned PDF sẽ trả lỗi tường minh thay vì silent fail.
-- **Migration window:** Pivot lần 2 trong 15 ngày — phải hoàn thành M2 trong khoảng thời gian hợp lý (4-8 tuần) để tránh thrash thêm nữa.
+- **Tech stack:** giữ nguyên v2.0 — Python 3.12 · FastAPI 0.136.1 · cocoindex 1.0.3 · pgvector pg16. KHÔNG bump version giữa milestone.
+- **Multi-DB cùng instance:** N+1 database trên 1 Postgres instance (`medinet_central` + `medinet_hub_<name>`). KHÔNG schema riêng (đụng cocoindex `db_schema_name` fixed — R5/P7). KHÔNG instance riêng (ops × N).
+- **Embedding dim:** vẫn PIN 1536 cho cả OpenAI + Gemini (R1 carry forward). Hub tổng KHÔNG re-embed — nhận sẵn vector từ hub con.
+- **Dataflow direction:** Hub con → tổng 1 chiều (chunks + vector denormalized). Hub tổng KHÔNG ghi ngược về hub con. D-V3-02.
+- **D6 expire ở Phase 5:** Frontend rewrite được phép — prefix detect, per-hub login branding, base URL detect từ `window.location.pathname.split('/')[1]`.
+- **Hub isolation E4 reinforced:** DB-level isolation (hub con CHỈ có data của chính nó). Cross-hub search ở central qua aggregated chunks + `hub_ids` JWT claim.
+- **Performance carry forward:** Search hub đơn < 800ms p95, cross-hub < 1.5s p95 (E-V3-2 — KHÔNG regress so với Phase 6 M2).
+- **Settings sync propagation:** Đổi rag-config ở central → hub con propagate < 30s (E-V3-4).
+- **Migration window:** Mỗi hub blue/green deploy — KHÔNG full downtime (R-V3-4 mitigation).
+- **OCR Vietnamese:** Vẫn `failed_unsupported` cho scanned PDF (R4 carry forward — defer revisit v4.0).
+- **OAuth + JWKS:** Reuse JWT RS256 keypair v2.0 `api/keys/`. JWKS endpoint mới ở central exposing public key (Phase 3).
+- **MCP service:** Re-point gọi central cho cross-hub aggregate (Phase 7). KHÔNG fan-out N hub con.
 
-## Risk Register (M2)
+## Risk Register (v3.0)
 
-Đăng ký rủi ro chính từ research `.planning/research/PITFALLS.md`. Mỗi risk gắn phase phụ trách + mitigation cụ thể.
+Đăng ký rủi ro chính cho v3.0 Multi-Hub Split. Mỗi risk gắn phase phụ trách + mitigation cụ thể.
 
 | # | Risk | Severity | Phase address | Mitigation cụ thể |
 |---|---|---|---|---|
-| **R1** | pgvector index 2000-dim limit → HNSW FAIL → Seq Scan → p95 vỡ | HIGH | Phase 1, 4 | OpenAI `dimensions=1536` API param. Verify Phase 1 bằng `CREATE INDEX USING hnsw (vector vector_cosine_ops)` trên `vector(1536)` TRƯỚC khi viết flow. |
-| **R2** | HNSW post-filter recall collapse khi filter `hub_id` → hub leak hoặc results trống | HIGH | Phase 6, 9 | Pin `pgvector ≥0.8` + `SET hnsw.iterative_scan = relaxed_order` + `SET hnsw.max_scan_tuples = 20000`. Eval Phase 9 measure recall WITH `hub_id` filter (KHÔNG without). |
-| **R3** | **Pivot fatigue → pivot 3 trong 30 ngày** — M1 abandoned 2026-05-13, pivot 2 trong 15 ngày | **CRITICAL** | Phase 1 (bake) | Bake **EXIT criteria** (xem dưới) + **split M2a / M2b** + weekly check-in day 7/14/21/28. NO new tool adoption mid-flight. |
-| **R4** | Scanned PDF tiếng Việt silent fail (D4 gỡ Docling) → status='completed' nhưng chunk_count=0 | HIGH | Phase 4, 8 | Explicit format whitelist `{.docx, .txt, .md, .pdf}` + detect scanned PDF post-extract → enum `failed_unsupported` (khác `failed`) + frontend message "chuyển sang DOCX" thay vì retry. |
-| R5 | CocoIndex naming + APP_NAMESPACE prefix → bảng "biến mất" pgAdmin | MEDIUM | Phase 1, 4 | Tên flow snake_case (`name="medinet_wiki_ingest"`), `APP_NAMESPACE=medinet_prod` trong `.env.example`, `db_schema_name="cocoindex"`, alembic include_object filter ignore cocoindex tables, document tên thực tế trong CONVENTIONS.md. |
-| R6 | Argon2 hash cross-compat Go↔Python — pwdlib verify hash do `alexedwards/argon2id` tạo | MEDIUM | Phase 3 | Mandatory integration test với Go params `m=65536, t=1, p=2, saltLen=16, keyLen=32`. Pin pwdlib params Go-compat; fail-fast nếu mismatch. |
-| R7 | Embedding model swap = full re-embed delta (~$6.50 cho 100K chunks) | MEDIUM | Phase 7 | Pin dim 1536 cho cả OpenAI/Gemini → swap không cần re-embed. UI WARNING modal "re-embed N chunks, est $X, est T phút" khi đổi provider khác dim. Defer cross-dim swap v4.0. |
+| **R-V3-1** | Sync chunks + vector 2 lần (hub con + tổng) gây drift → cross-hub query mismatch hub-con-local | HIGH | Phase 4 | Outbox pattern (transactional INSERT outbox + worker push idempotent ON CONFLICT (content_hash)) + checksum verify periodic (daily count + sample hash diff hub con vs tổng). Track sync lag metric Prometheus. |
+| **R-V3-2** | D6 expire — frontend rewrite cho prefix detect + per-hub branding → risk regress 11 trang React đã ship M2 | HIGH | Phase 5 | D6 expire formally ở v3.0-05. Smoke test 11 trang React (M2 COMPAT-01 carry forward) cho mỗi hub con + tổng sau khi đổi base URL. Per-hub branding tách `frontend/src/branding/<hub>/` thay vì sửa core. |
+| **R-V3-3** | Per-hub Alembic drift — mỗi DB tự upgrade → schema mismatch giữa các hub | MEDIUM | Phase 1 | CI lint check Alembic head revision khớp giữa N DB sau migration. Make target `make migrate-all` apply N database tuần tự + verify version. |
+| **R-V3-4** | Migration data từ `medinet_central` cũ — downtime cần thiết | MEDIUM | Phase 7 | Blue/green per-hub — clone `medinet_central` cũ → DB hub con NEW (parallel), test smoke trên DB NEW, switch traffic, truncate hub_id rows khỏi central sau khi accept. KHÔNG full stack downtime. |
+| **R-V3-5** | JWKS endpoint xuống → hub con KHÔNG verify được JWT → users logged out toàn bộ | MEDIUM | Phase 3 | Hub con cache JWKS local TTL 1h + fallback static keypair embedded ở deploy time (rotation manual). Central JWKS endpoint high-availability (read-only, KHÔNG DB query mỗi request — load 1 lần lifespan). |
+| **R-V3-6** | Settings sync race — hub con đang xử lý request cũ rag-config khi central đã đổi → response inconsistent | LOW | Phase 6 | Redis pub/sub invalidate channel `settings:invalidate` + hub con re-fetch trong < 30s + idempotent settings application. Accept eventual consistency trong window 30s (E-V3-4). |
 
-**16 pitfall còn lại (P5-P20):** chi tiết + prevention checklist trong `.planning/research/PITFALLS.md`.
+**Carry forward từ v2.0 (vẫn áp dụng):** R1 (pgvector 2000-dim → PIN 1536), R2 (HNSW post-filter → ef_search=200 + iterative_scan), R4 (scanned PDF → failed_unsupported), R6 (Argon2 cross-compat — không còn relevant vì Go đã teardown nhưng pwdlib params vẫn pin), R7 (cross-dim swap REFUSE 400 — defer v4.0). Chi tiết: `.planning/research/PITFALLS.md`.
 
-## EXIT Criteria (anti-pivot fatigue — R3 mitigation)
+## EXIT Criteria (v3.0)
 
-Nếu một trong các điều kiện sau xảy ra, **DỪNG M2** và discuss với user trước khi tiếp tục — KHÔNG tự pivot sang stack khác.
+Nếu một trong các điều kiện sau xảy ra, **DỪNG v3.0** và discuss với user trước khi tiếp tục.
 
 | # | Trigger | Action |
 |---|---|---|
-| **E1** | CocoIndex critical bug không có fix trong **14 ngày** (upstream issue mở >14 days, không có workaround) | STOP, mở `/gsd-discuss-milestone` re-evaluate (giữ pgvector + thay cocoindex bằng custom Python flow, hoặc rollback M1 Docling) |
-| **E2** | pgvector p95 search latency >2000ms ở 50K chunks DÙ đã tune (HNSW + iterative_scan + connection pool + worker count) | STOP, discuss Qdrant migration hoặc dim reduce thêm |
-| **E3** | Phase 1-3 (Infra + Schema + Auth) vượt **21 ngày calendar** | STOP, scope review — cắt feature hay người |
-| **E4** | Hub isolation bug **không fixable trong 7 ngày** sau khi phát hiện (test fail, hub_A leak vào hub_B query) | STOP, security review — không ship M2 có data leak |
-| **E5** | Quality gate Phase 9 fail (<60% top-3) DÙ đã iterate 3 vòng chunker/prompt | Stop M2b, ship M2a standalone, discuss reranker / hybrid BM25 cho v3.0 |
+| **E-V3-1** | 3 hub con + tổng KHÔNG healthy trên Docker Compose sau Phase 7; HOẶC golden path `wiki.domain.com/yte` FAIL (login → upload → search local + cross-hub) | STOP, root-cause: process model issue / proxy config / DB topology — discuss revert sang multi-tenancy logical |
+| **E-V3-2** | Cross-hub search latency p95 ≥ 1.5s ở Phase 4/7 dù đã tune (denormalized chunks index + ef_search + connection pool) | STOP, discuss giảm hub_count concurrent / dim reduce thêm / fan-out federated thay vì denormalized |
+| **E-V3-3** | Hub isolation bug DB-level **không fixable trong 7 ngày** sau khi phát hiện (hub con truy cập được data hub khác qua DB connection / JWT bypass) | STOP, security review — không ship v3.0 có data leak |
+| **E-V3-4** | System settings change ở central KHÔNG propagate xuống hub con trong < 60s sau 3 vòng iterate Phase 6 | STOP, discuss push webhook thay HTTP pull / accept eventual consistency window lớn hơn |
+| **E-V3-5** | Sync drift hub con vs tổng > 1% rows sau 7 ngày run continuously trong Phase 4 staging | STOP, replace outbox/replication mechanism — chốt lại GA-V3-D ở re-discuss |
 
-**M2a/M2b split (R3 mitigation):**
+**v3.0-a / v3.0-b split (anti-pivot mitigation, kế thừa pattern R3 v2.0):**
 
-- **M2a = Phase 1-4** — Backend foundation + cocoindex MVP. Có thể ship đứng độc lập (demo upload DOCX → chunks trong pgvector → SELECT verify). **Nếu user accept M2a → never pivot.**
-- **M2b = Phase 5-10** — RAG completion (CRUD + Search + Ask + Eval + Hardening). Pivot M2b OK nếu cocoindex critical fail — M2a giữ nguyên reusable.
+- **v3.0-a = Phase 1-3** — Topology + codebase factor + auth SSO. Có thể ship đứng độc lập (demo: 1 hub con đứng riêng, login chéo central PASS, KHÔNG sync). **Nếu user accept v3.0-a → never pivot multi-DB topology.**
+- **v3.0-b = Phase 4-7** — Sync + proxy + settings + migration. Pivot v3.0-b OK nếu sync mechanism (GA-V3-D) chốt sai — v3.0-a giữ nguyên reusable.
+- 🚦 **v3.0-a EXIT GATE** giữa Phase 3 và 4 — demo 1 hub con + tổng + JWT SSO PASS → user accept là điều kiện tiếp tục v3.0-b.
 
-**Weekly check-in (R3 mitigation):**
+**Weekly check-in:**
 
 | Day | Checkpoint |
 |---|---|
-| Day 7 | Phase 1-2 done? Schema migration applied? Docker compose 3-service up? |
-| Day 14 | Phase 3 (auth) PASS Argon2 cross-compat test? Phase 4 (cocoindex flow) MVP ingest 1 file? |
-| Day 21 | **M2a EXIT GATE** — demo upload DOCX → chunks pgvector → user accept? |
-| Day 28 | Phase 6-7 (search + ask) wire? Phase 8 frontend smoke pass? |
+| Day 7 | Phase 1 done? `medinet_hub_yte` DB created + Alembic migration head match central? |
+| Day 14 | Phase 2-3 done? Hub con deploy với `HUB_NAME=yte` + JWT SSO PASS (login central, verify hub con qua JWKS)? |
+| Day 21 | **v3.0-a EXIT GATE** — 1 hub con + tổng + JWT SSO + golden path PASS → user accept? |
+| Day 28 | Phase 4-5 done? Chunks sync hub con → tổng + cross-hub search PASS? Caddy subpath + frontend prefix detect PASS? |
+| Day 35 | Phase 6-7 done? Settings sync < 30s + migration data full + smoke E2E 3 hub PASS? |
 
 ## Key Decisions
 
+### v3.0 LOCKED (2026-05-21)
+
 | # | Decision | Rationale | Outcome |
 |---|---|---|---|
-| D1 | **Toàn bộ backend Go → Python FastAPI** | Codebase đồng nhất Python với cocoindex; tránh boundary Go↔Python phức tạp; LiteLLM/asyncpg trưởng thành | — Pending (2026-05-13 pivot) |
-| D2 | **CocoIndex v1.0.3+ làm indexing layer** | Incremental diff content-hash + LMDB fingerprint = giải quyết backlog 999.1 sẵn; lineage chunk→source built-in; Rust core production-grade | — Pending |
-| D3 | **Postgres pgvector** thay ChromaDB | Bớt 1 service; dùng Postgres sẵn có; pgvector là cocoindex flagship target battle-tested hơn ChromaDB target (recent 2025) | — Pending |
+| **D-V3-01** | Multi-tenancy PHYSICAL = Postgres database riêng cùng instance (`medinet_central` + `medinet_hub_<name>` × N trên 1 instance) | Backup chung + network đơn giản + cocoindex flow ngắn; bỏ schema riêng (đụng cocoindex `db_schema_name` fixed R5/P7) + bỏ instance riêng (ops × N) | LOCKED 2026-05-21 (chốt qua AskUserQuestion seed) |
+| **D-V3-02** | Dataflow hub con → tổng = chunks + vector denormalized sync 1 chiều; hub tổng KHÔNG re-embed | Cross-hub search 1 DB nhanh, KHÔNG federated HTTP fan-out; cost storage 2× chấp nhận được | LOCKED 2026-05-21 |
+| **D-V3-03** | Scoping = milestone v3.0 mới (KHÔNG nhét vào M2 dưới dạng 1 phase) | Scope quá lớn — 7 phase ~30 REQ; nhét M2 phá EXIT criteria + R3 anti-pivot fatigue | LOCKED 2026-05-21 (M2 đã shipped 2026-05-21 trước v3.0 start) |
+| **D-V3-04** | M2 closeout precondition — HUMAN UAT Phase 9 gate verdict + retrospective xong TRƯỚC v3.0 start | RAG chưa chứng minh ≥75% top-3 sẽ propagate bug × N hub khi split | LOCKED 2026-05-21; HUMAN UAT track standalone defer KHÔNG block v3.0 start theo user trigger |
+| **D-V3-05** | Phase numbering reset về 1 cho v3.0 (continuation từ v2.0 hết Phase 10 KHÔNG phù hợp) | Milestone-level scoping (D-V3-03); seed labels v3.0-01..07; precedent D9 v2.0 reset | LOCKED 2026-05-21 |
+| **D-V3-06** | D6 expire formally ở Phase 5 — frontend rewrite được phép cho prefix detect + per-hub branding | URL subpath `wiki.domain.com/<hub>` cần frontend đổi base URL detect prefix; "fix CSS được phép sửa React" feedback đã chuẩn bị | LOCKED 2026-05-21 (re-confirm ở Phase 5 discuss-phase) |
+
+### v2.0 Carry forward (đã shipped — giữ làm lịch sử)
+
+| # | Decision | Rationale | Outcome |
+|---|---|---|---|
+| D1 | **Toàn bộ backend Go → Python FastAPI** | Codebase đồng nhất Python với cocoindex; tránh boundary Go↔Python phức tạp; LiteLLM/asyncpg trưởng thành | ✅ Shipped v2.0 |
+| D2 | **CocoIndex v1.0.3+ làm indexing layer** | Incremental diff content-hash + LMDB fingerprint = giải quyết backlog 999.1 sẵn; lineage chunk→source built-in; Rust core production-grade | ✅ Shipped v2.0 |
+| D3 | **Postgres pgvector** thay ChromaDB | Bớt 1 service; dùng Postgres sẵn có; pgvector là cocoindex flagship target battle-tested hơn ChromaDB target (recent 2025) | ✅ Shipped v2.0 |
 | D4 | **Gỡ Docling hoàn toàn** | Codebase đồng nhất, không phụ thuộc binary Tesseract/Docling model 2GB | ⚠️ Risk regress scanned PDF tiếng Việt + bảng — documented |
-| D5 | **LLM answerer giữ hot-swap OpenAI/Gemini** (port sang LiteLLM) | Đã work tốt với tiếng Việt; KHÔNG thêm local model trong M2 | — Pending |
-| D6 | **Frontend KHÔNG sửa trong M2** | Risk giảm; URL `/api/*` giữ qua nginx/FastAPI cùng port :8080 | — Pending |
+| D5 | **LLM answerer giữ hot-swap OpenAI/Gemini** (port sang LiteLLM) | Đã work tốt với tiếng Việt; KHÔNG thêm local model trong M2 | ✅ Shipped v2.0 |
+| D6 | **Frontend KHÔNG sửa trong M2** | Risk giảm; URL `/api/*` giữ qua nginx/FastAPI cùng port :8080 | ✅ Shipped v2.0 |
 | D7 | **Abandon M1 hoàn toàn** | M1 chưa runtime verify (chưa chạy `make eval-all`), chưa production → mất ít công sức nhất khi pivot bây giờ thay vì sau | — Logged (xem `MILESTONES.md`) |
-| D8 | **Eval framework làm lại từ đầu** | `eval/` Go-style queries hardcoded path; M2 dùng Python pytest + queries.jsonl giữ semantic + dataset 10 file gold giữ | — Pending |
+| D8 | **Eval framework làm lại từ đầu** | `eval/` Go-style queries hardcoded path; M2 dùng Python pytest + queries.jsonl giữ semantic + dataset 10 file gold giữ | ✅ Shipped v2.0 |
 | D9 | **Phase numbering reset về 1** (--reset-phase-numbers) | M2 = rewrite full, không tiếp nối M1 logic; archive M1 phases vào `.planning/milestones/v1.0-docling-rag/` | — Logged |
 | ~~M1 cũ: Multi-subdomain SPA~~ → Pivot 1: RAG Quality with Docling | (2026-04-28 — đã abandoned) | ❌ Abandoned 2026-05-13 |
 | Sử dụng Docling thay vì MarkItDown | (Decision của M1, không còn áp dụng) | ❌ Reverted by D4 |
 | Service split Python sidecar chỉ Extract+Chunk | (Decision của M1, không còn áp dụng) | ❌ Reverted by D1 |
 | Embedding giữ OpenAI/Gemini hot-swap | Hot-swap đã có, tránh thêm dependency local model | ✓ Carried forward (D5) |
-| Granularity: Large (10-15 phases) | M2 scope rất lớn (backend rewrite + RAG rewrite + eval + integration) | — Pending |
-| Mode: YOLO | Tài liệu PRD/RAG/Backend Plan rất chi tiết; tin context có sẵn | — Pending |
+| Granularity: Large (10-15 phases) | M2 scope rất lớn (backend rewrite + RAG rewrite + eval + integration) | ✅ Shipped v2.0 |
+| Mode: YOLO | Tài liệu PRD/RAG/Backend Plan rất chi tiết; tin context có sẵn | ✅ Shipped v2.0 |
 
 ## Evolution
 
@@ -225,4 +269,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-21 after v2.0 milestone close (`/gsd-complete-milestone v2.0`). M2 v2.0 100% COMPLETE — 13 phase / ~75 plan / 38 REQ-ID. Tag `v2.0` (local). Archive `.planning/milestones/v2.0-full-rag-rewrite/`. Pending HUMAN UAT (Phase 9 gate verdict + 8.3 Claude web + 8 docker compose) KHÔNG block close — ghi nhận retrospective. Next: `/gsd-new-milestone v3.0` Multi-Hub Split sau khi user verify v2.0.)*
+*Last updated: 2026-05-21 sau `/gsd-new-milestone v3.0` — Multi-Hub Split STARTED. Phase numbering reset về 1 (D-V3-05). 7 phase × ~4-5 REQ = ~30 REQ-ID v1 (TOPO/FACTOR/SSO/SYNC/PROXY/SETTINGS/MIGRATE). v3.0-a (Phase 1-3) vs v3.0-b (Phase 4-7) split anti-pivot. v2.0 archive: `.planning/milestones/v2.0-full-rag-rewrite/` (REQUIREMENTS + ROADMAP + 13 phase dirs). Next: `/gsd-discuss-phase 1` Multi-DB topology + per-hub Alembic.*
