@@ -57,3 +57,40 @@ Phase 10 chỉ cần verify cocoindex BackgroundTask carry request_id (đã DONE
 
 **Workaround dùng tạm:** structlog ProcessorAdapter wrap stdlib logger nếu cần
 migrate full (out of scope Plan 10-01).
+
+## DEF-10-04-A: Pre-existing mypy --strict errors trong `mcp_service/mcp_app/server.py`
+
+**Discovered:** 2026-05-21 trong Plan 10-04 Task 1 verify mypy.
+
+**Symptom (6 errors):**
+```
+mcp_app\server.py:389: error: Unused "type: ignore" comment  [unused-ignore]
+mcp_app\server.py:390: error: Missing type arguments for generic type "Context"  [type-arg]
+mcp_app\server.py:441: error: Unused "type: ignore" comment  [unused-ignore]
+mcp_app\server.py:442: error: Missing type arguments for generic type "Context"  [type-arg]
+mcp_app\server.py:1249: error: Missing type arguments for generic type "dict"  [type-arg]
+mcp_app\server.py:1260: error: Returning Any from function declared to return "dict[Any, Any]"  [no-any-return]
+```
+
+**Pre-existing — KHÔNG do Plan 10-04.** Verify: `git stash` rồi chạy
+`uv run mypy --strict mcp_app/server.py` → 6 errors như trên (toàn pre-existing,
+liên quan tới tool decorator `# type: ignore[type-arg]` cho `Context` generic
++ _BasicAuthFormShim `_receive` return type Phase 8.3).
+
+**Plan 10-04 KHÔNG thêm mypy error mới** — đã fix error duy nhất do middleware
+mới gây ra (dict missing type args ở `_wrapped_send`).
+
+**Resolution:** Migrate dần khi MCP SDK upstream expose proper `Context[T]`
+generic. Defer v4.0 — out of scope Plan 10-04 (CORS policy split focus).
+
+## DEF-10-04-B: Pre-existing ruff E402 + UP012 trong `tests/test_path_prefix_wrapper.py`
+
+**Discovered:** 2026-05-21 trong Plan 10-04 regression sweep.
+
+**Source:** Plan 08.3-07 SUMMARY note (deferred-items.md sau commit `a5f3364`).
+
+**Status:** Plan 10-04 KHÔNG đụng file `tests/test_path_prefix_wrapper.py` (CORS
+tests cũ vẫn assert metadata `ACAO=*` đúng behavior sau Plan 10-04). KHÔNG cần
+patch test cũ — middleware mới giữ metadata wildcard nguyên vẹn.
+
+**Resolution:** Defer chore commit riêng — out of scope Plan 10-04.
