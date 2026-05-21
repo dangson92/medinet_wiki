@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import logging
+import secrets
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
@@ -30,19 +31,20 @@ logger = logging.getLogger(__name__)
 
 
 def render_login_form(
-    txn: str, callback_action: str, error: str | None = None
+    txn: str, callback_action: str, csrf_token: str, error: str | None = None
 ) -> HTMLResponse:
     """Trả HTML form đăng nhập tối giản.
 
     Args:
         txn: transaction id — đặt vào hidden input để POST callback nối lại flow.
-        callback_action: URL form action — TUYỆT ĐỐI (đã prepend issuer_url) để
-            form hoạt động đúng khi MCP service không ở authority root
-            (vd path-based reverse proxy `wiki.example.com/mcp/*`).
+        callback_action: URL form action — TUYỆT ĐỐI (đã prepend issuer_url).
+        csrf_token: CSRF token sinh ở provider.authorize, embed hidden, verify
+            ở POST callback (HIGH-09).
         error: thông báo lỗi (nếu có) — hiển thị dòng đỏ phía trên form.
     """
     safe_txn = html.escape(txn, quote=True)
     safe_action = html.escape(callback_action, quote=True)
+    safe_csrf = html.escape(csrf_token, quote=True)
     error_block = ""
     if error:
         error_block = (
@@ -61,6 +63,7 @@ def render_login_form(
   {error_block}
   <form method="post" action="{safe_action}">
     <input type="hidden" name="txn" value="{safe_txn}">
+    <input type="hidden" name="csrf_token" value="{safe_csrf}">
     <p>
       <label for="email">Email</label><br>
       <input type="email" id="email" name="email" required
@@ -78,7 +81,7 @@ def render_login_form(
     return HTMLResponse(body)
 
 
-def get_login_routes(
+def get_login_routes(  # noqa: C901 — login_callback có nhiều nhánh lỗi tường minh
     provider: MedinetOAuthProvider, api_client: ApiClient
 ) -> list[Route]:
     """Trả danh sách Route Starlette cho login form.
@@ -93,14 +96,20 @@ def get_login_routes(
     callback_action = f"{provider.issuer_url}/login/callback"
 
     async def login_get(request: Request) -> Response:
-        """GET /login — trả HTML form. Thiếu `txn` -> 400."""
+        """GET /login — trả HTML form. Thiếu `txn` hoặc pending miss -> 400."""
         txn = request.query_params.get("txn")
         if not txn:
             return HTMLResponse(
                 "<p>Thiếu tham số txn — phiên đăng nhập không hợp lệ.</p>",
                 status_code=400,
             )
-        return render_login_form(txn, callback_action)
+        csrf = await provider.load_pending_csrf(txn)
+        if csrf is None:
+            return HTMLResponse(
+                "<p>Phiên đăng nhập hết hạn hoặc không hợp lệ.</p>",
+                status_code=400,
+            )
+        return render_login_form(txn, callback_action, csrf_token=csrf)
 
     async def login_callback(request: Request) -> Response:
         """POST /login/callback — xác thực credential Medinet, phát code OAuth."""
@@ -108,11 +117,32 @@ def get_login_routes(
         txn = str(form.get("txn") or "")
         email = str(form.get("email") or "")
         password = str(form.get("password") or "")
+        form_csrf = str(form.get("csrf_token") or "")
 
         if not txn:
             return HTMLResponse(
                 "<p>Thiếu tham số txn — phiên đăng nhập không hợp lệ.</p>",
                 status_code=400,
+            )
+
+        # HIGH-09: verify CSRF — form csrf_token PHẢI khớp pending csrf_token.
+        # Thiếu / sai → render lại form với lỗi. KHÔNG log giá trị csrf_token
+        # (T-08.3-08). load_pending_csrf trả None → pending không tồn tại
+        # (đã dùng / hết hạn).
+        pending_csrf = await provider.load_pending_csrf(txn)
+        if pending_csrf is None:
+            logger.info("Login callback — pending không tồn tại / hết hạn")
+            return HTMLResponse(
+                "<p>Phiên đăng nhập hết hạn hoặc không hợp lệ.</p>",
+                status_code=400,
+            )
+        if not form_csrf or not secrets.compare_digest(form_csrf, pending_csrf):
+            logger.warning("Login callback — CSRF token mismatch")
+            return render_login_form(
+                txn,
+                callback_action,
+                csrf_token=pending_csrf,
+                error="Phiên đăng nhập không hợp lệ, vui lòng thử lại",
             )
 
         # (a) Xác thực credential Medinet qua API Service — KHÔNG verify tại MCP.
@@ -121,13 +151,15 @@ def get_login_routes(
         except ApiClientError:
             logger.error("Login callback — lỗi hạ tầng khi gọi API Service")
             return render_login_form(
-                txn, callback_action, error="Lỗi hệ thống, vui lòng thử lại sau"
+                txn, callback_action, csrf_token=pending_csrf,
+                error="Lỗi hệ thống, vui lòng thử lại sau",
             )
 
         # (b) Credential sai -> render lại form kèm lỗi.
         if login_data is None:
             return render_login_form(
-                txn, callback_action, error="Sai tài khoản hoặc mật khẩu"
+                txn, callback_action, csrf_token=pending_csrf,
+                error="Sai tài khoản hoặc mật khẩu",
             )
 
         # (c) Login OK -> phát authorization code, redirect về client.
@@ -145,6 +177,7 @@ def get_login_routes(
             return render_login_form(
                 txn,
                 callback_action,
+                csrf_token=pending_csrf,
                 error=(
                     "Tài khoản này không phải chủ sở hữu connector. "
                     "Đăng nhập bằng đúng tài khoản đã sinh credentials, hoặc tạo "
@@ -154,12 +187,14 @@ def get_login_routes(
         except OAuthStoreError:
             logger.info("Login callback — txn hết hạn hoặc không hợp lệ")
             return render_login_form(
-                txn, callback_action, error="Phiên đăng nhập hết hạn, vui lòng kết nối lại"
+                txn, callback_action, csrf_token=pending_csrf,
+                error="Phiên đăng nhập hết hạn, vui lòng kết nối lại",
             )
         except (KeyError, TypeError):
             logger.error("Login callback — payload downstream thiếu trường bắt buộc")
             return render_login_form(
-                txn, callback_action, error="Lỗi hệ thống, vui lòng thử lại sau"
+                txn, callback_action, csrf_token=pending_csrf,
+                error="Lỗi hệ thống, vui lòng thử lại sau",
             )
 
         location = f"{redirect_uri}?code={code}"

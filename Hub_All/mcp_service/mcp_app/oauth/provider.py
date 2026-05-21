@@ -167,6 +167,19 @@ class MedinetOAuthProvider(
         """Sinh token/code opaque ngẫu nhiên — >160 bit entropy (RFC 6749 §10.10)."""
         return secrets.token_urlsafe(32)
 
+    # --- CSRF helpers (HIGH-09) ---
+
+    async def load_pending_csrf(self, txn: str) -> str | None:
+        """Lấy csrf_token cho txn — login route dùng để render hidden + verify.
+
+        Trả None nếu txn không tồn tại (đã dùng/hết hạn). Method này KHÔNG xoá
+        pending — chỉ đọc.
+        """
+        pending = await self._store.load_pending(txn)
+        if pending is None:
+            return None
+        return pending.get("csrf_token") or None
+
     # --- DCR (RFC 7591) ---
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
@@ -250,12 +263,14 @@ class MedinetOAuthProvider(
         Login callback (login.py) dùng `txn` để `load_pending` nối lại flow.
         """
         txn = self._new_opaque()
+        csrf_token = self._new_opaque()  # HIGH-09 — embed vào login form hidden
         await self._store.save_pending(
             txn=txn,
             client_id=client.client_id or "",
             redirect_uri=str(params.redirect_uri),
             code_challenge=params.code_challenge,
             code_challenge_method="S256",
+            csrf_token=csrf_token,
             client_state=params.state,
             scopes=list(params.scopes or []),
             created_at=self._now(),

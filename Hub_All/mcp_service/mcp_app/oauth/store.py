@@ -71,6 +71,7 @@ _SCHEMA_STATEMENTS = (
         redirect_uri TEXT NOT NULL,
         code_challenge TEXT NOT NULL,
         code_challenge_method TEXT NOT NULL,
+        csrf_token TEXT NOT NULL DEFAULT '',
         client_state TEXT,
         scopes TEXT NOT NULL,
         created_at INTEGER NOT NULL
@@ -97,7 +98,12 @@ class OAuthStore:
         self._conn: aiosqlite.Connection | None = None
 
     async def init_schema(self) -> None:
-        """Mở connection + tạo 4 bảng (CREATE TABLE IF NOT EXISTS — idempotent)."""
+        """Mở connection + tạo 4 bảng (CREATE TABLE IF NOT EXISTS — idempotent).
+
+        HIGH-09 migration: thêm cột csrf_token cho oauth_pending nếu DB cũ
+        không có. SQLite không hỗ trợ ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+        — phải kiểm PRAGMA table_info trước.
+        """
         if self._conn is None:
             # Đảm bảo thư mục cha tồn tại (bỏ qua khi :memory: hoặc không có dirname).
             dirname = os.path.dirname(self.db_path)
@@ -106,6 +112,16 @@ class OAuthStore:
             self._conn = await aiosqlite.connect(self.db_path)
         for statement in _SCHEMA_STATEMENTS:
             await self._conn.execute(statement)
+        # HIGH-09 migration — back-compat DB cũ.
+        async with self._conn.execute(
+            "PRAGMA table_info(oauth_pending)"
+        ) as cursor:
+            cols = {row[1] for row in await cursor.fetchall()}
+        if "csrf_token" not in cols:
+            await self._conn.execute(
+                "ALTER TABLE oauth_pending ADD COLUMN csrf_token TEXT "
+                "NOT NULL DEFAULT ''"
+            )
         await self._conn.commit()
         logger.info("OAuthStore khởi tạo schema — 4 bảng sẵn sàng")
 
@@ -392,22 +408,30 @@ class OAuthStore:
         redirect_uri: str,
         code_challenge: str,
         code_challenge_method: str,
+        csrf_token: str,
         client_state: str | None,
         scopes: list,
         created_at: int,
     ) -> None:
-        """Lưu tham số authorize() — giữ giữa lúc /authorize và lúc user login."""
+        """Lưu tham số authorize() — giữ giữa lúc /authorize và lúc user login.
+
+        HIGH-09: csrf_token sinh ở provider.authorize, embed vào login form
+        hidden, verify ở /login/callback. Tham số BẮT BUỘC (không default) —
+        contract đồng nhất giữa production và test helper.
+        """
         conn = self._require_conn()
         await conn.execute(
             "INSERT OR REPLACE INTO oauth_pending "
             "(txn, client_id, redirect_uri, code_challenge, code_challenge_method, "
-            "client_state, scopes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "csrf_token, client_state, scopes, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 txn,
                 client_id,
                 redirect_uri,
                 code_challenge,
                 code_challenge_method,
+                csrf_token,
                 client_state,
                 json.dumps(scopes),
                 created_at,
@@ -421,7 +445,8 @@ class OAuthStore:
         conn = self._require_conn()
         async with conn.execute(
             "SELECT client_id, redirect_uri, code_challenge, code_challenge_method, "
-            "client_state, scopes, created_at FROM oauth_pending WHERE txn = ?",
+            "csrf_token, client_state, scopes, created_at "
+            "FROM oauth_pending WHERE txn = ?",
             (txn,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -432,9 +457,10 @@ class OAuthStore:
             "redirect_uri": row[1],
             "code_challenge": row[2],
             "code_challenge_method": row[3],
-            "client_state": row[4],
-            "scopes": json.loads(row[5]),
-            "created_at": row[6],
+            "csrf_token": row[4],
+            "client_state": row[5],
+            "scopes": json.loads(row[6]),
+            "created_at": row[7],
         }
 
     async def delete_pending(self, txn: str) -> None:

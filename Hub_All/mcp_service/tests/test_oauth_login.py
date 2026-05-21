@@ -63,34 +63,66 @@ def oauth_env(monkeypatch: pytest.MonkeyPatch, tmp_path):
 
 
 def test_login_get_renders_form(oauth_env) -> None:
-    """GET /login?txn=x -> 200 + HTML chứa form + input email + password."""
-    from mcp_app.server import build_asgi_app
+    """GET /login?txn=x sau khi seed pending -> 200 + HTML chứa form + email + password + hidden csrf_token.
+
+    Plan 07 (HIGH-09): login_get giờ load_pending_csrf — pending miss → 400.
+    Test PHẢI seed pending TRƯỚC GET.
+    """
+    import asyncio
+
+    from mcp_app.server import _get_oauth_store, build_asgi_app
+
+    from .conftest import fake_pending_authorize
 
     app = build_asgi_app()
     with TestClient(app) as client:
-        resp = client.get("/login?txn=txn-abc")
+        store = _get_oauth_store()
+        txn = asyncio.new_event_loop().run_until_complete(
+            fake_pending_authorize(store, txn="txn-abc", csrf_token="csrf-render-test")
+        )
+        resp = client.get(f"/login?txn={txn}")
     assert resp.status_code == 200
     body = resp.text
     assert "<form" in body
     assert 'name="email"' in body
     assert 'name="password"' in body
     assert "txn-abc" in body
+    # HIGH-09: hidden csrf_token render đúng giá trị seed.
+    assert 'name="csrf_token"' in body
+    assert "csrf-render-test" in body
 
 
 @pytest.mark.critical
 @respx.mock
 def test_login_callback_wrong_credential(oauth_env) -> None:
-    """POST /login/callback, /api/auth/login 401 -> 200 HTML lỗi credential."""
-    from mcp_app.server import build_asgi_app
+    """POST /login/callback, /api/auth/login 401 -> 200 HTML lỗi credential.
+
+    Plan 07 (HIGH-09): login_callback giờ verify CSRF + pending tồn tại — phải
+    seed pending TRƯỚC POST, kèm csrf_token form khớp.
+    """
+    import asyncio
+
+    from mcp_app.server import _get_oauth_store, build_asgi_app
+
+    from .conftest import fake_pending_authorize
 
     respx.post(f"{_API_BASE_URL}/api/auth/login").mock(
         return_value=httpx.Response(401, json=_envelope_err("INVALID", "Sai"))
     )
     app = build_asgi_app()
     with TestClient(app) as client:
+        store = _get_oauth_store()
+        txn = asyncio.new_event_loop().run_until_complete(
+            fake_pending_authorize(store, txn="txn-x", csrf_token="csrf-x")
+        )
         resp = client.post(
             "/login/callback",
-            data={"txn": "txn-x", "email": "a@b.com", "password": "sai"},
+            data={
+                "txn": txn,
+                "csrf_token": "csrf-x",
+                "email": "a@b.com",
+                "password": "sai",
+            },
         )
     assert resp.status_code == 200
     assert "Sai tài khoản hoặc mật khẩu" in resp.text
@@ -125,9 +157,15 @@ def test_login_callback_success_redirects(oauth_env) -> None:
         txn = asyncio.new_event_loop().run_until_complete(
             fake_pending_authorize(store, txn="txn-success")
         )
+        # Plan 07 (HIGH-09): truyền csrf_token form khớp default fake_pending_authorize.
         resp = client.post(
             "/login/callback",
-            data={"txn": txn, "email": "a@b.com", "password": "pwd"},
+            data={
+                "txn": txn,
+                "csrf_token": "csrf-test-fixed",
+                "email": "a@b.com",
+                "password": "pwd",
+            },
             follow_redirects=False,
         )
     assert resp.status_code == 302

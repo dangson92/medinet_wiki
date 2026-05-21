@@ -134,14 +134,15 @@ async def fake_pending_authorize(
     redirect_uri: str = "https://claude.ai/api/mcp/auth_callback",
     code_challenge: str = "challenge-test",
     code_challenge_method: str = "S256",
+    csrf_token: str = "csrf-test-fixed",  # HIGH-09 — helper test default
     client_state: str | None = "client-state-test",
     scopes: list[str] | None = None,
     created_at: int | None = None,
 ) -> str:
     """Seed 1 bản ghi oauth_pending để test login callback nối lại flow.
 
-    Trả về `txn` đã seed. Dùng ở Plan 02 Task 3 (test_login_callback_success_redirects)
-    và bất kỳ test nào cần pending-authorize params có sẵn trong store.
+    Trả về `txn` đã seed. csrf_token mặc định `"csrf-test-fixed"` — test mới
+    HIGH-09 truyền tường minh giá trị khác để test verify mismatch.
     """
     import time
 
@@ -151,6 +152,7 @@ async def fake_pending_authorize(
         redirect_uri=redirect_uri,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
+        csrf_token=csrf_token,
         client_state=client_state,
         scopes=scopes or ["wiki"],
         created_at=created_at if created_at is not None else int(time.time()),

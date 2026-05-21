@@ -168,6 +168,7 @@ async def test_pending_roundtrip(oauth_store) -> None:
         redirect_uri="https://claude.ai/api/mcp/auth_callback",
         code_challenge="pkce-challenge",
         code_challenge_method="S256",
+        csrf_token="csrf-store-test",
         client_state="client-state-99",
         scopes=["wiki"],
         created_at=now,
@@ -179,6 +180,8 @@ async def test_pending_roundtrip(oauth_store) -> None:
     assert loaded["redirect_uri"] == "https://claude.ai/api/mcp/auth_callback"
     assert loaded["code_challenge"] == "pkce-challenge"
     assert loaded["code_challenge_method"] == "S256"
+    # HIGH-09: csrf_token propagate end-to-end.
+    assert loaded["csrf_token"] == "csrf-store-test"
     assert loaded["client_state"] == "client-state-99"
     assert loaded["scopes"] == ["wiki"]
     assert loaded["created_at"] == now
