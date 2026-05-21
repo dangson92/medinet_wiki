@@ -1,11 +1,12 @@
 # Medinet Wiki — Hub_All
 
 **Mã dự án:** MEDWIKI
-**Giai đoạn:** Brownfield · Pivot lần 2 (full rewrite RAG)
-**Current Milestone:** **v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)**
-**Defer:** v3.0 = Multi-subdomain SPA · v4.0 = MCP Server + Hardening
+**Giai đoạn:** Post-v2.0 closeout (M2 shipped 2026-05-21) — chờ trigger `/gsd-new-milestone v3.0` Multi-Hub Split
+**Shipped:** **v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)** ✅ 2026-05-21 (13 phase / ~75 plan / 38 REQ-ID — xem `.planning/milestones/v2.0-full-rag-rewrite/`)
+**Next Milestone:** **v3.0 — Multi-Hub Split** (LOCKED 4 D-V3 + 4 GA-V3 open — seed `.planning/seeds/v3.0-multi-hub-split.md`)
+**Defer:** v4.0 = Production Hardening + Advanced RAG (OCR VN, streaming SSE, cross-dim swap, coverage >80%, ...)
 **Abandoned:** v1.0 = RAG Quality with Docling (2026-05-13 — xem `MILESTONES.md`)
-**Ngày khởi tạo GSD:** 2026-04-28 · **Pivot 2:** 2026-05-13
+**Ngày khởi tạo GSD:** 2026-04-28 · **Pivot 2:** 2026-05-13 · **v2.0 shipped:** 2026-05-21
 
 ---
 
@@ -21,24 +22,75 @@ Medinet Wiki là hệ thống quản lý tri thức nội bộ đa-Hub (3 Hub: y
 
 Core value không đổi qua các milestone — chỉ cách triển khai thay đổi (Go-native → Docling sidecar → CocoIndex + FastAPI). Khi RAG chất lượng ổn định, các milestone sau (Multi-subdomain SPA, MCP Server, AI Post) mới có giá trị thực tế.
 
-## Current Milestone: v2.0 Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
+## Current State: v2.0 SHIPPED ✅ 2026-05-21
 
-**Goal:** Xóa toàn bộ stack RAG + backend Go hiện hữu, viết lại bằng **Python FastAPI + cocoindex v1.0.3+ + Postgres pgvector**. CocoIndex sở hữu indexing dataflow (extract → chunk → embed → upsert) + incremental diff theo content-hash; FastAPI handle auth (JWT RS256 + Argon2), hub registry, user management, audit log, search, answer. ChromaDB và toàn bộ Go backend bị xóa.
+**Status:** M2 v2.0 100% COMPLETE — 13 phase / ~75 plan / 38 REQ-ID done. Tag git `v2.0` (annotated, local — push remote defer user trigger).
 
-**Target features:**
+**Delivered (v2.0):**
 
-1. **Python FastAPI backend** thay thế Go — auth (JWT RS256 + Argon2 + refresh token), hub registry, user management, audit log, document CRUD, search/ask API
-2. **CocoIndex flow** ingest documents → chunks → pgvector (incremental diff content-hash khi user sửa nội dung — hợp nhất backlog 999.1)
-3. **pgvector schema** chunks + metadata + isolation theo `hub_id`
-4. **Embedding hot-swap** OpenAI / Gemini qua LiteLLM (transform function trong cocoindex flow)
-5. **LLM answerer hot-swap** OpenAI / Gemini + citation `[src:<chunk_id>]` + cross-hub (FastAPI handler)
-6. **Frontend tương thích** — React 19 hiện tại KHÔNG sửa (URL `/api/*` giữ nguyên qua nginx hoặc FastAPI mount cùng port `:8080`)
-7. **Eval framework mới** đo retrieval + extraction quality trên stack mới (queries.jsonl + dataset 10 file y tế tiếng Việt)
-8. **Quality gate** ≥ 75% top-3 trên dataset y tế tiếng Việt
+1. **Python FastAPI backend** thay thế Go hoàn toàn — auth (JWT RS256 + Argon2 cross-compat Go params `m=65536,t=3,p=4`), hub registry CRUD, user management RBAC, audit log async, document CRUD, envelope `{success,data,error,meta}`
+2. **CocoIndex 1.0.3 flow** ingest extract → chunk VN → embed dim 1536 → pgvector + content-hash incremental dedup + `BackgroundTasks` trigger (cocoindex 1.0.3 KHÔNG support LISTEN/NOTIFY) + heartbeat watchdog 300s + race vá Plan 04-08
+3. **pgvector schema** + HNSW `vector_cosine_ops` + `iterative_scan=relaxed_order` + ef_search=200; hub isolation enforce ở repo layer (E4 6/6 critical PASS)
+4. **Embedding hot-swap** OpenAI/Gemini within dim 1536 OK, cross-dim REFUSE 400 (defer v4.0)
+5. **LLM answerer LiteLLM** + citation `[N]`→`chunk_id` + anti-injection prompt + cross-hub + token usage `BackgroundTasks` ghi `usage_events`
+6. **Frontend KHÔNG sửa** (D6) — Phase 8 verify-only, 0 file `frontend/` đụng; SC1/SC2-browser/SC5 HUMAN UAT defer
+7. **MCP server cho AI client ngoài** — Phase 8.1 in-process → Phase 8.2 standalone process HTTP → Phase 8.3 OAuth 2.0 + DCR + Caddy auto-TLS (mcp_service 135/135 PASS)
+8. **Eval framework Python pytest** — `make eval-smoke` mock <60s + `make eval-all` real LLM gate verdict + `report.py` 7 section EVAL.md + pytest smoke regression CI gate zero external dep
+9. **Hardening + observability** — structlog JSON 10 field + Prometheus `/metrics` 5 metric + critical-path coverage 57.75% + GitHub Actions CI test.yml + lint.yml secret detection
+
+**Pending HUMAN UAT (KHÔNG block v2.0 close):**
+- Phase 9 Wave 4 — gate verdict ≥75% top-3 với OpenAI key thật (~$0.20/run)
+- Phase 8.3 — kết nối Claude web "Add custom connector" tới domain MeWiki MCP thật
+- Phase 8 — render 11 trang React + citation `[1]` clickable + docker compose 5-service healthy
+
+Full details: `.planning/milestones/v2.0-full-rag-rewrite/ROADMAP.md`
+
+## Next Milestone Goals: v3.0 Multi-Hub Split
+
+**Trigger:** `/gsd-new-milestone v3.0` sau khi user verify v2.0 closeout (HUMAN UAT Phase 9 gate verdict + retrospective).
+
+**Goal:** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL (1 DB `medinet_central` + `WHERE hub_id`) sang **multi-tenancy PHYSICAL** — mỗi hub con có **process + Postgres database riêng cùng 1 instance**, hub tổng đóng vai trò aggregator nhận chunks + vector từ hub con (sync 1 chiều) để search cross-hub tập trung. URL subpath `wiki.domain.com/<ten_hub>`.
+
+**LOCKED architectural decisions (2026-05-21):**
+- **D-V3-01:** Postgres database riêng cùng instance (`medinet_central` + `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`). Backup chung, network đơn giản, cocoindex flow ngắn.
+- **D-V3-02:** Dataflow hub con → tổng = **chunks + vector denormalized** sync 1 chiều (cocoindex target thứ 2 / Postgres logical replication / outbox + worker — chốt ở `/gsd-discuss-phase`). Hub tổng KHÔNG re-embed.
+- **D-V3-03:** Milestone-level scoping — KHÔNG nhét vào M2 dưới dạng 1 phase.
+- **D-V3-04:** M2 closeout precondition — Phase 9 gate ≥75% + retrospective phải xong TRƯỚC v3.0 start.
+
+**Open questions (chốt ở `/gsd-discuss-milestone v3.0`):**
+- **GA-V3-A:** Auth SSO design (JWT shared secret / OIDC / cookie domain `.medinet.vn`).
+- **GA-V3-B:** System settings sync (rag-config global vs per-hub override; api_keys vs `X-API-Key` propagation).
+- **GA-V3-C:** Reverse proxy frontend prefix detect (Caddy/nginx `/{ten_hub}` → đúng SPA bundle + JWT issuer per subpath).
+- **GA-V3-D:** Migration data từ `medinet_central` cũ — partition table theo `hub_id` → physical split.
+
+Seed full: `.planning/seeds/v3.0-multi-hub-split.md` (7 phase ~35 plan + 4 R-V3 risk + 4 E-V3 exit criteria)
 
 ## Requirements
 
-### Validated (đã có trong codebase brownfield — sẽ thay thế hoàn toàn ở M2)
+### Validated (M2 v2.0 shipped 2026-05-21 — 38/38 REQ-ID done)
+
+- ✓ Python FastAPI backend thay Go hoàn toàn (auth + hub + user + audit + ingest + search + ask + MCP) — v2.0
+- ✓ CocoIndex 1.0.3 ingest dataflow + content-hash incremental dedup + heartbeat watchdog — v2.0
+- ✓ pgvector + HNSW search single-hub & cross-hub + Redis cache hub-tagged Pub/Sub invalidate — v2.0
+- ✓ Ask API + LiteLLM citation `[N]`→`chunk_id` + anti-injection + hot-swap provider + token usage logging — v2.0
+- ✓ MCP server (3 tool read-only) + standalone process gọi API HTTP + OAuth 2.0 + DCR + Caddy auto-TLS — v2.0 (Phase 8.1/8.2/8.3)
+- ✓ Eval framework Python pytest + 10 file VN medical + queries.jsonl + gate `report.py` exit 0/1/E5 + pytest smoke regression CI gate — v2.0
+- ✓ Hardening: structlog JSON 10 field + Prometheus `/metrics` + critical-path coverage 57.75% + GitHub Actions CI — v2.0
+- ✓ Frontend React 19 KHÔNG sửa (D6) — verify-only smoke 11 trang + VN filename UTF-8 — v2.0 (COMPAT-01)
+- ✓ TEARDOWN Go backend xoá + tag `m1-go-archived` backup — v2.0 (TEARDOWN-01, pull-in 2026-05-14)
+
+### Active (chờ trigger v3.0 Multi-Hub Split)
+
+Sẽ liệt kê chi tiết ở `/gsd-new-milestone v3.0` — tham chiếu seed `.planning/seeds/v3.0-multi-hub-split.md`. Tóm tắt:
+
+- [ ] **HUB-V3-01..N**: Tách hub con (y_te, dược, HCNS) thành process + Postgres database riêng cùng instance (D-V3-01)
+- [ ] **SYNC-V3**: Dataflow hub con → hub tổng = chunks + vector denormalized sync 1 chiều (D-V3-02)
+- [ ] **AUTH-V3**: SSO across subpath `wiki.domain.com/<ten_hub>` (GA-V3-A chốt)
+- [ ] **PROXY-V3**: Reverse proxy frontend prefix detect (GA-V3-C chốt)
+- [ ] **SETTINGS-V3**: rag-config global vs per-hub override (GA-V3-B chốt)
+- [ ] **MIGRATE-V3**: Data migration `medinet_central` cũ → physical split (GA-V3-D chốt)
+
+### Validated (brownfield — đã thay thế hoàn toàn ở M2, giữ làm lịch sử)
 
 > ⚠️ Các capability dưới đây là scope cần xây trong M2. Go backend đã xóa 2026-05-14 (TEARDOWN-01 pull-in) — **KHÔNG còn "port từ Go source"**. Contract của mỗi capability lấy từ: (1) `frontend/src/services/api.ts` (URL path + request/response types — D6 ràng buộc), (2) response envelope `{success, data, error, meta}`, (3) git tag `m1-go-archived` nếu cần tra cứu shape Go cũ. Thiết kế fresh bằng Python, KHÔNG dịch 1-1 logic Go.
 
@@ -49,19 +101,6 @@ Core value không đổi qua các milestone — chỉ cách triển khai thay đ
 - **Async usage logging non-blocking** — asyncio/background task
 - **React SPA đầy đủ** (Dashboard, HubRegistry, DocumentIngestion, SyncQueue, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — **KHÔNG đổi frontend** (chỉ giữ tương thích URL)
 - **Cross-hub search API** — FastAPI
-
-### Active (M2 — Full RAG Rewrite)
-
-Sẽ liệt kê chi tiết trong `REQUIREMENTS.md`. Tóm tắt 8 nhóm:
-
-- [ ] **CORE** — FastAPI app skeleton, Postgres schema migrate (drop chunks Chroma-only fields, add pgvector cols), Docker Compose mới (postgres + redis + python-api, bỏ chromadb)
-- [ ] **AUTH** — JWT RS256 + Argon2 + login/refresh/me/logout, RBAC middleware
-- [ ] **HUB** — hub registry CRUD, isolation theo `hub_id` trên mọi endpoint
-- [ ] **USER** — user management CRUD + RBAC
-- [ ] **INGEST** — cocoindex flow: source (file_store) → extract (TBD parser, OCR tiếng Việt = open question) → chunk → embed → pgvector
-- [ ] **SEARCH** — `/api/search` hybrid query (vector + metadata filter), top-k pgvector
-- [x] **ASK** — `/api/ask` LLM answerer với citation + cross-hub option ✓ Phase 7 (ASK-01..05 — citation `[N]`, anti-injection, hot-swap provider, token usage)
-- [ ] **EVAL** — eval framework Python mới + queries.jsonl + dataset 10 file + gate ≥75% top-3
 
 ### Out of Scope (M2)
 
@@ -186,4 +225,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 (Phase 8 COMPLETE — Frontend E2E Smoke: contract diff frontend↔FastAPI, fix gap api-side (router `/api/ai/chat` + port 8180), test golden path + VN filename; COMPAT-01 lớp tĩnh/tự động ĐẠT, SC1/SC2-browser/SC5 defer `/gsd-verify-work 8`. M2b tiến độ: Phase 5/6/7/8 done, tiếp theo Phase 9 Eval Framework. M2a còn Phase 4 (cocoindex ingest) + M2a EXIT GATE.)*
+*Last updated: 2026-05-21 after v2.0 milestone close (`/gsd-complete-milestone v2.0`). M2 v2.0 100% COMPLETE — 13 phase / ~75 plan / 38 REQ-ID. Tag `v2.0` (local). Archive `.planning/milestones/v2.0-full-rag-rewrite/`. Pending HUMAN UAT (Phase 9 gate verdict + 8.3 Claude web + 8 docker compose) KHÔNG block close — ghi nhận retrospective. Next: `/gsd-new-milestone v3.0` Multi-Hub Split sau khi user verify v2.0.)*

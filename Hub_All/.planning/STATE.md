@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
 milestone: v2.0
-milestone_name: milestone
-status: Phase 10 COMPLETE — 6/6 plans ✅ (HARD-01 structlog + HARD-02 Prometheus + HARD-03 critical-path acceptance + CRIT-01 CORS split + HARD-04 docs + HARD-03 CI workflow DONE). M2 v2.0 100% COMPLETE → sẵn sàng /gsd-complete-milestone v2.0 → /gsd-new-milestone v3.0 Multi-Hub Split.
-last_updated: "2026-05-21T09:18:16.000Z"
+milestone_name: Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
+status: ✅ SHIPPED 2026-05-21 (`/gsd-complete-milestone v2.0`). Tag `v2.0` (annotated, local — push remote defer). Archive `.planning/milestones/v2.0-full-rag-rewrite/`. Next: `/gsd-new-milestone v3.0` Multi-Hub Split sau khi user verify HUMAN UAT (Phase 9 gate verdict + 8.3 Claude web + 8 docker compose 5-service).
+last_updated: "2026-05-21T10:30:00.000Z"
 progress:
   total_phases: 13
   completed_phases: 13
@@ -11,6 +11,23 @@ progress:
   completed_plans: 70
   percent: 100
 ---
+
+## Deferred Items (acknowledged at v2.0 close 2026-05-21)
+
+Pre-flight `audit-open` PASSED clear. Các item HUMAN UAT dưới đây acknowledge và defer track standalone, KHÔNG block v2.0 close:
+
+| Category | Item | Status / Next action |
+|----------|------|---------------------|
+| HUMAN UAT | Phase 9 Wave 4 — gate verdict ≥75% top-3 OpenAI key thật | Chạy `make eval-all` khi user release key + budget ~$0.20/run |
+| HUMAN UAT | Phase 8.3 — kết nối Claude web "Add custom connector" tới domain MeWiki MCP | `08.3-HUMAN-UAT.md` — chờ user deploy public HTTPS thật |
+| HUMAN UAT | Phase 8 SC1/SC2-browser/SC5 (render 11 trang React + citation `[1]` clickable + docker compose healthy) | `08-HUMAN-UAT.md` — defer `/gsd-verify-work 8` |
+| HUMAN UAT | Phase 8.1 SC1 (AI client thật) + SC5 (`usage_events` DB thật) | `08.1-HUMAN-UAT.md` |
+| HUMAN UAT | Phase 8.2 SC4 (`usage_events` row sau `ask_wiki` E2E thật) | mcp_service README |
+| Tech debt | Migrate service module log cũ sang `structlog.get_logger(__name__)` | DEF-10-01-B → v4.0 |
+| Tech debt | Branch protection rule GitHub repo enforce 2 workflow trước merge main | Cần admin permission → v4.0 |
+| Tech debt | Push tag `v2.0` lên remote | Defer user trigger sau verify |
+
+> **CRIT-01 status:** ✅ ĐÃ ĐÓNG Plan 10-04 (2026-05-21) — KHÔNG còn defer.
 
 # State — MEDWIKI
 
