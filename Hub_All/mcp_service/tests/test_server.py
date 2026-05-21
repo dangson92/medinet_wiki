@@ -332,3 +332,157 @@ async def test_tool_no_credential(
     with pytest.raises(ToolError, match="MCP_UNAUTHORIZED"):
         await list_hubs(mock_ctx_oauth(token=None))
     await store.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.3 Plan 09 — gap closure wave 9 (HIGH-05 envelope + HIGH-03 concurrency)
+# ---------------------------------------------------------------------------
+
+
+async def test_list_hubs_envelope_data_list_branch(mock_ctx) -> None:
+    """list_hubs unwrap envelope `data:[list]` (HIGH-05, regression commit 3dbb378).
+
+    API service `/api/hubs` (resp.paginated) trả envelope `{data:[...], meta:{...}}`
+    → `data` đã unwrap là LIST hub. Test verify nhánh `isinstance(data, list)`
+    của server.py (dòng 368) — KHÔNG dùng fallback `dict.get("items")`.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from mcp_app.auth import Credential
+    from mcp_app.server import list_hubs
+
+    # Mock ApiClient — get trả LIST trực tiếp (sau khi envelope `data:[...]` unwrap).
+    list_data = [
+        {"id": "hub-1", "name": "Hub Một", "description": "Mô tả 1"},
+        {"id": "hub-2", "name": "Hub Hai", "description": None},
+    ]
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=list_data)
+
+    # Credential signature confirmed (Warning #9): kind, value, oauth_token.
+    fake_cred = Credential(kind="api_key", value="test-key", oauth_token=None)
+
+    with (
+        patch("mcp_app.server._resolve_credential", AsyncMock(return_value=fake_cred)),
+        patch("mcp_app.server._get_client", return_value=fake_client),
+    ):
+        result = await list_hubs(mock_ctx())
+
+    assert len(result.hubs) == 2
+    assert result.hubs[0].id == "hub-1"
+    assert result.hubs[0].name == "Hub Một"
+    assert result.hubs[1].description is None
+
+
+async def test_list_hubs_envelope_legacy_items_dict_branch(mock_ctx) -> None:
+    """list_hubs unwrap fallback `{items: [...]}` legacy format (HIGH-05 fallback path).
+
+    Fallback `dict.get("items", [])` cho format cũ phòng khi API đổi shape ngược.
+    Test chứng minh fallback path đang hoạt động (BOND legacy compat).
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from mcp_app.auth import Credential
+    from mcp_app.server import list_hubs
+
+    legacy_data = {"items": [{"id": "hub-x", "name": "Hub X"}]}
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=legacy_data)
+    fake_cred = Credential(kind="api_key", value="k", oauth_token=None)
+
+    with (
+        patch("mcp_app.server._resolve_credential", AsyncMock(return_value=fake_cred)),
+        patch("mcp_app.server._get_client", return_value=fake_client),
+    ):
+        result = await list_hubs(mock_ctx())
+
+    assert len(result.hubs) == 1
+    assert result.hubs[0].id == "hub-x"
+
+
+async def test_refresh_jwt_concurrency_single_flight(oauth_store) -> None:
+    """2 task song song _call_api gặp 401 → refresh_jwt gọi ĐÚNG 1 LẦN (HIGH-03).
+
+    Audit 2026-05-21 HIGH-03 + Warning #8 (audit checker): assertion nghiêm —
+    refresh_mock.call_count == 1 (single-flight), call_state["get_calls"] in
+    (3, 4) tùy race ordering.
+
+    Race ordering:
+    - 4 calls = 2 task gọi với JWT-OLD song song (cả 2 raise 401) +
+      2 task retry với JWT-NEW (cả 2 OK).
+    - 3 calls = task 2 vào lock SAU task 1 refresh xong, đọc record thấy JWT
+      đã update → skip refresh, retry với JWT-NEW ngay (chỉ 1 lần gọi).
+      Trường hợp này task 1 gọi 2 lần (OLD + NEW) + task 2 gọi 1 lần (NEW) = 3.
+    """
+    import asyncio
+    import time
+    from unittest.mock import AsyncMock, patch
+
+    from mcp_app.api_client import ApiClient, ApiUnauthorizedError
+    from mcp_app.auth import Credential
+    from mcp_app.server import _call_api, _refresh_locks
+
+    # Setup oauth_store với 1 token có downstream JWT cũ.
+    await oauth_store.save_token(
+        access_token="oauth-T",
+        refresh_token="oauth-R",
+        client_id="client-test",
+        scopes=["wiki"],
+        downstream_jwt="JWT-OLD",
+        downstream_refresh_token="REFRESH-OLD",
+        user_payload={"id": 1},
+        expires_at=int(time.time()) + 3600,
+    )
+
+    # Reset lock pool cho test isolation.
+    _refresh_locks.clear()
+
+    # Mock ApiClient:
+    # - get(): lần đầu raise ApiUnauthorizedError (401); lần sau trả {"ok": True}.
+    # - refresh_jwt(): trả pair JWT mới.
+    call_state = {"get_calls": 0}
+
+    async def _fake_get(path, *, jwt=None, api_key=None, params=None):  # type: ignore[no-untyped-def]
+        call_state["get_calls"] += 1
+        # 401 nếu JWT vẫn là JWT-OLD; OK nếu JWT mới.
+        if jwt == "JWT-OLD":
+            raise ApiUnauthorizedError("401 mock")
+        return {"ok": True, "jwt_used": jwt}
+
+    refresh_mock = AsyncMock(
+        return_value={"access_token": "JWT-NEW", "refresh_token": "REFRESH-NEW"}
+    )
+    fake_client = AsyncMock(spec=ApiClient)
+    fake_client.get = _fake_get
+    fake_client.refresh_jwt = refresh_mock
+
+    # Credential signature confirmed (Warning #9): kind, value, oauth_token.
+    cred = Credential(kind="jwt", value="JWT-OLD", oauth_token="oauth-T")
+
+    with (
+        patch("mcp_app.server._get_client", return_value=fake_client),
+        patch("mcp_app.server._get_oauth_store", return_value=oauth_store),
+    ):
+        # asyncio.gather 2 task song song.
+        results = await asyncio.gather(
+            _call_api(cred, "GET", "/api/test"),
+            _call_api(cred, "GET", "/api/test"),
+        )
+
+    # HIGH-03 assertion nghiêm (Warning #8): refresh_jwt gọi ĐÚNG 1 lần (single-flight).
+    assert refresh_mock.call_count == 1, (
+        f"HIGH-03: refresh_jwt phải gọi ĐÚNG 1 lần, nhận {refresh_mock.call_count}"
+    )
+    # Cả 2 task succeed.
+    assert len(results) == 2
+    for r in results:
+        assert r["ok"] is True
+    # Tổng get calls (Warning #8 — siết từ >=3 sang in (3, 4)):
+    # Bất kỳ giá trị NGOÀI {3, 4} → behavior sai (vd 5 = double refresh).
+    assert call_state["get_calls"] in (3, 4), (
+        f"HIGH-03: Expect get_calls ∈ (3, 4) tùy race ordering, "
+        f"got {call_state['get_calls']}"
+    )
+
+    # Cleanup lock pool.
+    _refresh_locks.clear()
