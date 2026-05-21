@@ -1,240 +1,124 @@
-# Requirements: Medinet Wiki — Milestone v2.0 (Full RAG Rewrite)
+# Requirements: Medinet Wiki — Milestone v3.0 (Multi-Hub Split)
 
-**Defined:** 2026-05-13
-**Milestone:** v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)
-**Core Value:** Ingestion tri thức Medinet phải tái hiện trung thực cấu trúc tài liệu nguồn (heading, bảng, ảnh có chú thích, công thức — OCR tiếng Việt cho scanned PDF defer M2 vì D4) — biến mọi tài liệu y tế / dược / HCNS thành chunk semantic giàu metadata, để top-3 retrieval đạt ≥ 75% trên eval set thật.
-**Granularity:** Large (10 phases) · **Mode:** YOLO · **Phase numbering:** Reset về 1 (--reset-phase-numbers)
+**Defined:** 2026-05-21
+**Milestone:** v3.0 — Multi-Hub Split (subpath routing + multi-DB physical isolation)
+**Core Value:** Ingestion tri thức Medinet phải tái hiện trung thực cấu trúc tài liệu nguồn — biến mọi tài liệu y tế / dược / HCNS thành chunk semantic giàu metadata. v3.0 mở rộng theo trục tách hub vật lý (process + DB riêng cùng instance) + cross-hub aggregation tại central, top-3 retrieval vẫn ≥75% trên eval set thật.
+**Granularity:** Large (7 phases) · **Mode:** YOLO · **Phase numbering:** Reset về 1 (D-V3-05)
 
-> ⚠️ **REPLACE — M1 requirements (Docling) abandoned 2026-05-13.** Toàn bộ DSVC/EXTRACT/CHUNK/WIRE/CFG REQ-ID của M1 archive vào `.planning/milestones/v1.0-docling-rag/`. M2 = bộ REQ-ID mới hoàn toàn.
-
----
-
-## v1 Requirements (M2 scope — 38 REQ-ID)
-
-### CORE — Infra + Skeleton + Demolition (5 REQ)
-
-- [ ] **CORE-01**: `Hub_All/api/` Python project skeleton (pyproject.toml + uv lockfile + Dockerfile multi-stage + ruff + mypy + pytest config). Lock-in version: `python>=3.11,<3.13`, `fastapi==0.136.1`, `cocoindex==1.0.3`, các dep khác theo `.planning/research/STACK.md`.
-- [x] **CORE-02**: `docker-compose.yml` 3 services (`pgvector/pgvector:pg16` + `redis:7-alpine` + `python-api`); init script tạo 2 logical DB (`medinet_central` + `medinet_cocoindex`) + `CREATE EXTENSION vector` trên cả 2 + verify HNSW index 1536-dim build được trước khi viết flow (R1 mitigation). **Note:** Phần schema migrations (Alembic baseline) tách sang Phase 2. ✓ COMPLETE — Phase 1 Plan 02 docker-compose + Phase 2 Plan 01-05 schema baseline (10 bang + HNSW vector_cosine_ops + Vector(1536) verified runtime qua testcontainers 7/7 pytest PASS).
-- [ ] **CORE-03**: Xóa code cũ — `Hub_All/docling-pipeline/`, `Hub_All/eval/`, `Hub_All/chroma_data/` (nếu còn). Cập nhật `Hub_All/.gitignore` cho `api/keys/`, `api/.venv/`, `medinet_pgdata/`. Giữ `Hub_All/backend/` đến Phase 8 (tear-down sau frontend smoke pass).
-- [ ] **CORE-04**: FastAPI app factory `api/app/main.py` với `lifespan` event (init+abort `cocoindex.FlowLiveUpdater`), `pydantic-settings BaseSettings` đọc env, response envelope `{success, data, error, meta}` ở `api/app/pkg/response.py`. Healthcheck `GET /healthz` + `GET /readyz` (ready khi cocoindex flow updater started + DB pool connected).
-- [ ] **CORE-05**: `.planning/CONVENTIONS.md` mới cho stack Python — test strategy (critical-path mandatory, coverage target 50%+ trên auth/ingest/search/ask), naming `snake_case` cho cocoindex flow/target (R5 mitigation), `APP_NAMESPACE=medinet_prod` cố định trong `.env.example`, middleware order (FastAPI reverse: error→security→CORS→rate-limit), logging fields match Go `log/slog` semantics.
-
-### AUTH — JWT + Argon2 + RBAC + Response Envelope (6 REQ)
-
-- [x] **AUTH-01**: `POST /api/auth/login` — body `{email, password}` → verify Argon2 hash (pwdlib) → return JWT RS256 access (15min) + refresh token (7d). Response envelope `{success, data: {access_token, refresh_token, user}, error, meta}`. Match contract Go cũ để frontend `services/api.ts` không cần đổi. ✓ (Plan 03-04, 2026-05-14 — `app/auth/router.py` POST /login + `app/auth/service.py` AuthService.login với anti-timing oracle dummy_password_hash, response envelope qua `resp.ok(LoginResponse.model_dump())`).
-- [x] **AUTH-02**: `POST /api/auth/refresh` — body `{refresh_token}` → rotate refresh token (Redis SETNX atomic chống concurrent refresh race) → return access + refresh mới. Token cũ blacklist Redis TTL=access_token_ttl. ✓ (Plan 03-04, 2026-05-14 — `app/auth/service.py` AuthService.refresh với `redis.set(lock:refresh:<jti>, nx=True, ex=30)` P16 mitigation + blacklist old jti + UPDATE refresh_tokens.revoked_at + INSERT new token_hash SHA-256).
-- [x] **AUTH-03**: `GET /api/auth/me` (Bearer) → return user info + roles + hub assignments. `POST /api/auth/logout` blacklist refresh token. ✓ (Plan 03-04, 2026-05-14 — `app/auth/router.py` GET /me + POST /logout, `get_current_user` Depends verify Bearer + Redis blacklist check, logout blacklist access JTI + optional refresh JTI với TTL từ exp claim).
-- [x] **AUTH-04**: RBAC dependency `require_role("admin"|"editor"|"viewer")` qua FastAPI `Depends`. Endpoint admin-only refuse với 403 cho viewer/editor. Test integration: viewer KHÔNG thể `PUT /api/hubs/:id`. ✓ (Plan 03-05, 2026-05-14 — `app/auth/dependencies.py` require_role(*roles) factory với ValueError gate empty roles + allowed set check + HTTPException 403 FORBIDDEN; `app/main.py` thêm @app.exception_handler(HTTPException) map envelope shape `{success, data, error, meta}`; 5 unit test test_require_role.py + 6 integration test test_rbac_dependency.py PASS. AC3 reformulation note: production PUT /api/hubs/:id defer Phase 5 HUB-02 reuse cùng require_role dependency — Phase 3 verify contract qua test-only route /test/role-check mount qua fixture).
-- [x] **AUTH-05**: **Argon2 cross-compat test (R6 mitigation)** — pin pwdlib params Go-compat `m=65536, t=3, p=4, saltLen=16, keyLen=32` (DOC-BUG fix: trước đó ghi `t=1, p=2` sai; Go source `backend/internal/pkg/hash/argon2.go` line 13-19 là source of truth — verified by production seed hash prefix `$argon2id$v=19$m=65536,t=3,p=4$`). Test: pwdlib `verify_password()` PASS hash do Go `alexedwards/argon2id` sinh ra (1 Go production hash từ seed.sql + 5 Python round-trip — full 5+5 bi-directional defer Phase 5/8). Fail-fast (CI error) nếu mismatch. ✓ (Plan 03-03, 2026-05-14 — `app/auth/password.py` + 4 critical integration test PASS).
-- [x] **AUTH-06**: JWT keypair `Hub_All/api/keys/` (gitignored). Format compat verify: `openssl rsa -in private.pem -text -noout` xác định PKCS#1 vs PKCS#8. Convert PKCS#1→PKCS#8 nếu cần (`openssl pkcs8 -topk8 -nocrypt`). Token Go cũ (nếu có user đang đăng nhập) phải decode được bởi PyJWT. ✓ (Plan 03-02, 2026-05-14 — `scripts/verify_jwt_format.sh` + `app/auth/jwt.py` JWTManager PyJWT RS256, 8/8 unit test PASS, 5 attack vector reject verified, cross-process Go→Python defer rời Plan 03-05 integration test)
-
-### HUB — Hub Registry CRUD + Isolation (3 REQ)
-
-- [x] **HUB-01**: `GET/POST /api/hubs` + `GET/PUT /api/hubs/:id` + `PATCH /api/hubs/:id/status` — CRUD hub registry (D-07: PUT update KHÔNG PATCH; status endpoint riêng; D-06: KHÔNG test-connection). Schema Postgres: drop col `chroma_collection`/`db_*` (D-05). Pagination `page` + `per_page` (cap `min(per_page, 100)`). ✓ Plan 05-03 (router/service/schema).
-- [x] **HUB-02**: Hub isolation enforce ở repository layer — mọi query có `WHERE hub_id = $1` từ user's hub assignment. Editor of Hub A KHÔNG thể `PATCH/DELETE` document của Hub B kể cả khi explicit `hub_id` trong payload. Test integration mandatory. ✓ (Plan 05-02 hub_isolation.py helper; Plan 05-06 enforce — documents_service.delete() gọi verify_hub_access (hub_id load từ DB row, KHÔNG payload) + enqueue_audit security.hub_isolation_violation tại điểm reject; DELETE /api/documents/:id editor-eligible; test_hub_isolation.py 6 critical test E4 PASS against real DB — editor cross-hub 403 + document tồn tại + audit logged. 2026-05-17)
-- [x] **HUB-03**: `GET /api/hubs/:id/stats` — counts documents/chunks/users trong hub từ Postgres aggregate (KHÔNG từ ChromaDB). `query_count` defer Phase 6/7 (chưa có nguồn data — partial-coverage có chủ đích). ✓ Plan 05-03.
-
-### USER — User Management + RBAC (3 REQ)
-
-- [x] **USER-01**: `GET/POST /api/users` + `GET/PATCH/DELETE /api/users/:id` — admin-only CRUD user. Field: email, full_name, role, hub_assignments[]. (Plan 05-04 — D-07: update tách `PUT /:id` + `PATCH /:id/role` + `PATCH /:id/status`; router mount Wave 4.)
-- [x] **USER-02**: `POST /api/users/:id/reset-password` — admin trigger reset, sinh token 1-time TTL 1h gửi qua email/log (defer email send v4.0, log only M2). (Plan 05-04 — token Redis ex=3600 + log console; KHÔNG trả qua API.)
-- [x] **USER-03**: `GET /api/users/:id/profile` (self hoặc admin) + `PATCH /api/users/me/profile` (self only) — full_name, avatar (defer upload v4.0). (Plan 05-04 — D-07: dùng `/api/profile` self-scoped GET/PUT + POST /password; router KHÔNG :id param.)
-
-### INGEST — CocoIndex Flow + Document Upload (8 REQ)
-
-- [ ] **INGEST-01**: `api/app/rag/flow.py` — `@cocoindex.flow_def(name="medinet_wiki_ingest")` với source `cocoindex.sources.Postgres(table="documents", notification=PostgresNotification(channel="documents_notify"), ordinal_column="updated_at")`. Trigger: FastAPI `INSERT INTO documents` → Postgres `NOTIFY documents_notify` → cocoindex auto-pick up.
-- [ ] **INGEST-02**: Flow transform chain: extract (whitelist `{.docx, .txt, .md, .pdf}`) → detect scanned PDF (heuristic: pypdf trả empty/garbage cho 80%+ pages) → set `status='failed_unsupported'` + return (R4 mitigation) → RecursiveSplitter custom regex tiếng Việt (heading patterns `Mục N.`, `Chương N.`, sentence end before VN caps) → LiteLLM `aembedding(model=cfg.embedding_model, input=chunk.text, dimensions=1536)` (R1 mitigation, PIN dim 1536 cho hot-swap).
-- [ ] **INGEST-03**: Flow target `cocoindex.targets.Postgres(table="chunks")` với schema `chunks(id UUID PK, document_id UUID FK, hub_id UUID, content TEXT, content_hash BYTEA, heading_path TEXT, page_start INT, page_end INT, vector vector(1536), metadata JSONB, created_at TIMESTAMPTZ)`. HNSW cosine index trên `vector` + B-tree index `(hub_id, document_id)`. `chunk_id` stable qua re-index (D-2 differentiator preserve citation).
-- [ ] **INGEST-04**: `POST /api/documents/upload` (multipart) — save file vào `file_store/` (local default, GDrive port optional defer Phase 4 quyết) → INSERT documents row `(hub_id, uploaded_by, filename, file_path, status='pending')` → return 202 + document_id. Cocoindex LISTEN/NOTIFY auto-pick up trong <1s.
-- [ ] **INGEST-05**: `GET /api/documents/:id` — return document + `status` + `chunk_count` (từ `chunks` table aggregate). Frontend poll endpoint này hiển thị progress. `status` enum: `pending | processing | completed | failed | failed_unsupported` (R4 + Pitfall 8 mitigation).
-- [ ] **INGEST-06**: Heartbeat columns `documents.last_heartbeat TIMESTAMPTZ`, `documents.attempts INT`. Watchdog cron (asyncio task mỗi 60s) flip `processing` rows có `last_heartbeat < NOW() - INTERVAL '2 minutes'` → `failed` với `error='timeout'`.
-- [ ] **INGEST-07**: `DELETE /api/documents/:id` — delete row documents + cocoindex auto re-trigger qua LISTEN/NOTIFY → chunks tự xóa qua cocoindex tombstone hoặc explicit `DELETE FROM chunks WHERE document_id = $1`. Audit log action='document_delete'.
-- [ ] **INGEST-08**: `GET /api/documents` list — pagination + filter `hub_id`, `status`, `uploaded_by`, search trong `filename`. Cap `per_page ≤ 100`.
-
-### SEARCH — Vector Search Direct + Cross-Hub (4 REQ)
-
-- [x] **SEARCH-01**: `GET /api/search?q=...&hub_id=X&top_k=10` — embed query qua LiteLLM (SAME provider + dimension như index) → raw SQL `SELECT id, content, metadata, 1 - (vector <=> $1) AS score FROM chunks WHERE hub_id = $2 ORDER BY vector <=> $1 LIMIT $3`. Bypass cocoindex hoàn toàn. ✓ Plan 06-01/06-02 (D-02: hiện thực bằng `POST /api/search` + body `query`/`hub_ids`/`top_k` khớp `api.ts` thay vì GET `?q=` — contract frontend là source of truth).
-- [x] **SEARCH-02**: Per-query session config — `SET LOCAL hnsw.ef_search = 200` + connection-level `SET hnsw.iterative_scan = relaxed_order` + `SET hnsw.max_scan_tuples = 20000` (R2 mitigation). p95 target <800ms cho hub đơn. ✓ Plan 06-01 (`_run_vector_query` SET LOCAL trong transaction; EXPLAIN test dùng `ix_chunks_vector_hnsw`. Đo p95 trên dataset thật: 06-HUMAN-UAT.md).
-- [x] **SEARCH-03**: `POST /api/search/cross-hub` body `{q, hub_ids: [...], top_k_per_hub}` — query nhiều hub song song (asyncio.gather), aggregate + re-rank theo score, return top results với `hub_id` mỗi result. User's `hub_assignments` enforce: result KHÔNG thuộc hub user không có access bị filter ở repo layer (defense in depth ngoài SQL filter). ✓ Plan 06-02 (`search_cross_hub` fan-out asyncio.gather + re-rank; `intersect_hubs` defense in depth — test_search_hub_isolation cross-hub PASS).
-- [x] **SEARCH-04**: Redis cache search results — key `search:{hash(q+hub_ids+top_k)}`, TTL 5 phút. Invalidate cache khi document upload/edit/delete trong hub (Pub/Sub channel `hub:{hub_id}:invalidate`). ✓ Plan 06-01/06-03 (cache read/write sha256 TTL 300s + hub-tagged scheme + publish_invalidate trên document create/delete + subscriber lifespan task. Invalidation E2E test: 06-HUMAN-UAT.md).
-
-### ASK — LLM Answerer + Citation + Hot-Swap (5 REQ)
-
-- [x] **ASK-01**: `POST /api/ask` body `{q, hub_id, top_k?}` → SEARCH-01 lấy top-k chunks → build prompt với chunks đánh số `[1]`, `[2]`,... → `litellm.acompletion(model=cfg.llm_model, messages=[...])` **non-streaming** (streaming defer post-M2 vì citation parsing mid-stream phức tạp) → parse `[N]` markers trong response → return `{answer, citations: [{chunk_id, document_id, score, content_snippet}]}`: ✅ Plan 07-04 + 07-05 (2026-05-18 — citation map verified critical test)
-- [x] **ASK-02**: System prompt anti-injection — instruct LLM "CHỈ trả lời từ context cung cấp, không suy diễn ngoài, format `[N]` cho citation". Test: user query yêu cầu bỏ qua system prompt KHÔNG bypass được: ✅ Plan 07-01 + 07-05 (2026-05-18 — anti-injection prompt được chèn verified; hành vi LLM thật defer Phase 9)
-- [x] **ASK-03**: `POST /api/ask/cross-hub` body `{q, hub_ids: [...]}` — như ASK-01 nhưng dùng SEARCH-03 lấy chunks từ nhiều hub. Citation kèm `hub_id`: ✅ Plan 07-04 + 07-05 (2026-05-18 — cross-hub citation hub_id + hub isolation E4 verified)
-- [x] **ASK-04**: `GET /api/rag-config` + `PUT /api/rag-config` — admin endpoint hot-swap embedding + LLM provider: ✅ Plan 07-03 (2026-05-18)
-  - LLM swap: trivial config reload, không re-index
-  - Embedding swap WITHIN dim 1536 (OpenAI ↔ Gemini): allowed, WARNING modal "vector hiện tại sinh bằng provider X, swap có thể giảm chất lượng — re-embed all? [yes/no]" (R7 mitigation)
-  - Embedding swap CROSS-dim (1536 ↔ 3072): REFUSE 400 "dimension mismatch — defer cross-dim swap v4.0"
-- [x] **ASK-05**: Token usage logging — mỗi LLM call ghi `(user_id, hub_id, model, prompt_tokens, completion_tokens, cost_usd, request_id, created_at)` vào `usage_events`. FastAPI `BackgroundTasks` async (defer Go-style batcher v4.0). `GET /api/usage` aggregate theo user/hub/model/date: ✅ Plan 07-02 + 07-04 + 07-05 (2026-05-18 — 10 ask → 10 row + aggregate verified critical test)
-
-### AUDIT + APIKEY + AUX (3 REQ)
-
-- [ ] **AUX-01**: Audit logger asyncio.Queue + batch flush 2s/128 → `audit_logs(user_id, action, target_type, target_id, hub_id, payload JSONB, request_id, created_at)`. Action enum: `auth.login`, `auth.refresh`, `document.upload`, `document.delete`, `rag-config.update`, `hub.create`, `hub.update`, `user.create`. `GET /api/audit-logs` admin-only.
-- [x] **AUX-02**: API key management `GET/POST/DELETE /api/api-keys` — admin sinh API key cho external integration. Encrypt at rest (AES-GCM với `AES_KEY` env — schema M2 mới, không có data mã hóa cũ cần tương thích). Auth middleware accept header `X-API-Key:` ngoài JWT. ✓ (Plan 05-05 ApiKeyService CRUD + AES-GCM encrypt-at-rest + soft revoke + verify_key; Plan 05-06 router api_keys mounted main.py + auth/api_key.py require_api_key X-API-Key dependency; test_x_api_key_invalid_rejected critical PASS. 2026-05-17)
-- [x] **AUX-03**: Rate limit middleware (slowapi) — 100 req/min/user trên search/ask, 30 req/min/user trên upload, KHÔNG limit trên auth/me. ✓ (Plan 05-02 slowapi Limiter + 429 envelope handler; Plan 05-05 @limiter.limit GET /api/audit-logs; Plan 05-06 app.state.limiter wired main.py + add_exception_handler(RateLimitExceeded); test_rate_limit.py 429 envelope shape + auth/me không limit PASS. /api/search + /api/ask decoration defer Phase 6/7 — endpoint chưa tồn tại. 2026-05-17)
-
-### EVAL — Quality Gate ≥75% top-3 (4 REQ)
-
-- [x] **EVAL-01**: ✅ Plan 09-01 COMPLETE 2026-05-21 — `Hub_All/eval/dataset/sources/` 8 file (7 DOCX DMD + tri_thuc_chinh_tri.pdf) + `Hub_All/eval/dataset/scanned/` 2 scanned PDF (R4 test 415 failed_unsupported) restore byte-identical từ git history commit `0af44f0` (M1 archive). `Hub_All/eval/queries.jsonl` 12 truy vấn vàng port từ M1 + patch thêm field `hub_id="eval_hub"` mỗi dòng — schema đầy đủ `{id, query, expected_doc_id, expected_section, hub_id, notes}` (`ensure_ascii=False` giữ tiếng Việt unicode). Kèm: skeleton Python project độc lập (`pyproject.toml` + `.env.example` + `.gitignore` + `README.md` placeholder + `__init__.py`) + `scripts/seed_hub.sql` idempotent (subdomain `eval.medinet.vn` isolation marker — D-09-01-C). 3 commit atomic `89fb73f` / `c2751b5` / `6a21612`. Self-check PASS.
-- [x] **EVAL-02**: ✅ Plan 09-04 COMPLETE 2026-05-21 — `eval/run_eval.py` 337 dòng orchestrator end-to-end 8-step (preflight → resolve hub → cleanup → login admin + upload 10 file → settle 2s cocoindex → run 12 query → compute metrics → write results.json + EVAL.md + exit verdict) + CLI 5 args (--mock-embed/--skip-cleanup/--top-k/--output/--eval-md) + env switch `EVAL_MOCK_EMBED=1` or-logic. `eval/scripts/cleanup.py` 215 dòng mixed strategy 3 layer (`_cleanup_via_api` DELETE /api/documents/:id cocoindex auto-tombstone + `_cleanup_postgres_defensive` DELETE chunks/documents WHERE hub_id fallback + `_cleanup_redis_cache` DEL search:*/hub:*:invalidate/rate_limit:*) + idempotent + CLI --skip-* per layer. 3 commit atomic `f21cec7` / `6631301` / `a132d85`. Regression 27/27 PASS.
-- [x] **EVAL-03**: ✅ Plan 09-03 COMPLETE 2026-05-21 — `eval/report.py` 360 dòng EVAL.md generator 7 section qua tabulate `tablefmt='github'` + `gate_verdict(top_3)` dict 3 field (≥0.75 PASS exit 0 / 0.60-0.75 FAIL exit 1 không E5 / <0.60 FAIL exit 1 trigger_e5 STOP M2b PROJECT EXIT E5) + threshold constant module-level + CLI 3 exit code (0 PASS / 1 FAIL / 2 missing file). `eval/tests/test_report.py` 257 dòng 17 unit test (3 critical + 14 standard) PASS. 2 task atomic (`f9f1e48` / `dbd58d1`).
-- [x] **EVAL-04**: ✅ Plan 09-04 + Plan 09-05 COMPLETE 2026-05-21. **09-04 (Makefile + README):** `Hub_All/Makefile` thêm 8 target eval-* (install/seed/clean/smoke/all/report/readme/restore) — `eval-all` chain cleanup + run_eval real LLM, `eval-smoke` mock embedding < 60s, `eval-restore` disaster recovery. `eval/README.md` 249 dòng 8 section. **09-05 (pytest smoke regression CI gate):** `api/tests/integration/test_eval_pipeline.py` 573 dòng + `conftest_eval.py` 203 dòng — 3 critical test (upload_search_pipeline + scanned_pdf_failed_unsupported + hub_isolation_no_leak) với mock embed 1536-dim deterministic SHA-256 + helper `_reconcile_status` Phase 4 race fix. CI gate `pytest -m critical api/tests/integration/test_eval_pipeline.py` < 60s KHÔNG cần OPENAI_API_KEY. Pattern khớp test_ingest_e2e.py Phase 4 (override app_with_auth + _cocoindex_env session-scoped DEF-05-01). 2 task atomic (`81e83ee` / `717b53b`).
-
-### FRONTEND-COMPAT — Verify React 19 Vẫn Hoạt Động (1 REQ)
-
-- [x] **COMPAT-01**: ✅ Phase 8 COMPLETE 2026-05-19 (lớp tĩnh/tự động ĐẠT; SC1/SC2-browser/SC5 defer `/gsd-verify-work 8` — `08-HUMAN-UAT.md`). Boot stack mới (FastAPI + pgvector + redis + frontend dev `npm run dev`), smoke từng trang React (Dashboard, HubRegistry, DocumentIngestion, UserManagement, AuditLog, APIKeyManagement, CrossHubSearch, Settings, GeminiAssistant, TokenUsage, Profile) — golden path mỗi trang PASS. **Ngoại lệ: trang `SyncQueue`** — feature sync queue đã loại khỏi M2 (Phase 5 CONTEXT D-01), `/api/sync/*` KHÔNG implement; trang này dự kiến lỗi API, KHÔNG tính vào golden-path PASS, dọn ở frontend rewrite v3.0. Replay test: so response envelope shape FastAPI mới vs router signature `git show m1-go-archived` + frontend types (Go runtime đã teardown). Vietnamese filename UTF-8 test ("Khám bệnh đa khoa.docx") upload + display preserve.
-
-### TEARDOWN — Xóa Go Backend (1 REQ)
-
-- [ ] **TEARDOWN-01**: Sau COMPAT-01 PASS, xóa `Hub_All/backend/` (toàn bộ Go), update `Hub_All/docker-compose.yml` + `Hub_All/Makefile` root remove Go references. Update CLAUDE.md (root + Hub_All) reflect stack Python. Backup tag git `git tag m1-go-archived` trước khi xóa.
-
-### HARDENING — Observability + Production Ready (4 REQ)
-
-- [x] **HARD-01** ✅ (Plan 10-01, 2026-05-21): structlog JSON output với fields match Go `log/slog` (`level`, `msg`, `ts`, `request_id`, `user_id`, `hub_id`, `latency_ms`). `X-Request-Id` middleware sinh UUID4 nếu thiếu, propagate xuống cocoindex flow logs qua ContextVar `request_id_var` + `asyncio.create_task` copy_context.
-- [x] **HARD-02** ✅ (Plan 10-02, 2026-05-21): Prometheus `/metrics` endpoint outside `/api/*` namespace với 5 metric (Counter requests_total + errors_total; Histogram request_duration_seconds + search_latency_seconds[hub_scope=single/cross] + ingest_duration_seconds). PrometheusMiddleware đo latency + count + resolve route template qua app.routes.matches(). Instrument search_service.search/_cross_hub + documents_service.trigger_cocoindex_update. Defer Grafana dashboard v4.0.
-- [x] **HARD-03** ✅ (Plan 10-03 + Plan 10-06, 2026-05-21): **Plan 10-03 (test suite)** — 5 acceptance test crisp suite-level trong `tests/integration/test_critical_path_coverage.py` (auth happy login envelope+JWT / hub isolation E4 editor DELETE cross-hub 403+audit / ingest VN filename UTF-8 roundtrip / search hub filter intersection / ask citation marker → chunk_id 1-to-1) + `.coveragerc-critical` scope 17 file critical path (auth 8 + routers 4 + services 4 + repositories.hub_isolation + auth.schemas). pytest + testcontainers Postgres pgvector pg16 + Redis 7. Coverage gate ≥50% PASS thực đo 57.75%. **Plan 10-06 (CI gate enforcement)** — `.github/workflows/test.yml` GitHub Actions 7 step required (Checkout + Setup Python 3.12 + Setup uv + Sync deps --frozen + Ruff check + Mypy --strict + Pytest -m critical -m integration với `--cov-fail-under=50` hardcode YAML KHÔNG env override) + `.github/workflows/lint.yml` 6 step quick feedback <5 phút (secret detection guard 3 pattern OpenAI/Gemini/AWS trên .env.example HARD-04 safety). Trigger push + pull_request branch main, concurrency cancel-in-progress=true, testcontainers spin qua Docker socket runner ubuntu-22.04, mock LiteLLM qua OPENAI_API_KEY=sk-test-placeholder zero external dep. Acceptance line "Integration test ≥50% critical path coverage chạy CI GitHub Actions PASS" ĐÓNG.
-- [x] **HARD-04** ✅ (Plan 10-05, 2026-05-21): `Hub_All/README.md` mới 140 dòng (stack Python overview + quickstart + test + eval + observability + milestone status) + `Hub_All/DEPLOY.md` mới 314 dòng (7 section: prerequisites + quickstart + .env config 18 nhóm + backup/restore 6 artifact + observability Prometheus + security checklist 12 mục + M2 closeout summary). Backup script đúng spec: `pg_dump --schema=public --schema=cocoindex medinet_central > backup.sql` + `pg_dump medinet_cocoindex > backup_cocoindex.sql` + tarball `.cocoindex/` LMDB + `file_store/` + `mcp_service/.oauth/` + `api/keys/` + retention 30 ngày. `Hub_All/api/.env.example` mở rộng +4 key thiếu (COCOINDEX_LMDB_PATH + RATE_LIMIT_SEARCH_PER_MINUTE + RATE_LIMIT_UPLOAD_PER_MINUTE + WATCHDOG_TIMEOUT_SECONDS) + AES_KEY placeholder tường minh. `Hub_All/mcp_service/.env.example` bổ sung Plan 10-04 MCP_OAUTH_SENSITIVE_ALLOWED_ORIGINS default 4 origin + MCP_PATH_PREFIX + MCP_INTERNAL_TOKEN. `Hub_All/CLAUDE.md` section 6 mới "M2 closeout — Pivot tới v3.0 Multi-Hub Split" với 4 D-V3 LOCKED + 4 GA-V3 open question + reference seed v3.0. `Hub_All/.planning/CONVENTIONS.md` section 5 thêm note actionable Plan 10-01 (rule mọi log mới PHẢI dùng structlog.get_logger). KHÔNG commit secret thật (grep `sk-[a-zA-Z0-9]{20,}` NO MATCH).
+> ⚠️ **REPLACE — M2 requirements (v2.0 Full RAG Rewrite) shipped 2026-05-21.** Toàn bộ 38 REQ-ID của M2 archive vào `.planning/milestones/v2.0-full-rag-rewrite/REQUIREMENTS.md`. v3.0 = bộ REQ-ID mới hoàn toàn (7 category: TOPO/FACTOR/SSO/SYNC/PROXY/SETTINGS/MIGRATE).
 
 ---
 
-## v2 Requirements (defer sang v3.0 / v4.0)
+## v1 Requirements (v3.0 scope — 29 REQ-ID)
 
-### v3.0 — Multi-subdomain SPA (defer từ trước, PRD v1.3)
+### TOPO — Multi-DB Topology + Per-hub Alembic (4 REQ)
 
-- **SPA-01**: Tách frontend thành 4 SPA build độc lập (Hub Tổng + 3 Hub Dự Án)
-- **SPA-02**: Mỗi SPA có entry, route, login form, branding, theme riêng (không share session)
-- **SPA-03**: Backend phát hành JWT mang `hub_id` từ subdomain context — middleware verify khớp
-- **SPA-04**: CORS + cookie domain cấu hình đúng từng subdomain
-- **SPA-05**: Hub Dự Án SPA chỉ expose route Hub-scoped — ẩn admin, ẩn cross-hub search
-- **SPA-06**: Nginx config routing wildcard `*.medinet.vn` → đúng SPA bundle, kèm SSL wildcard cert
-- **SPA-07**: Smoke test e2e: đăng nhập tamdao không có session ở dmd / wiki
+- [ ] **TOPO-01**: Postgres init script idempotent tạo N+1 logical DB cùng instance — `medinet_central` (đã có từ M2) + `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`. Mỗi DB có `CREATE EXTENSION vector` + HNSW index 1536-dim verify build được. Khả năng thêm hub động (`medinet_hub_<new>`) qua make target `make hub-init HUB=<name>` mà KHÔNG cần down instance.
+- [ ] **TOPO-02**: Per-hub Alembic migration set — mỗi DB hub con có `alembic_version` table riêng, head revision khớp giữa các DB. Make target `make migrate-all` apply migrations tuần tự N database + verify version match. CI lint check `alembic current` returns cùng head SHA cho tất cả DB sau migration (R-V3-3 mitigation).
+- [ ] **TOPO-03**: Cocoindex flow naming per-hub — `medinet_<hub>_ingest` (`medinet_yte_ingest`, `medinet_duoc_ingest`, ...). APP_NAMESPACE per-hub `medinet_<hub>_prod` đảm bảo cocoindex internal tables không đụng nhau giữa các DB. `db_schema_name="cocoindex"` giữ nguyên (R5 carry forward).
+- [ ] **TOPO-04**: Per-hub Postgres connection pool + isolation env — `HUB_NAME=yte` → kết nối `medinet_hub_yte` (KHÔNG fallback central). Helper `get_engine(hub_name)` resolve URL từ env + connection pool size config-driven. Test integration: `HUB_NAME=yte` deploy KHÔNG truy cập được `medinet_hub_duoc` qua DB connection (R-V3-3 + E-V3-3 enforce).
 
-### v4.0 — MCP Server + Production Hardening
+### FACTOR — Hub-con Codebase Factor (3 REQ)
 
-- **MCP-01**: MCP Server expose RAG/Wiki cho Claude/ChatGPT agent
-- **MCP-02**: Tool exposure: search, ask, list_documents, get_document — scoped theo hub_id
-- **HARD-V4-01**: OCR Vietnamese (revisit cocoindex custom function wrap pytesseract nếu user feedback regress)
-- **HARD-V4-02**: Cross-dim embedding swap (dim 3072 cho text-embedding-3-large full quality)
-- **HARD-V4-03**: Streaming `/api/ask` qua SSE với citation injection mid-stream (buffer parse `[N]`)
-- **HARD-V4-04**: Token usage Go-style batcher (CopyFrom-equivalent qua asyncpg COPY)
-- **HARD-V4-05**: Email send cho password reset (defer M2)
-- **HARD-V4-06**: Avatar upload + S3/GCS file storage
-- **HARD-V4-07**: GDrive file storage backend port
-- **HARD-V4-08**: Cocoindex augmenter (Q&A pair generation) — thiết kế mới (Go source đã archive ở tag `m1-go-archived`)
-- **HARD-V4-09**: Postgres pg16 → pg17 upgrade
-- **HARD-V4-10**: Comprehensive test coverage >80% (M2 chỉ 50%+ critical path)
-- **HARD-V4-11**: Khắc phục CONCERNS bảo mật cũ (`.gitignore` root, GCP key audit, AES_KEY rotation, XSS token storage migration httpOnly cookie)
+- [ ] **FACTOR-01**: 1 codebase deploy được nhiều lần với env `HUB_NAME=<name>` (`central` vs `yte` vs `duoc` vs `hcns`). App factory `create_app(hub_name)` đọc env, mount router phù hợp, khởi tạo cocoindex flow đúng tên (TOPO-03). Docker compose mở rộng từ 3 service (M2) sang 1 Postgres + 1 Redis + N+1 process FastAPI.
+- [ ] **FACTOR-02**: Strip system settings router khi `HUB_NAME != "central"` — hub con KHÔNG mount `/api/rag-config` (GET/PUT), `/api/api-keys` (GET/POST/DELETE), `/api/hubs` (POST/PUT/PATCH), `/api/users` (admin CRUD), `/api/audit-logs` (GET). Test integration: `GET /api/rag-config` ở hub con trả 404 (KHÔNG 403 — endpoint không exist). Central giữ nguyên 100% endpoint M2.
+- [ ] **FACTOR-03**: Hub con expose endpoint hạn chế (10 endpoint hub-scoped) — `POST/GET /api/auth/*`, `GET/PATCH /api/profile`, `POST/GET/DELETE /api/documents/*`, `POST /api/search`, `POST /api/ask`, `GET /api/usage`. KHÔNG expose cross-hub search (đó là endpoint central). Smoke test mỗi endpoint trả 200 hoặc lỗi đúng shape envelope.
 
-### v4.1+ — Advanced RAG
+### SSO — Auth SSO + hub_ids trong JWT (4 REQ — GA-V3-A chốt ở `/gsd-discuss-phase 3`)
 
-- **RAG-V4-01**: Hybrid retrieval BM25 + dense vector (Phase 2 PRD original)
-- **RAG-V4-02**: Reranker (Cohere rerank-3 hoặc local cross-encoder)
-- **RAG-V4-03**: Version history & concurrent editing (Phase 3 PRD original)
-- **RAG-V4-04**: Local embedding model (sentence-transformers, BGE-M3 cho on-prem)
+- [ ] **SSO-01**: Central expose JWKS endpoint `GET /.well-known/jwks.json` public key RS256 (PKCS#8). Hub con cache JWKS local TTL 1h ở startup + refresh background (R-V3-5 mitigation HA). Hub con verify JWT bằng JWKS đã cache thay vì shared keypair file. Test integration: rotate central keypair → hub con detect mới trong TTL window.
+- [ ] **SSO-02**: Refresh token blacklist Redis chung — central + hub con cùng kết nối 1 Redis instance, blacklist key `auth:blacklist:<jti>` valid cross-process. Hub con KHÔNG sinh refresh token (login + refresh chỉ ở central qua `POST /api/auth/login` central URL). User login 1 lần ở central → JWT valid trên tất cả hub con qua subpath redirect.
+- [ ] **SSO-03**: JWT claim `hub_ids: list[str]` reflect user's hub assignments — central verify access cross-hub search dùng `hub_ids` (intersection với requested `hub_ids` body). Hub con verify access local hub bằng so sánh `current_user.hub_ids` chứa `HUB_NAME` của process. JWT issuer URL cố định central (KHÔNG đổi per-hub).
+- [ ] **SSO-04**: E4 reinforced — hub con KHÔNG truy cập được data hub khác kể cả khi JWT compromised (DB-level isolation từ TOPO-04 + repository layer vẫn enforce `WHERE hub_id = settings.hub_name`). Test integration: stale JWT chứa `hub_ids=["duoc"]` post tới `medinet_hub_yte` API → 403 (không phải 404 hay data leak).
+
+### SYNC — Cross-hub Data Sync (5 REQ — GA-V3-D mechanism chốt ở `/gsd-discuss-phase 4`)
+
+- [ ] **SYNC-01**: Sau khi cocoindex flow hub con ingest xong → push chunks + vector (denormalized) lên `medinet_central.chunks` với cùng `chunk_id` + `document_id` + `hub_id` + `content` + `content_hash` + `vector` (1536-dim). Hub tổng KHÔNG re-embed (D-V3-02). Push trigger: cocoindex post-process hook hoặc outbox worker (chốt ở discuss-phase 4).
+- [ ] **SYNC-02**: Push idempotent on retry — `INSERT ... ON CONFLICT (chunk_id) DO UPDATE SET content_hash, vector, ... WHERE central.content_hash != hub.content_hash`. Multi-retry KHÔNG dup. Test integration: kill push mid-batch → re-run KHÔNG sai chunk_count tổng.
+- [ ] **SYNC-03**: Cross-hub search ở central dùng aggregated `medinet_central.chunks` — query SQL `WHERE hub_id = ANY($1::uuid[])` với `hub_ids` từ JWT claim + intersect với `body.hub_ids`. KHÔNG fan-out HTTP tới hub con (latency × N). Re-rank theo score (carry forward Phase 6 v2.0 cross-hub logic).
+- [ ] **SYNC-04**: Checksum verify periodic chống drift (R-V3-1 mitigation) — daily cron Prometheus metric `sync_drift_total{hub_id, drift_type}` đếm row count + sample content_hash diff giữa `medinet_hub_<name>.chunks` và `medinet_central.chunks WHERE hub_id = <hub>`. Alert nếu drift > 1% (E-V3-5 trigger nếu sustained 7 ngày).
+- [ ] **SYNC-05**: Sync mechanism chốt ở `/gsd-discuss-phase 4` — 3 option đánh giá: (a) cocoindex target thứ 2 (Postgres target trỏ central — chỉ activate sau ingest local), (b) Postgres logical replication (publication `chunks_hub_yte_pub` ở hub con + subscription `chunks_hub_yte_sub` ở central), (c) outbox + worker (transactional INSERT outbox table local + worker async push central với ack). Trade-off: (a) lock-in cocoindex / (b) Postgres native nhưng schema drift sensitive / (c) flexible nhưng phải tự maintain worker.
+
+### PROXY — Reverse Proxy + Frontend Subpath (4 REQ — GA-V3-C chốt ở `/gsd-discuss-phase 5`, D-V3-06 D6 expire)
+
+- [ ] **PROXY-01**: Caddy route `wiki.domain.com/<hub>/api/*` → upstream container hub đúng (`http://hub-<hub>:8180/api/*`) với strip prefix `/<hub>`. Central route `wiki.domain.com/api/*` → `http://central:8180/api/*` (KHÔNG strip). Caddy auto-TLS tiếp tục từ v2.0 Phase 8.3. Test smoke: `curl https://wiki.domain.com/yte/api/health` PASS + `curl https://wiki.domain.com/api/health` PASS (central).
+- [ ] **PROXY-02**: Frontend detect prefix từ URL (1 build dùng chung — option a GA-V3-C khuyến nghị seed) — `frontend/src/services/api.ts` đổi base URL: `const PREFIX = window.location.pathname.split('/')[1]; const API_BASE = PREFIX && KNOWN_HUBS.includes(PREFIX) ? '/' + PREFIX + '/api' : '/api';`. Per-hub build (`VITE_HUB_NAME=yte`) bỏ — đỡ build matrix. Re-confirm option ở discuss-phase 5.
+- [ ] **PROXY-03**: D6 expire formally — `Hub_All/CLAUDE.md` section 3 cập nhật ghi D6 hết hiệu lực ở v3.0-05. Frontend rewrite được phép cho prefix detect (PROXY-02) + per-hub login branding (PROXY-04). Smoke regression 11 trang React M2 COMPAT-01 carry forward (R-V3-2 mitigation).
+- [ ] **PROXY-04**: Per-hub login branding — hub con render logo + tiêu đề khác nhau (Hub y_te = phòng y tế Medinet, Hub dược = phòng dược, ...). Tách `frontend/src/branding/<hub>/` config (logo URL + title VN + theme color) thay vì sửa core component. Central giữ branding gốc Medinet Wiki. Login form ở hub con redirect về central `/api/auth/login` (SSO-02).
+
+### SETTINGS — System Settings Sync (4 REQ — GA-V3-B chốt ở `/gsd-discuss-phase 6`)
+
+- [ ] **SETTINGS-01**: Hub con đọc `rag_config` (LLM/embedding provider + model + dim) từ central qua HTTP pull on-demand `GET https://central/api/rag-config` (cache Redis local TTL 60s). Cache key `settings:rag_config:<hub>`. Fallback: nếu central down, dùng cached value cho tới TTL expire — sau đó fail-loud nếu vẫn không reach (KHÔNG silent degrade).
+- [ ] **SETTINGS-02**: Push invalidate qua Redis pub/sub channel `settings:invalidate` — khi central `PUT /api/rag-config` → publish `{config_key: "rag_config", timestamp}` → hub con subscriber flush local cache trong < 30s (E-V3-4). Test integration: đổi `rag_config` ở central → hub con phải re-fetch trong window.
+- [ ] **SETTINGS-03**: API key verification proxy — khi hub con nhận `X-API-Key:` header → gọi central `POST /api/api-keys/verify` (cache Redis TTL 60s key `apikey:<hash>`) thay vì lưu plaintext key cục bộ. Trả 401 nếu central reject. Central giữ AES-GCM encrypt-at-rest từ M2 AUX-02.
+- [ ] **SETTINGS-04**: `hub_registry` read-only ở hub con — hub con load `hub_registry` (list hub_id + subpath + active) từ central qua HTTP pull TTL 5 phút (rare-change). Hub con KHÔNG ghi (PUT/POST trả 404 do FACTOR-02 strip). Central giữ nguyên CRUD M2 HUB-01.
+
+### MIGRATE — Migration + Smoke E2E (5 REQ — GA-V3-D strategy chốt ở `/gsd-discuss-phase 7`)
+
+- [ ] **MIGRATE-01**: Snapshot data `medinet_central.{chunks, documents, users, audit_logs, usage_events}` per `hub_id` qua `pg_dump --data-only --table=... --where="hub_id = '<uuid>'"` (option a GA-V3-D khuyến nghị seed; option b "snapshot + replay cocoindex flow rebuild từ file_store" backup). File output `migrate-<hub>-<date>.sql` lưu vào `migrate-snapshots/`.
+- [ ] **MIGRATE-02**: Restore snapshot vào `medinet_hub_<name>` qua `psql -d medinet_hub_<name> -f migrate-<hub>.sql` (blue/green per-hub — R-V3-4 mitigation). Test trên DB NEW trước khi switch traffic. Sau verify smoke PASS → switch Caddy upstream `hub-<hub>:8180` từ central proxy sang hub con dedicated.
+- [ ] **MIGRATE-03**: Truncate `hub_id` rows khỏi central post-migration — giữ skeleton aggregate. Central `medinet_central.{documents, users, audit_logs, usage_events}` chỉ giữ rows `hub_id IS NULL` (system-level — admin, audit, settings change). `medinet_central.chunks` KHÔNG truncate (D-V3-02 — vẫn nhận sync từ hub con cho cross-hub search).
+- [ ] **MIGRATE-04**: MCP service re-point gọi central cho cross-hub aggregate (`mcp_service/config.py` đổi `API_BASE_URL` sang `https://central/api`). MCP tools `search_wiki(hub_id?)` + `ask_wiki(hub_id?)` vẫn hoạt động với `hub_id` parameter optional (cross-hub khi omit). OAuth flow Phase 8.3 carry forward — KHÔNG fan-out N hub con. Smoke MCP qua Claude Inspector PASS sau re-point.
+- [ ] **MIGRATE-05**: Smoke E2E sau migration — Docker compose mở rộng up đầy đủ (1 Postgres + 1 Redis + 4 FastAPI process: central + 3 hub con + Caddy + frontend). Golden path mỗi hub: `wiki.domain.com/yte` → login (qua central SSO) → upload DOCX → poll status `completed` → search local hub → search cross-hub (qua central) → ask → citation `[N]` → logout. 3 hub con + central PASS hết. Cross-hub search latency p95 < 1.5s (E-V3-2). Hub con KHÔNG access được data hub khác (E-V3-3).
 
 ---
 
-## Out of Scope (M2)
+## v2 Requirements (defer sang v4.0 / v4.1)
 
-Loại trừ tường minh — ghi vào đây để chống scope creep + tham chiếu khi reject phụ thuộc tương lai.
+### v4.0 — Production Hardening + Advanced RAG
 
-| Feature | Reason |
-|---|---|
-| **OCR Vietnamese cho scanned PDF** | D4 gỡ Docling. M2 ship với enum `failed_unsupported` cho scanned PDF. Revisit v4.0 nếu user feedback regress. |
-| **Table preservation phức tạp (merged cells, rowspan/colspan)** | Không có Python lib battle-tested cho VN medical PDF. Camelot/pdfplumber test Phase 4, ship M2 với accept-loss warning UI. Defer v4.0. |
-| **Frontend rewrite / Multi-subdomain SPA** | D6 — defer v3.0. M2 giữ React 19 đơn-SPA không sửa. |
-| **MCP Server** | Defer v4.0. |
-| **Data migration từ ChromaDB cũ** | M1 chưa production, không có user upload thật. Clean slate pgvector. |
-| **Test coverage tổng quát (>80%)** | Hardening v4.0. M2 chỉ critical path 50%+ (auth/ingest/search/ask/hub isolation). |
-| **Hybrid retrieval BM25 + dense** | Phase 2 PRD original — defer v4.1. |
-| **Reranker (Cohere / cross-encoder)** | Defer v4.1. |
-| **Version history & concurrent editing** | Phase 3 PRD original — defer v4.1. |
-| **Local embedding model (sentence-transformers/BGE-M3)** | Giữ OpenAI/Gemini hot-swap. Defer v4.1 cho on-prem use case. |
-| **Streaming `/api/ask` qua SSE** | Citation parsing mid-stream phức tạp (buffer `[N]` cross chunks). Non-streaming match M1 contract. Defer v4.0. |
-| **Cocoindex augmenter (Q&A pair gen)** | Go có, cocoindex equivalent unclear. Default skip M2, RTFM Phase 4 chỉ nếu dễ thêm. Defer v4.0. |
-| **Cross-dim embedding swap (1536 ↔ 3072)** | Triggers full re-embed (~$6.50/100K chunks). M2 PIN 1536 cả 2 provider. Defer v4.0. |
-| **Cocoindex worker tách container** | M2 in-process đủ cho 100 docs/day. Defer >1k docs/day (v4.0). |
-| **Avatar upload + S3/GCS** | Defer v4.0. |
-| **Email send (password reset, notification)** | M2 log only. Defer v4.0. |
-| **Khắc phục CONCERNS bảo mật cũ** | Hardening v4.0 (`.gitignore` root, GCP key audit, AES_KEY rotation, XSS token storage). |
-| **WebSocket job progress** | Frontend poll `/api/documents/:id` đủ M2. Defer v4.0. |
-| **GraphQL** | REST/JSON đủ. Không thêm tầng abstract. |
-| **LangChain / LlamaIndex** | CocoIndex + LiteLLM trực tiếp đủ. Tránh abstraction lock-in. |
+- **HARD-V4-01**: OCR Vietnamese revisit (Docling/Tesseract optional sidecar) nếu user feedback regress scanned PDF.
+- **HARD-V4-02**: Cross-dim embedding swap (1536 ↔ 3072) cho `text-embedding-3-large` full quality.
+- **HARD-V4-03**: Streaming `/api/ask` qua SSE với citation injection mid-stream.
+- **HARD-V4-04**: Comprehensive coverage >80% (v2.0 dừng ở 57.75% critical-path).
+- **HARD-V4-05**: Khắc phục CONCERNS bảo mật cũ — `.gitignore` root + GCP key audit + AES_KEY rotation + XSS token storage migration httpOnly cookie.
+- **HARD-V4-06**: Branch protection rule GitHub repo enforce 2 workflow trước merge main.
+- **HARD-V4-07**: Postgres pg17 upgrade.
+- **HARD-V4-08**: Email send (M2 user reset password chỉ log console).
+- **HARD-V4-09**: Avatar upload S3/GCS.
+- **HARD-V4-10**: GDrive file storage backend (M2 chỉ local `file_store/`).
+- **HARD-V4-11**: cocoindex augmenter Q&A pair gen.
+
+### v4.1 — Advanced Retrieval
+
+- **RAG-V41-01**: Hybrid retrieval BM25 + reranker (Cohere / cross-encoder).
+- **RAG-V41-02**: Local embedding model (sentence-transformers / BGE-M3 cho on-prem) — SEED-001.
+- **RAG-V41-03**: Version history & concurrent editing.
+
+---
+
+## Out of Scope (v3.0)
+
+- **OCR Vietnamese revisit** — defer v4.0. v3.0 vẫn dùng whitelist `{.docx, .txt, .md, .pdf text-only}` + `failed_unsupported` (R4 carry forward).
+- **Cross-dim embedding swap** — defer v4.0. v3.0 vẫn PIN dim 1536 (R1 + R7 carry forward).
+- **Streaming `/api/ask`** — defer v4.0.
+- **Coverage >80%** — defer v4.0. v3.0 giữ gate ≥50% critical-path (HARD-03 carry forward).
+- **Hybrid BM25 + reranker** — defer v4.1.
+- **Local embedding model** — defer v4.1 (SEED-001 dormant).
+- **Schema riêng per hub trong cùng DB** — bỏ phương án này (đụng R5/P7 — cocoindex `db_schema_name` cố định). LOCKED D-V3-01.
+- **Instance Postgres riêng per hub** — bỏ phương án này (ops × N). LOCKED D-V3-01.
+- **Federated HTTP fan-out cho cross-hub search** — bỏ phương án này (latency × N hub). LOCKED D-V3-02 (chunks+vector denormalized).
+- **Hub tổng re-embed chunks từ hub con** — KHÔNG re-embed; lưu sẵn vector 1536-dim từ hub con. LOCKED D-V3-02.
+- **Per-hub `VITE_HUB_NAME` build matrix** — bỏ option b GA-V3-C; chọn 1 build detect prefix (PROXY-02). Re-confirm ở discuss-phase 5.
 
 ---
 
 ## Traceability
 
-Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/38 REQ mapped, 0 orphan.
+Sẽ filled bởi gsd-roadmapper ở `ROADMAP.md` — map mỗi REQ-ID → 1 phase (1-to-1, không có REQ orphan, không có REQ map nhiều phase).
 
-| Requirement | Phase | Status |
+| REQ-ID | Phase | Mapping confirm |
 |---|---|---|
-| CORE-01 | Phase 1 (Infra Skeleton + Demolition + EXIT Criteria) | Pending |
-| CORE-02 | Phase 1 (docker-compose 3-service + HNSW 1536-dim verify) + Phase 2 (schema migrations Alembic baseline) | ✓ Complete (2026-05-13) |
-| CORE-03 | Phase 1 (xóa code M1 cũ) | Pending |
-| CORE-04 | Phase 1 (FastAPI app factory + lifespan + envelope + healthz) | Pending |
-| CORE-05 | Phase 1 (CONVENTIONS.md) | Pending |
-| AUTH-01 | Phase 3 Plan 03-04 (login) | ✓ Done 2026-05-14 (POST /api/auth/login + AuthService.login với anti-timing dummy_password_hash) |
-| AUTH-02 | Phase 3 Plan 03-04 (refresh) | ✓ Done 2026-05-14 (POST /api/auth/refresh + Redis SETNX P16 lock + blacklist old jti) |
-| AUTH-03 | Phase 3 Plan 03-04 (me + logout) | ✓ Done 2026-05-14 (GET /api/auth/me + POST /api/auth/logout + get_current_user Bearer auth) |
-| AUTH-04 | Phase 3 Plan 03-05 (RBAC dependency + integration test) | ✓ Done 2026-05-14 (require_role(*roles) factory + HTTPException envelope handler + 5 unit + 6 integration test PASS, 5/5 ROADMAP AC verified end-to-end) |
-| AUTH-05 | Phase 3 Plan 03-03 (Argon2 cross-compat test) | ✓ Done 2026-05-14 (10/10 unit+critical PASS, R6 cross-compat verified: pwdlib verify Go seed hash) |
-| AUTH-06 | Phase 3 Plan 03-02 (JWT keypair format + PyJWT RS256 wrapper) | ✓ Done 2026-05-14 (8/8 unit test PASS, T-03-jwt-alg-confusion mitigated) |
-| INGEST-01 | Phase 4 (cocoindex flow Postgres source LISTEN/NOTIFY) | Pending |
-| INGEST-02 | Phase 4 (extract + scanned detect + chunk VN + embed dim 1536) | Pending |
-| INGEST-03 | Phase 4 (cocoindex target chunks + HNSW + stable chunk_id) | Pending |
-| INGEST-04 | Phase 4 (POST /api/documents/upload) | Pending |
-| INGEST-05 | Phase 4 (GET /api/documents/:id + status enum) | Pending |
-| INGEST-06 | Phase 4 (heartbeat + watchdog) | Pending |
-| INGEST-07 | Phase 4 (DELETE /api/documents/:id) | Pending |
-| INGEST-08 | Phase 4 (GET /api/documents list + filter) | Pending |
-| HUB-01 | Phase 5 (hubs CRUD) | Done (05-01: migration 0003 schema; 05-03: router/service/schema 6 endpoint) |
-| HUB-02 | Phase 5 (hub isolation repo layer) | Done (05-02 helper; 05-06 enforce documents_service.delete + audit emit; test_hub_isolation.py 6 critical test E4 PASS) |
-| HUB-03 | Phase 5 (hubs/:id/stats) | Done (05-03: stats Postgres aggregate 3 count; query_count defer Phase 6/7) |
-| USER-01 | Phase 5 (users CRUD) | Done (Plan 05-04) |
-| USER-02 | Phase 5 (reset password) | Done (Plan 05-04) |
-| USER-03 | Phase 5 (profile) | Done (Plan 05-04) |
-| AUX-01 | Phase 5 (audit logger + GET audit-logs) | In Progress (05-01: audit_service asyncio.Queue + lifespan wire + SC4 test; 05-05: AuditQueryService + GET /api/audit-logs router; router mount + integration test Plan 05-06) |
-| AUX-02 | Phase 5 (API key management) | Done (05-05 ApiKeyService CRUD + AES-GCM + verify_key; 05-06 router mounted + auth/api_key.py require_api_key X-API-Key; test_x_api_key_invalid_rejected critical PASS) |
-| AUX-03 | Phase 5 (rate limit middleware slowapi) | Done (05-02 Limiter + 429 handler; 05-05 @limiter.limit audit-logs; 05-06 app.state.limiter wired main.py + test_rate_limit.py 429 envelope PASS) |
-| SEARCH-01 | Phase 6 (POST /api/search single-hub — D-02) | Done (06-01/06-02) |
-| SEARCH-02 | Phase 6 (per-query session config HNSW) | Done (06-01; p95 đo dataset thật → 06-HUMAN-UAT) |
-| SEARCH-03 | Phase 6 (POST /api/search/cross-hub) | Done (06-02) |
-| SEARCH-04 | Phase 6 (Redis cache + invalidate) | Done (06-01/06-03; invalidation E2E test → 06-HUMAN-UAT) |
-| ASK-01 | Phase 7 (POST /api/ask + citation) | ✅ Done (Plan 07-04 AskService + endpoint; 07-05 citation map `[N]`→chunk_id critical test verified) |
-| ASK-02 | Phase 7 (anti-injection system prompt) | ✅ Done (Plan 07-01 ANTI_INJECTION_SYSTEM_PROMPT; 07-05 prompt được chèn verified — hành vi LLM thật defer Phase 9) |
-| ASK-03 | Phase 7 (POST /api/ask/cross-hub) | ✅ Done (Plan 07-04 ask_cross_hub + endpoint; 07-05 cross-hub citation hub_id + hub isolation E4 verified) |
-| ASK-04 | Phase 7 (GET/PUT /api/rag-config hot-swap) | ✅ Done (Plan 07-03 dimension guard; 07-05 hot-swap LLM + cross-dim 400 verified) |
-| ASK-05 | Phase 7 (token usage logging) | ✅ Done (Plan 07-02 write/read path + 07-04 BackgroundTasks; 07-05 10 ask → 10 row + aggregate verified) |
-| COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | ✅ Phase 8 COMPLETE 2026-05-19 — lớp tĩnh/tự động ĐẠT: 08-01 contract diff + replay tĩnh (SC3), 08-02 fix api-side (BLOCKER /api/ai/chat + port 8180), 08-03 test golden path API SC2 + VN filename UTF-8 SC4 (2 test critical PASS), regression 109/109 unit PASS. Lớp browser SC1 (render 11 trang) / SC2-browser (citation `[1]` clickable) / SC5 (docker compose healthy) defer human UAT — `08-HUMAN-UAT.md`, chạy `/gsd-verify-work 8` |
-| TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
-| EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | ✅ Plan 09-01 done 2026-05-21 — restore M1 0af44f0 |
-| EVAL-02 | Phase 9 (run_eval.py pytest) | ✅ Plan 09-04 done 2026-05-21 — orchestrator 8-step + cleanup mixed 3 layer |
-| EVAL-03 | Phase 9 (EVAL.md generator + verdict gate ≥75%) | ✅ Plan 09-03 done 2026-05-21 — report.py 360 dòng 7 section + gate_verdict dict 3 field |
-| EVAL-04 | Phase 9 (Makefile + eval-smoke + README + pytest smoke regression CI gate) | ✅ Plan 09-04 + 09-05 done 2026-05-21 — 8 target Makefile + README 249 dòng + pytest 3 critical test smoke regression (test_eval_pipeline.py + conftest_eval.py) |
-| HARD-01 | Phase 10 Plan 10-01 (structlog JSON + X-Request-Id) | ✅ Complete 2026-05-21 |
-| HARD-02 | Phase 10 Plan 10-02 (Prometheus /metrics + 5 metric + middleware + instrument search/ingest) | ✅ Complete 2026-05-21 |
-| HARD-03 | Phase 10 Plan 10-03 (5 acceptance test critical path + .coveragerc-critical gate ≥50%) + Plan 10-06 (.github/workflows/test.yml CI enforcement --cov-fail-under=50) | ✅ Complete 2026-05-21 — 5/5 PASS, coverage 57.75%, CI workflow ship |
-| HARD-04 | Phase 10 Plan 10-05 (README + DEPLOY + 2 .env.example + CLAUDE.md M2 closeout + CONVENTIONS.md note) | ✅ Complete 2026-05-21 — 6 file ship + backup 6 artifact + KHÔNG commit secret |
+| TOPO-01..04 | Phase 1 | (sẽ ghi ở ROADMAP.md) |
+| FACTOR-01..03 | Phase 2 | (sẽ ghi ở ROADMAP.md) |
+| SSO-01..04 | Phase 3 | (sẽ ghi ở ROADMAP.md) |
+| SYNC-01..05 | Phase 4 | (sẽ ghi ở ROADMAP.md) |
+| PROXY-01..04 | Phase 5 | (sẽ ghi ở ROADMAP.md) |
+| SETTINGS-01..04 | Phase 6 | (sẽ ghi ở ROADMAP.md) |
+| MIGRATE-01..05 | Phase 7 | (sẽ ghi ở ROADMAP.md) |
 
-**Coverage:**
-- v1 requirements: **38 total** (CORE 5, AUTH 6, HUB 3, USER 3, INGEST 8, SEARCH 4, ASK 5, AUX 3, EVAL 4, COMPAT 1, TEARDOWN 1, HARD 4)
-- Phase mapping: **38/38 mapped** ✓ (0 orphan)
-- Phase distribution: Phase 1 (5 REQ) + Phase 2 (CORE-02 split) + Phase 3 (6 REQ) + Phase 4 (8 REQ) + Phase 5 (9 REQ HUB+USER+AUX) + Phase 6 (4 REQ) + Phase 7 (5 REQ) + Phase 8 (2 REQ COMPAT+TEARDOWN) + Phase 9 (4 REQ) + Phase 10 (4 REQ)
+**Tổng:** 4 + 3 + 4 + 5 + 4 + 4 + 5 = **29 REQ-ID v1**. 100% coverage qua 7 phase.
 
 ---
 
-## Open Questions (cần resolve trước hoặc trong phase tương ứng)
-
-1. **Storage backend** (Phase 4) — local default, GDrive port optional. Confirm với user trước Phase 4 start.
-2. **JWT keypair format** (Phase 3) — verify PKCS#1 vs PKCS#8, convert nếu cần.
-3. **PDF table extraction lib** (Phase 4) — pdfplumber vs camelot vs accept loss. Empirical test 3 VN medical PDF.
-4. **Cocoindex augmenter** (Phase 4) — RTFM, default skip M2.
-5. **Embedding dim 1536 vs 3072 quality** (Phase 9) — empirical eval gate ≥75%.
-
----
-
-*Requirements defined: 2026-05-13 (REPLACE M1 — Docling abandoned)*
-*Last updated: 2026-05-13 (Traceability final confirmed bởi gsd-roadmapper — 38/38 REQ mapped vào 10 phase)*
+*Last updated: 2026-05-21 sau `/gsd-new-milestone v3.0`. Pre-roadmap snapshot. REQ-ID có thể refine sau khi `/gsd-discuss-phase 1` chốt gray area Phase 1.*
