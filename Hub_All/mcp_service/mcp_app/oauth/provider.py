@@ -438,6 +438,7 @@ class MedinetOAuthProvider(
 
         access_token = self._new_opaque()
         refresh_token = self._new_opaque()
+        family_id = self._new_opaque()  # HIGH-02: token đầu chain — family_id mới
         scopes = list(authorization_code.scopes)
         await self._store.save_token(
             access_token=access_token,
@@ -447,6 +448,7 @@ class MedinetOAuthProvider(
             downstream_jwt=record["downstream_jwt"],
             downstream_refresh_token=record["downstream_refresh_token"],
             user_payload=record["user_payload"],
+            family_id=family_id,
             expires_at=self._now() + self._access_token_ttl,
         )
         logger.info(
@@ -515,10 +517,27 @@ class MedinetOAuthProvider(
         )
         if not ok:
             # rowcount != 1 — refresh token đã bị dùng/rotate (reuse detected).
-            logger.info(
-                "MedinetOAuthProvider refresh token reuse — client_id=%s",
-                record["client_id"],
-            )
+            # HIGH-02 (audit 2026-05-21, RFC 6749 §10.4): KHÔNG phân biệt được
+            # kẻ tấn công và client thật → AS PHẢI thu hồi cả family. record
+            # đã load ở đầu hàm (load_token_by_refresh) — nếu record có
+            # family_id non-NULL thì xoá cả family; family_id NULL (token cũ
+            # trước migration HIGH-02) → delete_token_family no-op.
+            family_id = record.get("family_id") or ""
+            if family_id:
+                deleted = await self._store.delete_token_family(family_id)
+                logger.warning(
+                    "exchange_refresh_token reuse — xoá token family "
+                    "client_id=%s family_size=%d",
+                    record["client_id"],
+                    deleted,
+                )
+            else:
+                logger.info(
+                    "MedinetOAuthProvider refresh token reuse — token cũ "
+                    "không có family_id, KHÔNG thu hồi family (back-compat) "
+                    "client_id=%s",
+                    record["client_id"],
+                )
             raise OAuthStoreError(
                 "Refresh token đã dùng — vui lòng kết nối lại"
             )
