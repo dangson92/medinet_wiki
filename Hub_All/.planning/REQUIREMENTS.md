@@ -77,7 +77,7 @@
 
 ### EVAL — Quality Gate ≥75% top-3 (4 REQ)
 
-- [ ] **EVAL-01**: `Hub_All/eval/dataset/sources/` chứa 10 file VN medical (port từ M1 archive `.planning/milestones/v1.0-docling-rag/01-eval-dataset-baseline-native/` nếu có, hoặc dựng mới). `eval/queries.jsonl` 12 truy vấn vàng (port semantic từ M1) — mỗi dòng `{query, expected_doc_id, expected_section, hub_id, notes}`.
+- [x] **EVAL-01**: ✅ Plan 09-01 COMPLETE 2026-05-21 — `Hub_All/eval/dataset/sources/` 8 file (7 DOCX DMD + tri_thuc_chinh_tri.pdf) + `Hub_All/eval/dataset/scanned/` 2 scanned PDF (R4 test 415 failed_unsupported) restore byte-identical từ git history commit `0af44f0` (M1 archive). `Hub_All/eval/queries.jsonl` 12 truy vấn vàng port từ M1 + patch thêm field `hub_id="eval_hub"` mỗi dòng — schema đầy đủ `{id, query, expected_doc_id, expected_section, hub_id, notes}` (`ensure_ascii=False` giữ tiếng Việt unicode). Kèm: skeleton Python project độc lập (`pyproject.toml` + `.env.example` + `.gitignore` + `README.md` placeholder + `__init__.py`) + `scripts/seed_hub.sql` idempotent (subdomain `eval.medinet.vn` isolation marker — D-09-01-C). 3 commit atomic `89fb73f` / `c2751b5` / `6a21612`. Self-check PASS.
 - [ ] **EVAL-02**: `eval/run_eval.py` pytest-based — login admin → seed eval_hub (DELETE chunks/documents trước) → upload 10 file → wait completion → run 12 queries qua `/api/search` (WITH `hub_id` filter để measure recall thật, R2 verify) → compute top-1/3/5 + MRR + latency p50/p95/p99 → emit `eval/results.json`.
 - [ ] **EVAL-03**: `eval/EVAL.md` generator — Markdown report 7 section (Setup + Metrics table + Per-Query Diff + Latency + Conclusion PASS/FAIL + Recommendations + Defer ideas). Verdict logic: **PASS nếu top-3 ≥ 75% tuyệt đối** (KHÔNG có +15pp delta vì M1 abandoned). Exit code 0 PASS, 1 FAIL (CI-friendly).
 - [ ] **EVAL-04**: `Makefile` root target `make eval-all`, `make eval-clean`, `make eval-smoke`. Smoke: upload 1 sample DOCX → search → assert ≥1 chunk return + chunk content match heading. `eval/README.md` workflow 3 bước + troubleshooting + tiền điều kiện.
@@ -210,7 +210,7 @@ Mapping REQ-ID → Phase (final, confirmed bởi gsd-roadmapper 2026-05-13). 38/
 | ASK-05 | Phase 7 (token usage logging) | ✅ Done (Plan 07-02 write/read path + 07-04 BackgroundTasks; 07-05 10 ask → 10 row + aggregate verified) |
 | COMPAT-01 | Phase 8 (frontend smoke 12 pages + replay test + VN filename) | ✅ Phase 8 COMPLETE 2026-05-19 — lớp tĩnh/tự động ĐẠT: 08-01 contract diff + replay tĩnh (SC3), 08-02 fix api-side (BLOCKER /api/ai/chat + port 8180), 08-03 test golden path API SC2 + VN filename UTF-8 SC4 (2 test critical PASS), regression 109/109 unit PASS. Lớp browser SC1 (render 11 trang) / SC2-browser (citation `[1]` clickable) / SC5 (docker compose healthy) defer human UAT — `08-HUMAN-UAT.md`, chạy `/gsd-verify-work 8` |
 | TEARDOWN-01 | Phase 8 (xóa Hub_All/backend/ + git tag m1-go-archived) | Pending |
-| EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | Pending |
+| EVAL-01 | Phase 9 (dataset 10 file VN + queries.jsonl) | ✅ Plan 09-01 done 2026-05-21 — restore M1 0af44f0 |
 | EVAL-02 | Phase 9 (run_eval.py pytest) | Pending |
 | EVAL-03 | Phase 9 (EVAL.md generator + verdict gate ≥75%) | Pending |
 | EVAL-04 | Phase 9 (Makefile + eval-smoke + README) | Pending |
