@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: Phase 1 EXECUTING 2026-05-21. 5 plans / 3 waves wave-based execution. Wave 1 (Plans 01+02) parallel worktree → Wave 2 (Plans 03+04) parallel worktree → Wave 3 (Plan 05) sequential với [BLOCKING] schema push. Default Option B `make hub-init` preserve M2 central volume.
-last_updated: "2026-05-21T17:35:00.000Z"
+status: Phase 1 DONE 2026-05-21 ✅. 5 plans / 22 commits / 166 unit tests + 5 integration test PASS. Live Postgres state verified — 5 DB (medinet_central + medinet_cocoindex + 3 hub) cùng Alembic head SHA 0004, M2 documents COUNT=3 preserved. VERIFICATION 4/4 SC PASS. Next phase 2 — Hub-con Codebase Factor (FACTOR-01..03).
+last_updated: "2026-05-21T18:00:00.000Z"
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 14
 ---
 
 # State — MEDWIKI (v3.0)
@@ -21,31 +21,38 @@ progress:
 
 ## Current Position
 
-- **Phase:** 1 — Multi-DB Topology + Per-hub Alembic (PLANNED — 5 plans ready cho execute)
-- **Plan:** 5 plans (01-01..01-05) ở `.planning/phases/01-multi-db-topology/`
-- **Status:** Ready to execute
-- **Last activity:** 2026-05-21 — `/gsd-plan-phase 1` chạy (SKIP `/gsd-discuss-phase 1`, dùng ROADMAP seeded recommendations cho gray areas). Planner spawn → 5 plan / 3 wave (commit `1ac0ae7`). Plan-checker iteration 1/3 found 4 BLOCKER + 8 WARNING. Planner revision iteration 1/3 fixed 4 BLOCKER + 5 WARNING (commit `b19f5bf`). Plan-checker iteration 2/3 PASSED — no regression, TOPO-01..04 coverage 100%, [BLOCKING] schema push SAFE (Option B preserve M2 volume).
+- **Phase:** 1 — Multi-DB Topology + Per-hub Alembic ✅ **DONE 2026-05-21**
+- **Plan:** 5/5 plans complete (01-01..01-05) ở `.planning/phases/01-multi-db-topology/`
+- **Status:** Phase 1 closed — VERIFICATION 4/4 SC PASS
+- **Last activity:** 2026-05-21 — `/gsd-execute-phase 1` wave-based execution complete. Wave 1 (Plans 01+02) + Wave 2 (Plans 03+04) + Wave 3 (Plan 05 với [BLOCKING] schema push). 22 commits total. 166/166 unit tests + 5/5 integration tests E-V3-3 PASS. Live Postgres: 5 DB (`medinet_central` + `medinet_cocoindex` + 3 hub `yte/duoc/hcns`) cùng Alembic head SHA `0004`, M2 documents COUNT=3 PRESERVED. Verifier: PASSED 4/4 SC.
 
-## Phase 1 Plans Summary
+## Phase 1 Results Summary
 
-| Plan | Wave | Objective | REQ | Tasks |
-|------|------|-----------|-----|-------|
-| 01-01 | 1 | Postgres init-db.sh refactor 4 DB + vector ext + HNSW 1536-dim verify | TOPO-01 (part 1) | 2 |
-| 01-02 | 1 | Settings.hub_name + DSN validator + per-hub resolver | TOPO-04 (part 1) | 3 (1 TDD) |
-| 01-03 | 2 | Per-hub Alembic env -x hub + make migrate-all + alembic-head-check.sh | TOPO-02 (part 1) | 3 (1 TDD) |
-| 01-04 | 2 | Cocoindex flow `medinet_<hub>_ingest` + APP_NAMESPACE `medinet_<hub>_prod` | TOPO-03 | 2 (1 TDD) |
-| 01-05 | 3 | hub-init.sh dynamic + integration test E-V3-3 + CI workflow + [BLOCKING] schema push | TOPO-01/02/04 (part 2) | 4 (1 TDD, 1 BLOCKING) |
+| Plan | Wave | Objective | Commits | Tests |
+|------|------|-----------|---------|-------|
+| 01-01 | 1 | Postgres init-db.sh refactor 4 DB + HNSW 1536-dim verify | 3 | acceptance 15/15 |
+| 01-02 | 1 | Settings.hub_name + DSN validator + resolve_database_url | 6 | TDD 11/11 PASS, deviation Rule 1 fix conftest |
+| 01-03 | 2 | Per-hub Alembic env -x hub + make migrate-all + head-check | 5 | TDD 10/10 PASS, deviation Rule 3 Windows substitute |
+| 01-04 | 2 | Cocoindex dynamic App name + APP_NAMESPACE per-hub + LEGACY fallback | 4 | TDD 9/9 PASS, M2 cocoindex state reset documented |
+| 01-05 | 3 | hub-init.sh dynamic + integration test E-V3-3 + CI gate + [BLOCKING] schema push | 5+1 | integration 5/5 PASS, schema push 4 DB head SHA uniform 0004 |
 
-**Gray-area decisions LOCKED (seeded từ ROADMAP, không qua discuss-phase 1):**
-- GA-Phase1-A: imperative bash loop `SELECT pg_database WHERE datname` + conditional CREATE (Postgres không support `IF NOT EXISTS` cho CREATE DATABASE).
-- GA-Phase1-B: APP_NAMESPACE per-hub `medinet_<hub>_prod`; giữ `cocoindex_db_schema="cocoindex"` cố định (R5 + P7 carry forward). M2 cocoindex state reset acceptable cho v3.0-a (re-ingest qua content_hash idempotent + Phase 7 sẽ migrate formally).
-- GA-Phase1-C: `make hub-init HUB=<name>` dynamic add — preserve M2 central volume (không cần docker compose down).
+**Live state verified post-execute:**
+- 5 DB exist: `medinet_central`, `medinet_cocoindex`, `medinet_hub_yte`, `medinet_hub_duoc`, `medinet_hub_hcns`
+- 4 hub Alembic head uniform: `0004`
+- M2 `medinet_central.documents` COUNT = 3 (preserved)
+- `ix_chunks_vector_hnsw` index per-DB verified
+
+**M2 cocoindex state migration (BLOCKER 4 mitigation chain documented):**
+- App name M2 `medinet_wiki_ingest` → v3.0 `medinet_central_ingest` — state orphan accepted cho v3.0-a.
+- Optional fallback `COCOINDEX_APP_NAME_LEGACY=medinet_wiki_ingest` env override.
+- Post-deploy re-ingest qua `UPDATE documents SET status='pending' WHERE status='completed'` (content_hash idempotent skip nếu unchanged).
+- Phase 7 sẽ migrate data formally qua `pg_dump --where`.
 
 ## Next Action
 
-1. (Optional) `cat .planning/phases/01-multi-db-topology/*-PLAN.md` — review 5 plans trước khi execute.
-2. `/gsd-execute-phase 1` — execute 5 plans theo wave order (W1 parallel 01+02 → W2 parallel 03+04 → W3 final 05 với BLOCKING schema push).
-3. (Optional after execute) `/gsd-verify-work 1` — UAT 4 success criteria + E-V3-3 hub isolation.
+1. **(Recommended) `/gsd-discuss-phase 2`** — Hub-con Codebase Factor. Gray areas chốt: app factory pattern (`create_app(hub_name)` vs 2 file `main_central.py`/`main_hub.py`), mount router conditional, docker compose service definition.
+2. (Optional) `/gsd-code-review 1` — advisory code review trên 22 commits Phase 1 (workflow.code_review=true gate).
+3. (Optional) `/gsd-verify-work 1` — manual UAT 4 SC nếu user muốn extra verify ngoài automated test.
 
 ## Accumulated Context (carry forward từ v2.0)
 

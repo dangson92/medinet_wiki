@@ -21,7 +21,7 @@
 
 | # | Phase | Goal | Requirements | Success Criteria | Depends on |
 |---|---|---|---|---|---|
-| **1** | Multi-DB topology + per-hub Alembic | Tạo N+1 DB cùng instance, per-hub Alembic migration set khớp head SHA, cocoindex flow naming per-hub | TOPO-01..04 (4) | 4 | M2 shipped |
+| ✅ **1** | Multi-DB topology + per-hub Alembic | Tạo N+1 DB cùng instance, per-hub Alembic migration set khớp head SHA, cocoindex flow naming per-hub | TOPO-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-21** (5 plans / 22 commits) |
 | **2** | Hub-con codebase factor | 1 codebase deploy nhiều lần với HUB_NAME; strip system settings ở hub con; expose 10 endpoint hub-scoped | FACTOR-01..03 (3) | 3 | Phase 1 |
 | **3** | Auth SSO + hub_ids trong JWT | JWKS endpoint central; cache hub con TTL 1h HA; Redis blacklist chung; E4 DB-level isolation | SSO-01..04 (4) | 4 | Phase 2 |
 | 🚦 | **v3.0-a EXIT GATE** | Demo 1 hub con (yte) + tổng + JWT SSO + golden path PASS — user accept tiếp tục v3.0-b | — | — | Phase 1-3 done |
@@ -232,7 +232,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **0/~30** | **0/29** | 🔄 **STARTED** | — |
+| **v3.0 Multi-Hub Split** | **7** | **5/~30** | **4/29** | 🔄 **Phase 1 DONE** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 

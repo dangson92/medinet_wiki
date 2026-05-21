@@ -13,10 +13,10 @@
 
 ### TOPO — Multi-DB Topology + Per-hub Alembic (4 REQ)
 
-- [ ] **TOPO-01**: Postgres init script idempotent tạo N+1 logical DB cùng instance — `medinet_central` (đã có từ M2) + `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`. Mỗi DB có `CREATE EXTENSION vector` + HNSW index 1536-dim verify build được. Khả năng thêm hub động (`medinet_hub_<new>`) qua make target `make hub-init HUB=<name>` mà KHÔNG cần down instance.
-- [ ] **TOPO-02**: Per-hub Alembic migration set — mỗi DB hub con có `alembic_version` table riêng, head revision khớp giữa các DB. Make target `make migrate-all` apply migrations tuần tự N database + verify version match. CI lint check `alembic current` returns cùng head SHA cho tất cả DB sau migration (R-V3-3 mitigation).
-- [ ] **TOPO-03**: Cocoindex flow naming per-hub — `medinet_<hub>_ingest` (`medinet_yte_ingest`, `medinet_duoc_ingest`, ...). APP_NAMESPACE per-hub `medinet_<hub>_prod` đảm bảo cocoindex internal tables không đụng nhau giữa các DB. `db_schema_name="cocoindex"` giữ nguyên (R5 carry forward).
-- [ ] **TOPO-04**: Per-hub Postgres connection pool + isolation env — `HUB_NAME=yte` → kết nối `medinet_hub_yte` (KHÔNG fallback central). Helper `get_engine(hub_name)` resolve URL từ env + connection pool size config-driven. Test integration: `HUB_NAME=yte` deploy KHÔNG truy cập được `medinet_hub_duoc` qua DB connection (R-V3-3 + E-V3-3 enforce).
+- [x] **TOPO-01** ✅ Phase 1: Postgres init script idempotent tạo N+1 logical DB cùng instance — `medinet_central` (đã có từ M2) + `medinet_hub_yte` + `medinet_hub_duoc` + `medinet_hub_hcns`. Mỗi DB có `CREATE EXTENSION vector` + HNSW index 1536-dim verify build được. Khả năng thêm hub động (`medinet_hub_<new>`) qua make target `make hub-init HUB=<name>` mà KHÔNG cần down instance.
+- [x] **TOPO-02** ✅ Phase 1: Per-hub Alembic migration set — mỗi DB hub con có `alembic_version` table riêng, head revision khớp giữa các DB. Make target `make migrate-all` apply migrations tuần tự N database + verify version match. CI lint check `alembic current` returns cùng head SHA cho tất cả DB sau migration (R-V3-3 mitigation).
+- [x] **TOPO-03** ✅ Phase 1: Cocoindex flow naming per-hub — `medinet_<hub>_ingest` (`medinet_yte_ingest`, `medinet_duoc_ingest`, ...). APP_NAMESPACE per-hub `medinet_<hub>_prod` đảm bảo cocoindex internal tables không đụng nhau giữa các DB. `db_schema_name="cocoindex"` giữ nguyên (R5 carry forward).
+- [x] **TOPO-04** ✅ Phase 1: Per-hub Postgres connection pool + isolation env — `HUB_NAME=yte` → kết nối `medinet_hub_yte` (KHÔNG fallback central). Helper `get_engine(hub_name)` resolve URL từ env + connection pool size config-driven. Test integration: `HUB_NAME=yte` deploy KHÔNG truy cập được `medinet_hub_duoc` qua DB connection (R-V3-3 + E-V3-3 enforce).
 
 ### FACTOR — Hub-con Codebase Factor (3 REQ)
 
