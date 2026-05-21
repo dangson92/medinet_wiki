@@ -600,15 +600,22 @@ def build_asgi_app() -> Any:
     # CORS — RFC 8414 §3.1 / RFC 9728 §3.1 yêu cầu metadata endpoint OAuth
     # support CORS để browser-based client dùng được. MCP Inspector
     # (localhost:6274) + Claude web (claude.ai) fetch cross-origin → cần
-    # `Access-Control-Allow-Origin`. Public AS — không dùng cookie credentials
-    # (Authorization Bearer header), an toàn `allow_origins=*` +
-    # `allow_credentials=False`. Áp dụng CẢ 2 mode (subdomain + path-prefix)
-    # cùng config để hành vi đồng nhất.
-    _add_cors_middleware(inner)
+    # `Access-Control-Allow-Origin`.
+    #
+    # CRIT-02 (audit 2026-05-21): CHỈ add CORS Ở MỘT TẦNG. Trước fix:
+    # subdomain mode add ở inner; path-prefix mode add ở CẢ inner (dòng cũ) +
+    # wrapper (dòng dưới) → response duplicate `Access-Control-Allow-Origin`
+    # → browser reject (CORS spec: header duplicate). Toàn bộ OAuth flow vỡ
+    # với Claude web + MCP Inspector ở path-prefix deploy chính.
+    #
+    # Fix: subdomain mode add ở inner (return ngay sau); path-prefix mode add
+    # ở wrapper outer THÔI (dòng `_add_cors_middleware` cho `wrapper` ở dưới).
 
     # Subdomain/authority-root deploy → trả inner bọc _BasicAuthFormShim
-    # (defense-in-depth Basic→form, xem class docstring).
+    # (defense-in-depth Basic→form, xem class docstring). CORS add ở inner —
+    # request đi qua _BasicAuthFormShim → inner CORSMiddleware → SDK app.
     if not prefix:
+        _add_cors_middleware(inner)
         return _BasicAuthFormShim(inner)
 
     # Path-based deploy: wrap inner dưới Mount(`/<prefix>`, ...) + add 2
@@ -815,7 +822,9 @@ class _BasicAuthFormShim:
     def __init__(self, app: Any) -> None:
         self._app = app
 
-    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+    async def __call__(  # noqa: C901 — nhiều nhánh fast-fail pass-through tường minh
+        self, scope: Any, receive: Any, send: Any
+    ) -> None:
         if scope.get("type") != "http":
             await self._app(scope, receive, send)
             return
