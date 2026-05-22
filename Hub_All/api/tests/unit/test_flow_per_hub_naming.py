@@ -158,6 +158,8 @@ def test_module_app_name_per_hub_yte_subprocess() -> None:
             "DATABASE_URL": "postgresql+asyncpg://u:p@localhost:5432/medinet_hub_yte",
             "COCOINDEX_DATABASE_URL": "postgresql://u:p@localhost:5432/medinet_cocoindex",
             "REDIS_URL": "redis://localhost:6379/0",
+            # Plan 03-02 Task 1 — validator hub con required CENTRAL_JWKS_URL.
+            "CENTRAL_JWKS_URL": "http://python-api-central:8080/.well-known/jwks.json",
         },
         script,
     )

@@ -82,7 +82,8 @@ def get_auth_service(
     )
 
 
-async def get_current_user(
+async def get_current_user(  # noqa: C901 — Phase 3 branch verify path hub con
+    request: Request,
     token: str | None = Depends(oauth2_scheme),  # noqa: B008
     jwt_mgr: JWTManager = Depends(get_jwt_manager),  # noqa: B008
     redis: Redis | None = Depends(get_redis),  # noqa: B008
@@ -90,12 +91,22 @@ async def get_current_user(
 ) -> User:
     """Verify Bearer access token → User entity.
 
-    Trình tự reject:
+    Phase 3 Plan 03-02 SSO-01 (D-V3-Phase3-D) — Hub con verify qua JWKSCache:
+    - central: dùng JWTManager.verify_token (local public.pem M2 carry forward)
+    - hub con: dùng JWKSCache.get_public_key(kid) → verify_token_with_key
+
+    Trình tự reject (KHÔNG đổi từ M2):
     1. Token rỗng → 401 MISSING_AUTHORIZATION
     2. Sai signature/expired/sai issuer/sai alg → 401 INVALID_TOKEN
     3. Sai type (refresh thay vì access) → 401 INVALID_TOKEN_TYPE
     4. JTI trong Redis blacklist → 401 TOKEN_REVOKED
     5. User không tồn tại / disabled → 401 USER_DISABLED
+
+    Phase 3 Plan 03-02 thêm reject paths (hub con only):
+    6. JWT thiếu kid header → 401 INVALID_TOKEN ("Token thiếu kid header")
+    7. kid mismatch JWKS cache → 401 INVALID_TOKEN
+    8. JWKSCache stale > 24h → 503 JWKS_STALE (R-V3-5 fail-loud delayed)
+    9. JWKSCache chưa init (hub con boot fail) → 503 JWKS_CACHE_UNAVAILABLE
     """
     if not token:
         raise HTTPException(
@@ -107,16 +118,99 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    try:
-        claims = jwt_mgr.verify_token(token, expected_type="access")
-    except JWTError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "INVALID_TOKEN", "message": str(e)},
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from e
+    # Phase 3 Plan 03-02 — branch verify path theo hub_name (D-V3-Phase3-D).
+    from app.config import get_settings
 
-    # Blacklist check.
+    settings = get_settings()
+    if settings.hub_name == "central":
+        # Central: local public.pem M2 path (verify_token carry forward).
+        try:
+            claims = jwt_mgr.verify_token(token, expected_type="access")
+        except JWTError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "INVALID_TOKEN", "message": str(e)},
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from e
+    else:
+        # Hub con: verify qua JWKSCache (D-V3-Phase3-D).
+        import jwt as pyjwt
+
+        from app.auth.jwks import (
+            JWKSCache,
+            JWKSKidNotFoundError,
+            JWKSStaleError,
+        )
+
+        jwks_cache: JWKSCache | None = getattr(
+            request.app.state, "jwks_cache", None
+        )
+        if jwks_cache is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "JWKS_CACHE_UNAVAILABLE",
+                    "message": "JWKSCache chưa init — hub con boot fail?",
+                },
+            )
+
+        # Extract kid từ JWT header (pre-verify-by-design — kid chỉ để select
+        # key; signature verify ở step verify_token_with_key sau).
+        try:
+            unverified_header = pyjwt.get_unverified_header(token)
+        except pyjwt.InvalidTokenError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "INVALID_TOKEN",
+                    "message": f"JWT header invalid: {e}",
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from e
+
+        kid = unverified_header.get("kid")
+        if kid is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "INVALID_TOKEN",
+                    "message": (
+                        "Token thiếu kid header — JWT phát hành trước Phase 3 "
+                        "SSO, vui lòng đăng nhập lại"
+                    ),
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        try:
+            public_key = jwks_cache.get_public_key(kid)
+        except JWKSStaleError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "JWKS_STALE", "message": str(e)},
+            ) from e
+        except JWKSKidNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "INVALID_TOKEN",
+                    "message": f"kid không khớp JWKS cache: {e}",
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from e
+
+        try:
+            claims = jwt_mgr.verify_token_with_key(
+                token, public_key, expected_type="access"
+            )
+        except JWTError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "INVALID_TOKEN", "message": str(e)},
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from e
+
+    # Blacklist check (Plan 03-03 sẽ rename `blacklist:` → `auth:blacklist:`).
     if redis is not None:
         is_blacklisted = await redis.exists(f"blacklist:{claims.jti}")
         if is_blacklisted:
@@ -284,8 +378,14 @@ async def get_api_key_or_jwt(
         return user
 
     # Không có X-API-Key → fallback Bearer JWT.
+    # Plan 03-02 Task 4 — get_current_user signature thêm request (cần app.state
+    # truy cập jwks_cache cho hub con branch).
     return await get_current_user(
-        token=token, jwt_mgr=jwt_mgr, redis=redis, db=db
+        request=request,
+        token=token,
+        jwt_mgr=jwt_mgr,
+        redis=redis,
+        db=db,
     )
 
 
