@@ -478,6 +478,104 @@ Nếu sync drift > 1% sustained 7 days (E-V3-5 trigger):
 
 ---
 
+## Reverse Proxy Subpath Deploy Notes (Phase 5 v3.0)
+
+Phase 5 v3.0 ship Caddy reverse proxy subpath routing đa hub + frontend 1-build prefix detect runtime + per-hub login branding + D-V3-06 D6 expire formally.
+
+### Env vars (root `.env`)
+
+```bash
+# Domain serve qua HTTPS Caddy auto-TLS:
+# - Dev local: localhost → Caddy self-signed cert (browser cảnh báo, chấp nhận với -k)
+# - Prod: wiki.medinet.vn → Caddy auto ACME Let's Encrypt (cần port 80+443 open Internet)
+WIKI_PUBLIC_DOMAIN=localhost
+
+# Hub allowlist — comma-separated; operator dùng `make hub-add HUB=<name>` tự update + caddy reload
+HUBS_ALLOWLIST=yte,duoc,hcns
+
+# Regex pipe-separated cho Caddy path_regexp (auto-derived từ HUBS_ALLOWLIST — sync atomic qua hub-add.sh step 8)
+HUBS_ALLOWLIST_REGEX=yte|duoc|hcns
+```
+
+### Routing semantics
+
+| URL pattern | Caddy handle | Upstream | Notes |
+|-------------|--------------|----------|-------|
+| `wiki.domain.com/<hub>/api/*` | `@hub_api path_regexp` + `uri strip_prefix /<hub>` | `http://python-api-<hub>:8080` | Hub con backend nhận `/api/*` (KHÔNG `/<hub>/api/*`) — M2 router code unchanged |
+| `wiki.domain.com/api/*` | `handle /api/*` no-strip | `http://python-api-central:8080` | Central API route + cross-hub `/api/search/cross-hub` |
+| `wiki.domain.com/.well-known/*` | `handle /.well-known/*` | `http://python-api-central:8080` | JWKS endpoint Phase 3 SSO-01 |
+| `wiki.domain.com/<any>` (catch-all) | `file_server` + `try_files {path} /index.html` | `dist/index.html` SPA | React bootstrap → prefix detect → render đúng route |
+| `wiki.domain.com/branding/<hub>/logo.svg` | `file_server` | `dist/branding/<hub>/logo.svg` | Vite copy `public/branding/` → `dist/` |
+
+### Deploy steps
+
+```bash
+# 1. Build frontend (host machine — Vite output dist/)
+cd Hub_All/frontend && npm run build && cd ..
+
+# 2. Up compose (Postgres + Redis + N python-api + Caddy)
+cd Hub_All
+cp .env.example .env  # nếu chưa có
+docker compose up -d
+
+# 3. Verify Caddy validate + smoke
+docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
+curl -k -i https://localhost/api/health       # central
+curl -k -i https://localhost/yte/api/health   # python-api-yte (prefix stripped)
+curl -k -i https://localhost/                 # index.html SPA
+curl -k -i https://localhost/yte/dashboard    # index.html (SPA fallback) → React bootstrap → render Dashboard với basename=/yte
+```
+
+### Add a new hub (FACTOR-04 extend Phase 5 + Plan 02-05 carry forward)
+
+`make hub-add HUB=<name>` chain 9 step:
+1-7: DB create + override.yml append + compose config verify (Plan 02-05)
+8: sed-edit `.env` HUBS_ALLOWLIST + HUBS_ALLOWLIST_REGEX atomic (tmp file + mv preserve other env, duplicate skip idempotent)
+9: PRE-validate Caddy (Pitfall 7 silent rollback mitigation) + reload zero-downtime + smoke curl `/<new>/api/health` warn-only + dev pre-up tolerance (caddy chưa running → skip + hint)
+
+```bash
+cd Hub_All
+make hub-add HUB=phap_che PORT=8184
+# Output: hub registered, Caddy reloaded, smoke check ...
+```
+
+### Backward incompat (operator broadcast)
+
+- **Frontend hardcode `${window.location.hostname}:8180`** đã REMOVE (api.ts Plan 05-02). Direct browser bookmark `localhost:8180/...` không còn work — phải qua `wiki.medinet.vn` (Caddy gateway) hoặc `localhost` HTTPS.
+- **localStorage same-origin scope** carry forward M2 — token share xuyên subpath cùng origin. Logout `/yte/` → cleared cross-hub (TRUE SSO behavior). XSS concern accept — defer v4.0 HARD-V4-05 httpOnly cookie.
+- **11 trang React M2 COMPAT-01** — chỉ Login.tsx + Layout.tsx sidebar header touch (R-V3-2 mitigation D2 scope minimal). Dashboard + Documents + Search + 8 trang khác giữ NGUYÊN styling.
+
+### Rollback procedure
+
+```bash
+# Revert Caddyfile + docker-compose
+cd Hub_All
+git checkout HEAD~1 -- Caddyfile docker-compose.yml
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+# Revert frontend (api.ts + App.tsx + Login.tsx + Layout.tsx)
+git checkout HEAD~1 -- frontend/src/services/api.ts frontend/src/App.tsx frontend/src/pages/Login.tsx frontend/src/Layout.tsx
+cd frontend && npm run build && cd ..
+docker compose restart caddy  # reload dist mount
+
+# Hub registry rollback (manual sed .env)
+sed -i 's|^HUBS_ALLOWLIST=.*|HUBS_ALLOWLIST=yte,duoc,hcns|' .env
+sed -i 's|^HUBS_ALLOWLIST_REGEX=.*|HUBS_ALLOWLIST_REGEX=yte\|duoc\|hcns|' .env
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+### Reference
+
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-CONTEXT.md` — 16 D-V3-Phase5-A1..D4 LOCKED 2026-05-22.
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md` — Visual design contract (4 hub branding + Login state machine + Layout sidebar + theme delivery).
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-VALIDATION.md` — Per-task verification map (Wave 0 vitest infra + 5 test file).
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-{01..06}-PLAN.md` — 6 plan implementation chi tiết.
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-{01..06}-SUMMARY.md` — deliverable + commit + test count per plan.
+- `.planning/REQUIREMENTS.md` § PROXY-01..04 — REQ-ID spec + Phase 5 closeout note.
+- `Hub_All/CLAUDE.md` section 6 — v3.0 progress + Phase 5 Reverse Proxy + Frontend Subpath pattern subsection.
+
+---
+
 ## Milestone status
 
 - ✅ **M2 v2.0 — Full RAG Rewrite** đang đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS).
