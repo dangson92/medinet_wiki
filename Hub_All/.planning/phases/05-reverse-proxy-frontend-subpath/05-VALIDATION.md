@@ -1,10 +1,11 @@
 ---
 phase: 5
 slug: reverse-proxy-frontend-subpath
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: done
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-22
+verified: 2026-05-23
 ---
 
 # Phase 5 — Validation Strategy
