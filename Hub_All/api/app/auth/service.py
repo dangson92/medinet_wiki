@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth._blacklist import make_blacklist_key
 from app.auth.jwt import JWTError, JWTManager
 from app.auth.password import verify_password
 from app.auth.schemas import (
@@ -165,7 +166,10 @@ class AuthService:
                 )
             # Check blacklist NGAY SAU lock acquired (case: refresh đã hoàn tất
             # trước khi lock TTL expire — old jti đã trong blacklist).
-            already_revoked = await self.redis.exists(f"blacklist:{claims.jti}")
+            # Plan 03-03 D-V3-Phase3-H — key `auth:blacklist:{jti}` qua helper.
+            already_revoked = await self.redis.exists(
+                make_blacklist_key(claims.jti)
+            )
             if already_revoked:
                 raise AuthError("TOKEN_REVOKED", "Refresh token đã bị thu hồi")
         else:
@@ -196,9 +200,10 @@ class AuthService:
         )
 
         # Blacklist old jti + revoke DB row.
+        # Plan 03-03 D-V3-Phase3-H — key `auth:blacklist:{jti}` qua helper.
         if self.redis is not None:
             await self.redis.set(
-                f"blacklist:{claims.jti}",
+                make_blacklist_key(claims.jti),
                 "1",
                 ex=self.jwt_manager.refresh_ttl_seconds,
             )
@@ -244,7 +249,10 @@ class AuthService:
             return
         now_ts = int(datetime.now(tz=UTC).timestamp())
         access_ttl = max(1, access_exp - now_ts)
-        await self.redis.set(f"blacklist:{access_jti}", "1", ex=access_ttl)
+        # Plan 03-03 D-V3-Phase3-H — key `auth:blacklist:{jti}` qua helper.
+        await self.redis.set(
+            make_blacklist_key(access_jti), "1", ex=access_ttl
+        )
 
         if refresh_token:
             try:
@@ -252,7 +260,7 @@ class AuthService:
                     refresh_token, expected_type="refresh"
                 )
                 await self.redis.set(
-                    f"blacklist:{claims.jti}",
+                    make_blacklist_key(claims.jti),
                     "1",
                     ex=self.jwt_manager.refresh_ttl_seconds,
                 )

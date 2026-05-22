@@ -21,6 +21,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth._blacklist import make_blacklist_key
 from app.auth.jwt import JWTError, JWTManager
 from app.auth.service import AuthService
 from app.db.session import get_session
@@ -210,9 +211,10 @@ async def get_current_user(  # noqa: C901 — Phase 3 branch verify path hub con
                 headers={"WWW-Authenticate": "Bearer"},
             ) from e
 
-    # Blacklist check (Plan 03-03 sẽ rename `blacklist:` → `auth:blacklist:`).
+    # Blacklist check — Plan 03-03 D-V3-Phase3-H key `auth:blacklist:{jti}`
+    # qua helper (cross-process central + hub con cùng 1 Redis instance M2 baseline).
     if redis is not None:
-        is_blacklisted = await redis.exists(f"blacklist:{claims.jti}")
+        is_blacklisted = await redis.exists(make_blacklist_key(claims.jti))
         if is_blacklisted:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

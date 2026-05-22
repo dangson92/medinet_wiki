@@ -22,6 +22,7 @@ login/refresh/logout/me).
 """
 from __future__ import annotations
 
+from app.auth._blacklist import REDIS_BLACKLIST_PREFIX, make_blacklist_key
 from app.auth.api_key import require_api_key
 from app.auth.dependencies import (
     UserWithHubs,
@@ -68,6 +69,7 @@ __all__ = [
     "JWTClaims",
     "JWTError",
     "JWTManager",
+    "REDIS_BLACKLIST_PREFIX",
     "TokenPair",
     "UserWithHubs",
     "auth_router",
@@ -77,6 +79,7 @@ __all__ = [
     "get_current_user_with_hubs",
     "get_jwt_manager",
     "hash_password",
+    "make_blacklist_key",
     "oauth2_scheme",
     "require_api_key",
     "require_role",
