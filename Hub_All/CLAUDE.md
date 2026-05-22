@@ -149,10 +149,10 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 |-------|--------|------------|------|--------|
 | 1 — Multi-DB Topology + Per-hub Alembic | ✅ DONE | 5 plan | 2026-05-21 | TOPO-01..04 (4) |
 | 2 — Hub-con Codebase Factor | ✅ DONE | 5 plan | 2026-05-22 | FACTOR-01..04 (4 — FACTOR-04 added 2026-05-22 Plan 02-05) |
-| 3 — Auth SSO + hub_ids trong JWT | ✅ **DONE** | **5 plan** | **2026-05-22** | **SSO-01..04 (4)** |
-| 🚦 v3.0-a EXIT GATE | ✅ **TRIGGERED** | — | 2026-05-22 | Demo 1 hub con yte + central + JWT SSO + golden path → user accept tiếp tục v3.0-b (demo runtime defer Phase 7 MIGRATE-05 — evidence chain 65+ unit + 6 integration test in-process cover semantic) |
-| 4 — Cross-hub Data Sync | 📋 Next | — | — | SYNC-01..05 |
-| 5 — Reverse Proxy + Frontend Subpath | 📋 Backlog | — | — | PROXY-01..04 |
+| 3 — Auth SSO + hub_ids trong JWT | ✅ DONE | 5 plan | 2026-05-22 | SSO-01..04 (4) |
+| 🚦 v3.0-a EXIT GATE | ✅ TRIGGERED | — | 2026-05-22 | Demo 1 hub con yte + central + JWT SSO + golden path → user accept tiếp tục v3.0-b (demo runtime defer Phase 7 MIGRATE-05 — evidence chain 65+ unit + 6 integration test in-process cover semantic) |
+| 4 — Cross-hub Data Sync | ✅ **DONE** | **7 plan** | **2026-05-22** | **SYNC-01..05 (5)** |
+| 5 — Reverse Proxy + Frontend Subpath | 📋 Next | — | — | PROXY-01..04 |
 | 6 — System Settings Sync | 📋 Backlog | — | — | SETTINGS-01..04 |
 | 7 — Migration + Smoke E2E | 📋 Backlog | — | — | MIGRATE-01..05 |
 
@@ -215,6 +215,57 @@ Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 - **Layer 2 (M2 carry forward):** Repository layer `WHERE hub_id = settings.hub_name` query-time filter — hub con KHÔNG SELECT data hub khác.
 - **Layer 3 (Plan 03-03 MỚI):** Dependency `get_current_user_for_hub_access` JWT claim hub_ids check → 403 CROSS_HUB_ACCESS_DENIED envelope nếu mismatch — stale JWT compromised KHÔNG bypass.
 
+### Phase 4 Cross-hub Data Sync pattern (SYNC-01..05 — 2026-05-22)
+
+7 plan đóng 5 REQ-ID Cross-hub Data Sync + 9 D-V3-Phase4-A1..D3 LOCKED + 6 Prometheus metric infrastructure (outbox + worker mechanism, R-V3-1 HIGH sync drift mitigation):
+
+- **Plan 04-01 SYNC-01/02/05 — Per-hub Alembic 0005 + Postgres trigger AFTER INSERT/DELETE (D-V3-Phase4-A2/A4/B2):** `api/migrations/versions/0005_sync_outbox_per_hub.py` (~224 LOC) tạo bảng `sync_outbox` (11 cột: id/op_type/chunk_id/document_id/payload/attempt_count/last_error/status/next_retry_at/created_at/processed_at + 2 CHECK constraint + 2 partial index) + Postgres function `enqueue_sync_outbox()` (explicit `jsonb_build_object` field — KHÔNG `to_jsonb(NEW)` để fix BLOCKER 2 pgvector serialization + `NEW.vector::float4[]` cast + `encode(content_hash, 'hex')` 64 char) + 2 trigger AFTER INSERT/DELETE chunks (FOR EACH ROW atomic cùng transaction) + `documents.sync_status` enum (5 value lifecycle: pending/syncing/synced/failed/partial) + initial `'pending' → 'syncing'` idempotent UPDATE guard `WHERE sync_status='pending'` (BLOCKER 1 fix D-V3-Phase4-B2 lifecycle). Skip-central runtime guard `current_database() check` (sync_outbox per-hub-only). 17/17 unit test PASS + 293/293 unit regression + 10/10 Phase 1 PASS.
+
+- **Plan 04-02 SYNC-01/03/04 — Settings 7 field + 3 model_validator + docker-compose env wire (D-V3-Phase4-A5/C3/D2):** Settings field mới `hub_id` UUID4 str (env `HUB_ID`) + `central_sync_dsn` asyncpg DSN (env `CENTRAL_SYNC_DSN`) + `checksum_hub_dsns_json` JSON dict (central dict DSN tới N hub con) + `sync_batch_size=100` + `sync_poll_interval=5.0` + `sync_max_attempts=5` + `sync_backoff_seconds=[1,5,30,120]` defaults. 3 model_validator hub con required HUB_ID + CENTRAL_SYNC_DSN; central optional CHECKSUM_HUB_DSNS_JSON (lazy connect, deploy lần đầu CHƯA register hub con OK). 1 length validator backoff = max_attempts-1 (T-04-02-05 DoS mitigation). docker-compose 3 hub con env `${HUB_*_ID:?error}` fail-loud + central `${CHECKSUM_HUB_DSNS_JSON:-}` optional + override.yml.template FACTOR-04 placeholder. 17/17 unit + 310/310 regression PASS.
+
+- **Plan 04-03 SYNC-01/02/05 — `api/app/sync/` module + 6 Prometheus collector (D-V3-Phase4-A1/A5/B1/B3):** Module mới `api/app/sync/`: `keys.py` (8 SQL constant — CLAIM_PENDING FOR UPDATE SKIP LOCKED + MARK_PROCESSING/PROCESSED/FAILED_RETRY/DEAD + PUSH_INSERT_CHUNK ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT + PUSH_DELETE + UPDATE_DOC_SYNC_STATUS aggregate CASE 4 state) + `models.py` (Pydantic ChunkPayload với `content_hash` field_validator mode=before decode hex string → bytes BLOCKER 2 fix + DeletePayload + SyncOutboxRow + 3 enum SyncStatus/OpType/DocumentSyncStatus) + `metrics.py` (6 Prometheus collector module-level — `hub_name` label W7 fix bounded ~240 series) + `worker.py` (338 LOC `sync_worker_loop` + 7 helper `_claim/_push_inserts/_push_deletes/_update_document_sync_status/_handle_failures/_observe_lag/_get_settings` + SELECT FOR UPDATE SKIP LOCKED concurrency-safe + ON CONFLICT idempotent + exp backoff clamped + LAST_ERROR_TRUNCATE=1000 char + `_update_document_sync_status` D-V3-Phase4-B2 lifecycle aggregate). 43/43 unit (12 models + 13 metrics + 18 worker) + 353/353 regression PASS.
+
+- **Plan 04-04 SYNC-01/02/05 — Lifespan integration central_sync_pool + sync_worker_task + rag/flow.py guard:** `api/app/db/dsn.py` shared `_to_asyncpg_dsn` helper (W3 fix circular import — Plan 04-06 sẽ reuse) + `app/main.py::_init_central_sync_conn` callback register pgvector codec (BLOCKER 2 fix `$N::vector` bind) + lifespan hub con `central_sync_pool = await asyncpg.create_pool(init=_init_central_sync_conn)` verify `SELECT current_database() == 'medinet_central'` fail-fast (T-04-04-01 mitigation) + spawn `sync_worker_task = asyncio.create_task(sync_worker_loop(app))` + shutdown graceful `task.cancel() + asyncio.wait_for(timeout=10s)` (carry forward Plan 03-02 JWKSCache pattern) + close pool SAU worker stop. R-V3-1 fail-loud — hub con KHÔNG init được pool → re-raise → uvicorn exit 1. `rag/flow.py::index_document` defensive guard skip chunks INSERT khi `doc_hub_id != settings.hub_id` warning log (D-V3-Phase4-D2 + E-V3-3 Layer 1 carry forward). `SYNC_SKIP_CENTRAL_POOL=1` escape hatch (pattern song song `JWKS_SKIP_FETCH` + `COCOINDEX_SKIP_SETUP`). 6 mock integration + 1 skipif live-DB (defer Phase 7 MIGRATE-05).
+
+- **Plan 04-05 SYNC-03 — Cross-hub search refactor 1 SQL (D-V3-Phase4-D1/D3):** `SearchService._search_cross_hub_impl` refactor từ fan-out `asyncio.gather(*[_search_one(h) for h in hub_ids])` qua N task → 1 SQL aggregated `_run_vector_query(hub_ids=<full list>)` dùng `WHERE c.hub_id = ANY($2::uuid[]) ORDER BY vector <=> $1::vector LIMIT $3` — re-rank tự nhiên qua SQL ORDER BY (KHÔNG Python merge sort) + HNSW `iterative_scan=relaxed_order` + `ef_search=200` + `max_scan_tuples=20000` carry forward M2 Phase 6. Public API `SearchService.search_cross_hub(*, body, user)` signature giữ NGUYÊN (backward compat M2 ask_service.py + frontend api.ts crossHubSearch). Tách `routers/search.py` 2 APIRouter: `search_router` universal (/api/search, /api/search/similar) + `cross_hub_router` central-only (/api/search/cross-hub) + main.py conditional include trong block central-only. CENTRAL_ONLY list grow 8 → 9 endpoint. JWT hub_ids ∩ body.hub_ids intersect SSO-03 carry forward. 8/8 unit + 15/15 integration (10 baseline + 5 dedicated cross-hub) + 361/361 regression PASS.
+
+- **Plan 04-06 SYNC-04 — Checksum scheduler central + admin /api/sync/replay (D-V3-Phase4-C1/C2/C3):** `api/app/observability/checksum_scheduler.py` (~280 LOC) — central FastAPI lifespan asyncio task naive `asyncio.sleep` cron loop (KHÔNG cần APScheduler dep mới) + `_should_run_daily/_should_run_hourly` time-check helper + `_tick_daily_count` (full `COUNT(*)` per hub vs central WHERE hub_id → `SYNC_COUNT_DRIFT{hub_name}` gauge symmetric `drift_ratio = abs(diff) / max(hub_count, 1)`) + `_tick_hourly_hash` (TABLESAMPLE BERNOULLI(1) chunks created last 1h → content_hash diff → `SYNC_HASH_DRIFT{hub_name, drift_type=mismatch|missing}` counter) + lazy per-hub asyncpg.Pool init (operator append hub FACTOR-04 + restart refresh dict) + per-hub error isolation (1 hub fail KHÔNG abort scheduler). `POST /api/sync/replay { hub_id, since }` admin endpoint (require_role("admin") Phase 3 SSO-04 carry forward) reset 4 field dead rows (status='pending' + attempt_count=0 + last_error=NULL + next_retry_at=NULL) WHERE status='dead' AND created_at >= since atomic + audit_logs INSERT non-repudiation `action='sync.replay'` với defensive inner try/except (W8 fix audit fail KHÔNG block replay — T-04-06-03 reinforced). Mount via existing `sync_router` (FACTOR-02 central-only carry forward). Pydantic `SyncReplayRequest` schema + `hub_id` regex format check (T-04-06-02 Tampering). 22/22 unit (10 checksum + 12 replay) + 383/383 regression + 21/21 Phase 2+4 integration PASS.
+
+- **Plan 04-07 closeout — docs update + smoke checkpoint runtime SKIP pre-resolved (file này):** CLAUDE.md section 6 + STATE.md + REQUIREMENTS.md + README.md update phản ánh Phase 4 DONE. Task 5 smoke compose runtime SKIP pre-resolved per user decision — defer Phase 7 MIGRATE-05 full E2E (3 hub + central golden path + JWT SSO live + cross-hub search live data). Evidence chain: 113 unit + 21 integration test in-process PASS cover semantic SYNC-01..05 + `docker compose config --quiet` base PASS Plan 04-02.
+
+**6 Prometheus metric mới (Phase 4 observability):**
+- `sync_lag_seconds{hub_name}` histogram — outbox.created_at → central INSERT processed_at lag
+- `sync_outbox_pending{hub_name}` gauge — số row pending hiện tại
+- `sync_attempt_total{hub_name, status=success|fail}` counter — cumulative push attempts
+- `sync_dead_total{hub_name, error_class=network|timeout|conflict|unknown}` counter — cumulative dead rows
+- `sync_count_drift{hub_name}` gauge — daily COUNT diff ratio symmetric
+- `sync_hash_drift{hub_name, drift_type=mismatch|missing}` counter — hourly TABLESAMPLE hash sample diff
+
+**Backward compat (Phase 4 KHÔNG break M2):**
+- `SearchService.search_cross_hub(*, body, user) -> dict[str, Any]` public API signature unchanged — M2 ask_service.py consumer + frontend api.ts crossHubSearch giữ nguyên call.
+- Cross-hub endpoint URL `/api/search/cross-hub` giữ NGUYÊN ở central — chỉ refactor implementation 1 SQL.
+- Hub con `/api/search/cross-hub` strip → 404 envelope (FACTOR-02 extend) — frontend M2 hardcode same-origin sẽ FAIL ở hub con cho tới Phase 5 PROXY-02 wire base URL detect prefix. Acceptable dev v3.0-b.
+- M2 COMPAT stub `routers/sync.py` `/api/sync/{stats,batches,...}` PRESERVE — append `/api/sync/replay` mới (FACTOR-02 central-only mount).
+
+**R-V3-1 HIGH mitigation chain:**
+- Outbox INSERT atomic cùng transaction chunks INSERT (Plan 04-01 trigger AFTER INSERT/DELETE FOR EACH ROW).
+- Worker ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT FROM EXCLUDED.content_hash — idempotent retry KHÔNG dup + tránh UPDATE no-op bảo vệ HNSW vector index disk write thừa (Plan 04-03 + B1).
+- Exp backoff [1, 5, 30, 120]s + max 5 attempts → dead status + Prometheus alert (Plan 04-03 + A5).
+- Daily 2AM COUNT(*) drift + Hourly TABLESAMPLE BERNOULLI(1) content_hash sample → `sync_count_drift` + `sync_hash_drift` metric (Plan 04-06 + C1).
+- Admin `POST /api/sync/replay` endpoint manual recovery (Plan 04-06 + C2).
+
+**E-V3-2 cross-hub p95 < 1.5s carry forward:**
+- HNSW iterative_scan=relaxed_order + ef_search=200 + max_scan_tuples=20000 SET LOCAL session tuning carry forward M2 Phase 6.
+- 1 SQL aggregated thay fan-out N asyncio task → giảm overhead orchestration + re-rank natural qua SQL ORDER BY (Plan 04-05 + D1).
+- Live measure defer Phase 7 MIGRATE-05 runtime smoke E2E.
+
+**v3.0-b mở màn:** Phase 4 hoàn tất 5/5 REQ-ID SYNC. v3.0-b tiếp tục Phase 5 (PROXY + frontend subpath + D6 expire) hoặc Phase 6 (SETTINGS sync) parallel theo critical path. Phase 7 MIGRATE-05 sẽ verify runtime full E2E 3 hub con + central + golden path.
+
+**Reference:**
+- `.planning/phases/04-cross-hub-data-sync/04-CONTEXT.md` — 9 D-V3-Phase4-A1..D3 LOCKED 2026-05-22.
+- `.planning/phases/04-cross-hub-data-sync/04-{01..07}-PLAN.md` — implementation chi tiết 7 plan.
+- `.planning/phases/04-cross-hub-data-sync/04-{01..07}-SUMMARY.md` — deliverable + commit + test count per plan.
+
 ---
 
-*Cập nhật: 2026-05-22 (Phase 3 DONE — SSO-01..04 ship 5 plan; JWKS endpoint + JWKSCache + JWT aud/hub_ids REQUIRED + Redis blacklist key rename + 307 redirect hub con login/refresh + E4 reinforced 3-layer). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2+3 DONE (15/~32 plan ≈ 47%), v3.0-a EXIT GATE TRIGGERED. Next: `/gsd-discuss-phase 4` Cross-hub data sync (GA-V3-D chốt — cocoindex target / Postgres logical replication / outbox + worker) hoặc accept v3.0-a tiếp tục v3.0-b.*
+*Cập nhật: 2026-05-22 (Phase 4 DONE — SYNC-01..05 ship 7 plan; outbox + worker mechanism + Postgres trigger AFTER INSERT/DELETE chunks atomic + ON CONFLICT (id) DO UPDATE idempotent + exp backoff [1,5,30,120]s max 5 attempts → dead + checksum scheduler central daily 2AM + hourly 1% TABLESAMPLE + admin /api/sync/replay endpoint + cross-hub search refactor 1 SQL aggregated thay fan-out + 6 Prometheus metric). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2+3+4 DONE (22/~32 plan ≈ 69%), v3.0-a EXIT GATE TRIGGERED + v3.0-b mở màn. Next: `/gsd-discuss-phase 5` Reverse Proxy + Frontend Subpath (PROXY-01..04 — Caddy subpath routing + frontend prefix detect 1 build + D-V3-06 D6 expire formally + per-hub login branding).*
