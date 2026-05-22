@@ -16,8 +16,10 @@
 #   - PSQL co the connect superuser: PGHOST/PGPORT/PGUSER/PGPASSWORD env hoac .pgpass
 #   - api/.env DATABASE_URL tro medinet_central (de alembic -x hub=<HUB> resolve)
 #
-# Validation regex: pattern hub_name = `^[a-z][a-z0-9_]{1,30}$`
-# (lowercase a-z bat dau + a-z 0-9 underscore 1-30 char) - Postgres identifier safe.
+# Validation regex: pattern hub_name = `^[a-z][a-z0-9_]{0,15}$`
+# (lowercase a-z bat dau + a-z 0-9 underscore 0-15 char, max 16 char total).
+# Plan 02-05 FACTOR-04 sync regex voi Settings (Postgres identifier 63 char limit
+# minus medinet_hub_ prefix 12 char = 51 headroom, 16 char cho de nho + URL gon).
 #
 # Note: KHONG validate hub_name in _VALID_HUBS hardcoded - script nay cho phep
 # them hub MOI (vd "phap_che", "marketing"). Validation xay ra o Settings layer
@@ -37,8 +39,8 @@ fi
 # Sanitize: chi accept lowercase a-z 0-9 underscore (Postgres identifier safe)
 # Regex pattern xuat hien literal trong validation block - Plan 05 Task 1 grep
 # `grep -cF '^[a-z][a-z0-9_]' Hub_All/api/scripts/hub-init.sh` >= 1 cover.
-if ! [[ "$HUB" =~ ^[a-z][a-z0-9_]{1,30}$ ]]; then
-    echo "[hub-init] ERROR: hub name '$HUB' invalid. Pattern: ^[a-z][a-z0-9_]{1,30}$"
+if ! [[ "$HUB" =~ ^[a-z][a-z0-9_]{0,15}$ ]]; then
+    echo "[hub-init] ERROR: hub name '$HUB' invalid. Pattern: ^[a-z][a-z0-9_]{0,15}$ (sync Settings Plan 02-05 FACTOR-04)"
     exit 2
 fi
 

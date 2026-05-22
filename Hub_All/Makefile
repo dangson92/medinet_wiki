@@ -10,7 +10,7 @@
 
 .PHONY: help up down logs api-dev api-test api-lint api-keys api-install \
         eval-install eval-seed eval-clean eval-smoke eval-all eval-report \
-        eval-readme eval-restore hub-init
+        eval-readme eval-restore hub-init hub-add
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Help
@@ -33,6 +33,9 @@ help: ## Hiển thị danh sách target khả dụng
 	@echo ""
 	@echo "Phase 1 v3.0 Dynamic hub-init (TOPO-01 part 2):"
 	@echo "  hub-init HUB=<name>     - them hub moi (CREATE DB + ext vector + HNSW verify + alembic upgrade head)"
+	@echo ""
+	@echo "Phase 2 v3.0 FACTOR-04 Dynamic hub registration (Plan 02-05):"
+	@echo "  hub-add HUB=<name> [PORT=<port>] - them hub moi end-to-end (DB + ext vector + alembic + compose service block)"
 	@echo ""
 	@echo "Phase 9 Eval Framework (EVAL-02 + EVAL-04):"
 	@echo "  eval-install            - cd eval && pip install -e '.[dev]'"
@@ -86,6 +89,25 @@ api-lint:
 hub-init:
 	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-init HUB=<name>"; exit 2; fi
 	$(MAKE) -C api hub-init HUB=$(HUB)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Plan 02-05 FACTOR-04 — Dynamic hub registration end-to-end
+# ═══════════════════════════════════════════════════════════════════════════
+# Tien dieu kien giong hub-init: postgres dang chay + .env DATABASE_URL central.
+# Khac biet: hub-add wrap quanh hub-init + auto-gen docker-compose.override.yml
+# service block + volume declaration. Operator chay 1 lenh la tao xong hub moi.
+#
+# Usage:
+#   make hub-add HUB=phap_che              # auto-detect port (8184 tro len)
+#   make hub-add HUB=marketing PORT=8200   # explicit port
+#
+# Sau khi DONE:
+#   docker compose up -d python-api-phap_che
+#   curl http://localhost:<port>/api/health
+
+hub-add:
+	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-add HUB=<name> [PORT=<port>]"; exit 2; fi
+	@bash Hub_All/api/scripts/hub-add.sh $(HUB) $(PORT)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Phase 9 Eval Framework (EVAL-02 + EVAL-04)

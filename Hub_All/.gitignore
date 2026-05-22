@@ -39,3 +39,10 @@ medinet_pgdata/
 # Operator KHÔNG commit state — re-build từ scratch acceptable cho M2.
 .cocoindex/
 api/.cocoindex/
+
+# === Plan 02-05 FACTOR-04 — Dynamic hub registration override (operator-local) ===
+# Template `docker-compose.override.yml.template` PHẢI commit (source-of-truth).
+# Override file `docker-compose.override.yml` operator-local (auto-generated bởi
+# `make hub-add`) — chứa hub list cá nhân (vd `tmp_test`, `dev_<engineer>`),
+# KHÔNG commit để tránh leak operator-local hub list (T-02-05-04 Info Disclosure).
+docker-compose.override.yml

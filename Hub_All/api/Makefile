@@ -1,7 +1,7 @@
 # Medinet Wiki API — dev tasks
 .PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov clean \
         migrate-up migrate-down migrate-check migrate-history cocoindex-setup \
-        migrate-all migrate-status hub-init
+        migrate-all migrate-status hub-init hub-add
 
 UV ?= uv
 
@@ -89,6 +89,15 @@ migrate-status:
 hub-init:
 	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-init HUB=<name>"; exit 2; fi
 	@bash scripts/hub-init.sh $(HUB)
+
+# === Dynamic hub registration end-to-end (Plan 02-05 v3.0 FACTOR-04) ===
+# Wrap quanh hub-init + auto-gen docker-compose.override.yml service block.
+# Goi: make hub-add HUB=<name> [PORT=<port>]
+# Sau khi DONE: docker compose up -d python-api-<name>
+
+hub-add:
+	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-add HUB=<name> [PORT=<port>]"; exit 2; fi
+	@bash scripts/hub-add.sh $(HUB) $(PORT)
 
 # === Cocoindex setup (Phase 4 Plan 04-01) ===
 # Chạy MỘT LẦN sau `make migrate-up`. Idempotent — chạy lại OK sau Plan 04-02 (flow.py).

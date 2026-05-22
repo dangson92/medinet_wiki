@@ -1,0 +1,39 @@
+# Plan 02-05 FACTOR-04 — Template service block cho hub moi (`make hub-add HUB=<name>`).
+# Day la TEMPLATE — script hub-add.sh sed substitute {{HUB}} + {{PORT}} roi
+# append vao docker-compose.override.yml (gitignored — operator-local).
+# Docker compose tu merge docker-compose.yml + override khi `docker compose up`.
+# YAML anchor `*api-template` tu base file KHONG visible cross-file -> inline day du.
+
+  python-api-{{HUB}}:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    env_file:
+      - ./api/.env
+    container_name: medinet-api-{{HUB}}
+    environment:
+      HUB_NAME: {{HUB}}
+      DATABASE_URL: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_hub_{{HUB}}
+      COCOINDEX_DATABASE_URL: postgresql://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_cocoindex
+      REDIS_URL: redis://redis:6379/0
+      APP_NAMESPACE: medinet_prod
+      COCOINDEX_DB_SCHEMA: cocoindex
+      JWT_PRIVATE_KEY_PATH: /keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/public.pem
+      FILE_STORE_DIR: /file_store
+      APP_ENV: ${APP_ENV:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      COCOINDEX_DB: /app/.cocoindex/state.lmdb
+      COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
+    volumes:
+      - ./api/keys:/keys:ro
+      - ./file_store:/file_store
+      - medinet_cocoindex_{{HUB}}:/app/.cocoindex
+    ports:
+      - "{{PORT}}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [medinet_net]
