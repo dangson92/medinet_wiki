@@ -95,7 +95,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Refactor create_app() conditional router mount (7 universal + 9 central-only) + unit test boot 4 hub mode (FACTOR-01, FACTOR-02) — **DONE 2026-05-22** (9/9 test PASS, central 63 routes / hub con 29 routes)
-- [ ] 02-02-PLAN.md — Docker-compose 4 service FastAPI dedicated với YAML anchor + cocoindex LMDB volume per-hub + port 8180-8183 + MCP re-point central (FACTOR-01)
+- [x] 02-02-PLAN.md — Docker-compose 4 service FastAPI dedicated với YAML anchor + cocoindex LMDB volume per-hub + port 8180-8183 + MCP re-point central (FACTOR-01) — **DONE 2026-05-22** (`docker compose config --quiet` exit 0, 8 service render: postgres + redis + 4 python-api-* + mcp_service + caddy)
 - [ ] 02-03-PLAN.md — Integration test endpoint matrix — 12 hub-scoped mount + 8 central-only strip + envelope shape verify (FACTOR-02, FACTOR-03)
 - [ ] 02-04-PLAN.md — Closeout — CLAUDE.md + STATE.md update + smoke compose 2 service (central + yte) curl matrix (FACTOR-01..03 verify)
 
@@ -247,7 +247,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **5/~30** | **4/29** | 🔄 **Phase 1 DONE** | — |
+| **v3.0 Multi-Hub Split** | **7** | **7/~30** | **4/29** | 🔄 **Phase 1 DONE + Phase 2 2/4** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
