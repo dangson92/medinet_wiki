@@ -17,6 +17,24 @@ from typing import Annotated, Literal
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# Plan 02-05 FACTOR-04 — Reserved hub names blacklist.
+# Postgres có 4 template DB hệ thống (postgres/template0/template1) + schema mặc
+# định "public" + role "medinet" (M2 carry forward — postgres_user/owner cho mọi
+# DB nghiệp vụ) + DB internal cocoindex (R5 + P7 carry forward — separate khỏi
+# user DB). Reserve 6 name này tránh hub_name=postgres làm CREATE DATABASE
+# medinet_hub_postgres OK nhưng confuse + reserved "medinet" tránh hub_name=medinet
+# làm DB name medinet_hub_medinet redundant + privilege escalation theory nếu
+# someone alias trùng role. "central" KHÔNG trong blacklist — central là aggregator
+# special-case mapping sang medinet_central (KHÔNG prefix medinet_hub_).
+RESERVED_HUB_NAMES = frozenset({
+    "postgres",    # Postgres default superuser DB
+    "cocoindex",   # Internal cocoindex state DB (M2 ship)
+    "template0",   # Postgres template (read-only system)
+    "template1",   # Postgres template (writable system default)
+    "public",      # Default schema name — collision với cocoindex_db_schema
+    "medinet",     # Postgres role name (M2 init-db.sh OWNER) — privilege confuse
+})
+
 
 class Settings(BaseSettings):
     """Tổng hợp config runtime của Medinet Wiki API."""
@@ -35,12 +53,21 @@ class Settings(BaseSettings):
     log_level: str = "info"
     log_format: Literal["json", "console"] = "json"
 
-    # Hub identity — v3.0 TOPO-04 (Phase 1 multi-DB topology).
+    # Hub identity — v3.0 TOPO-04 (Phase 1 multi-DB topology) + FACTOR-04 Plan 02-05.
     # central = aggregator (medinet_central DB), yte/duoc/hcns = sub-hub
     # (medinet_hub_<name> DB cùng instance). Process biết mình deploy
     # hub nào để chọn DSN + cocoindex flow name (Plan 04) + Alembic
     # target (Plan 03). Default "central" giữ M2 backward-compat.
-    hub_name: Literal["central", "yte", "duoc", "hcns"] = "central"
+    #
+    # Plan 02-05 FACTOR-04 — Dynamic hub registration.
+    # Đổi từ Literal[4 hub] sang str + regex validator để operator thêm hub mới
+    # (vd phap_che, marketing) qua `make hub-add HUB=<name>` mà KHÔNG sửa code.
+    # Validator (`_validate_hub_name` bên dưới) enforce Postgres identifier safe
+    # (lowercase a-z first, a-z0-9_ rest, max 16 char total — Postgres identifier
+    # 63 char limit minus "medinet_hub_" prefix 12 char = 51 char headroom, nhưng
+    # 16 char cho dễ nhớ + URL prefix Phase 5 Caddy gọn). KHÔNG cho phép hyphen
+    # (Postgres identifier quote requirement) hoặc uppercase (case-sensitivity confuse).
+    hub_name: str = "central"
 
     # Postgres — KHÔNG default (bắt buộc qua env)
     database_url: str = Field(...)
@@ -116,6 +143,47 @@ class Settings(BaseSettings):
     # `http://a:5173,http://b:5173` raise SettingsError. NoDecode để raw string
     # đi thẳng vào `_parse_csv` validator (mode="before").
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    @field_validator("hub_name", mode="after")
+    @classmethod
+    def _validate_hub_name(cls, v: str) -> str:
+        """Regex format + reserved blacklist (FACTOR-04 Plan 02-05).
+
+        Pattern `^[a-z][a-z0-9_]{0,15}$`:
+        - lowercase a-z bắt đầu (KHÔNG digit/underscore — Postgres identifier
+          khuyến nghị start với letter để khỏi quote)
+        - body 0-15 char a-z0-9 underscore
+        - max total = 16 char (medinet_hub_<name> = 12 + 16 = 28 char < 63 limit)
+
+        Reserved blacklist: 6 name collide Postgres system DB / role (xem
+        RESERVED_HUB_NAMES docstring module-level).
+
+        Reject:
+        - empty string → ValueError (regex không match)
+        - uppercase ("Yte") → ValueError
+        - hyphen ("phap-che") → ValueError
+        - starting digit ("1hub") → ValueError
+        - starting underscore ("_hub") → ValueError
+        - > 16 char ("very_long_hub_name") → ValueError
+        - reserved ("postgres", "cocoindex", ...) → ValueError
+
+        Threat model cover:
+        - T-02-05-01 Tampering env HUB_NAME special char → regex reject pre-DB-create
+        - T-02-05-02 Privilege confuse hub_name=medinet/postgres → blacklist reject
+        - T-02-05-03 DoS hub_name 100-char → regex max 16 char reject
+        """
+        if not re.fullmatch(r"^[a-z][a-z0-9_]{0,15}$", v):
+            raise ValueError(
+                f"hub_name invalid format: {v!r}. Pattern required: "
+                f"^[a-z][a-z0-9_]{{0,15}}$ (lowercase a-z first char, max 16 "
+                f"char total, a-z0-9_ rest — KHÔNG hyphen/uppercase/start-digit)."
+            )
+        if v in RESERVED_HUB_NAMES:
+            raise ValueError(
+                f"hub_name reserved: {v!r}. 6 reserved names collide Postgres "
+                f"system DB / role medinet: {sorted(RESERVED_HUB_NAMES)}."
+            )
+        return v
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod

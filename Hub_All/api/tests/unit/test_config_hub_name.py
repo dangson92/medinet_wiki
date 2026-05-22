@@ -100,18 +100,22 @@ def test_duoc_mismatch_yte_dsn_raises(monkeypatch: pytest.MonkeyPatch) -> None:
         Settings()
 
 
-# === Test 5: hub_name không thuộc Literal → ValidationError ===
-def test_invalid_hub_name_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Literal restrict 4 giá trị — bất kỳ value khác (typo, hub mới chưa
-    register) → ValidationError. Bảo vệ chống Plan 05 hub-init forget update
-    Literal.
+# === Test 5: hub_name vi phạm regex format → ValidationError ===
+def test_invalid_hub_name_pattern_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plan 02-05 FACTOR-04 — Regex validator reject hub_name uppercase /
+    hyphen / starting digit. Plan 01-02 ship Literal[4 hub] đã đổi sang str
+    + regex (Plan 02-05). Test này verify regex enforce KHÔNG bị bypass.
+
+    "invalid_hub" (snake_case 11 char) sau Plan 02-05 sẽ PASS regex — KHÔNG
+    còn reject (Literal removed). Đổi input thành "Invalid_Hub" (uppercase →
+    regex reject) để test giữ semantic "invalid hub name fail-fast".
     """
     _set_env(
         monkeypatch,
-        hub_name="invalid_hub",
+        hub_name="Invalid_Hub",  # uppercase → regex reject
         database_url="postgresql+asyncpg://u:p@h:5432/medinet_central",
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="hub_name invalid format"):
         Settings()
 
 
