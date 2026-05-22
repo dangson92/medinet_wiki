@@ -84,6 +84,21 @@ Plans:
 - Mount router conditional: import + `app.include_router(...)` if condition vs feature flag config-driven.
 - Docker compose service definition: 4 service riêng (central + 3 hub) vs 1 service template + replicas với env override.
 
+**Decisions (chốt 2026-05-22 theo planner seed defaults Auto Mode `--chain`, KHÔNG /gsd-discuss-phase 2):**
+- D-V3-Phase2-A (App factory pattern): CHỌN 1 `create_app()` factory no-arg đọc settings.hub_name (DRY; Phase 1 Settings singleton consume).
+- D-V3-Phase2-B (Router conditional): CHỌN inline `if settings.hub_name == "central":` block (KHÔNG feature flag config-driven — over-engineer cho 2 class hub).
+- D-V3-Phase2-C (Docker compose): CHỌN 4 service dedicated với YAML anchor `x-api-template: &api-template` (KHÔNG deploy.replicas — replicas KHÔNG cho phép env per-replica khác).
+- D-V3-Phase2-D (Endpoint matrix): 12 endpoint hub-scoped (4 auth + 2 profile + 3 documents + search + ask + usage).
+- D-V3-Phase2-E (Strip semantic): 404 envelope shape M2 ErrorHandlerMiddleware wrap (KHÔNG 403 — endpoint không exist).
+
+**Plans:** 4 plans (3 waves — Wave 1 × 1 BLOCKING, Wave 2 parallel × 2 file-disjoint, Wave 3 × 1 closeout)
+
+Plans:
+- [ ] 02-01-PLAN.md — Refactor create_app() conditional router mount (7 universal + 9 central-only) + unit test boot 4 hub mode (FACTOR-01, FACTOR-02)
+- [ ] 02-02-PLAN.md — Docker-compose 4 service FastAPI dedicated với YAML anchor + cocoindex LMDB volume per-hub + port 8180-8183 + MCP re-point central (FACTOR-01)
+- [ ] 02-03-PLAN.md — Integration test endpoint matrix — 12 hub-scoped mount + 8 central-only strip + envelope shape verify (FACTOR-02, FACTOR-03)
+- [ ] 02-04-PLAN.md — Closeout — CLAUDE.md + STATE.md update + smoke compose 2 service (central + yte) curl matrix (FACTOR-01..03 verify)
+
 ---
 
 ### Phase 3 — Auth SSO + hub_ids trong JWT (GA-V3-A)
