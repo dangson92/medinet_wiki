@@ -87,3 +87,62 @@ describe('Phase 5 PROXY-02 — api.ts prefix detect', () => {
     expect(mod.PREFIX).toBe('hcns');
   });
 });
+
+// Phase 5 PROXY-02 — api.crossHubSearch ABSOLUTE path override
+// Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-VALIDATION.md task 5-04-03
+//         .planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md §5.1
+describe('Phase 5 PROXY-02 — api.crossHubSearch ABSOLUTE path override', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete (window as unknown as { __HUB_CONFIG__?: unknown }).__HUB_CONFIG__;
+  });
+
+  it('Test 8: crossHubSearch fetches ABSOLUTE /api/search/cross-hub (NOT ${API_BASE}/search/cross-hub)', async () => {
+    // Mock window.location to hub con yte → API_BASE would be /yte/api
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        pathname: '/yte/dashboard',
+        href: 'http://localhost/yte/dashboard',
+        origin: 'http://localhost',
+      },
+      writable: true,
+    });
+
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      status: 200,
+      json: async () => ({ success: true, data: { results: [], total_hubs_searched: 0, query_time_ms: 10, cache_hit: false } }),
+    } as Response);
+
+    vi.resetModules();
+    const { api } = await import('../api');
+    await api.crossHubSearch({ query: 'test', hub_ids: ['yte'] });
+
+    expect(fetchSpy).toHaveBeenCalled();
+    const calledUrl = fetchSpy.mock.calls[0][0];
+    // Critical assertion: absolute path /api/search/cross-hub (NOT /yte/api/search/cross-hub)
+    expect(calledUrl).toBe('/api/search/cross-hub');
+    expect(String(calledUrl)).not.toMatch(/^\/yte\//);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('Test 9: crossHubSearch attaches Bearer token if access_token in localStorage', async () => {
+    localStorage.setItem('access_token', 'fake-jwt-token');
+
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      status: 200,
+      json: async () => ({ success: true }),
+    } as Response);
+
+    vi.resetModules();
+    const { api } = await import('../api');
+    await api.crossHubSearch({ query: 'test' });
+
+    const fetchOptions = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect((fetchOptions.headers as Record<string, string>)['Authorization']).toBe('Bearer fake-jwt-token');
+
+    fetchSpy.mockRestore();
+    localStorage.removeItem('access_token');
+  });
+});

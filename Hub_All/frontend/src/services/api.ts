@@ -90,6 +90,40 @@ class APIClient {
     return res.json();
   }
 
+  /**
+   * Phase 5 D-V3-Phase4-D3 + RESEARCH §7 Option A — gọi central absolute path.
+   * KHÔNG dùng this.baseURL prefix. Dùng cho endpoint central-only như /api/search/cross-hub
+   * mà hub con strip (FACTOR-02 extend Phase 4) → 404 envelope D6.
+   *
+   * Caddy /api/* handle block (Plan 05-01) → reverse_proxy python-api-central:8080 (no strip).
+   */
+  private async requestAbsolute<T>(method: string, absolutePath: string, body?: unknown): Promise<APIResponse<T>> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = this.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(absolutePath, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (res.status === 401) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        headers['Authorization'] = `Bearer ${this.getToken()}`;
+        const retry = await fetch(absolutePath, { method, headers, body: body ? JSON.stringify(body) : undefined });
+        return retry.json();
+      }
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+
+    return res.json();
+  }
+
   private async tryRefresh(): Promise<boolean> {
     const refreshToken = localStorage.getItem('refresh_token');
     if (!refreshToken) return false;
@@ -252,8 +286,15 @@ class APIClient {
     return this.request<SearchResponseAPI>('POST', '/api/search', data);
   }
 
+  /**
+   * Cross-hub search — central-only endpoint (D-V3-Phase4-D3 LOCKED Phase 4 + RESEARCH §7 Option A).
+   *
+   * CRITICAL: Always uses ABSOLUTE path '/api/search/cross-hub' (KHÔNG ${this.baseURL} prefix).
+   * Lý do: hub con strip endpoint (FACTOR-02 extend) → 404 envelope D6. Frontend phải bypass
+   * API_BASE prefix để đảm bảo reach central qua Caddy /api/* handle (Plan 05-01).
+   */
   async crossHubSearch(data: SearchRequestAPI) {
-    return this.request<SearchResponseAPI>('POST', '/api/search/cross-hub', data);
+    return this.requestAbsolute<SearchResponseAPI>('POST', '/api/search/cross-hub', data);
   }
 
   async searchAnswer(data: { query: string; hub_ids?: string[]; top_k?: number }) {
