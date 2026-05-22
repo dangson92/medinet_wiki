@@ -22,7 +22,7 @@
 | # | Phase | Goal | Requirements | Success Criteria | Depends on |
 |---|---|---|---|---|---|
 | ✅ **1** | Multi-DB topology + per-hub Alembic | Tạo N+1 DB cùng instance, per-hub Alembic migration set khớp head SHA, cocoindex flow naming per-hub | TOPO-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-21** (5 plans / 22 commits) |
-| **2** | Hub-con codebase factor | 1 codebase deploy nhiều lần với HUB_NAME; strip system settings ở hub con; expose 10 endpoint hub-scoped | FACTOR-01..03 (3) | 3 | Phase 1 |
+| ✅ **2** | Hub-con codebase factor | 1 codebase deploy nhiều lần với HUB_NAME; strip system settings ở hub con; expose 10 endpoint hub-scoped; dynamic hub registration (FACTOR-04 added 2026-05-22) | FACTOR-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 12 commits) |
 | **3** | Auth SSO + hub_ids trong JWT | JWKS endpoint central; cache hub con TTL 1h HA; Redis blacklist chung; E4 DB-level isolation | SSO-01..04 (4) | 4 | Phase 2 |
 | 🚦 | **v3.0-a EXIT GATE** | Demo 1 hub con (yte) + tổng + JWT SSO + golden path PASS — user accept tiếp tục v3.0-b | — | — | Phase 1-3 done |
 | **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central; idempotent retry; cross-hub search aggregated; checksum verify periodic; mechanism chốt | SYNC-01..05 (5) | 5 | Phase 1, 3 |
@@ -72,12 +72,13 @@ Plans:
 
 **Goal:** 1 codebase deploy được nhiều lần với env `HUB_NAME=<name>` (central vs yte vs duoc vs hcns); app factory `create_app(hub_name)` đọc env, mount router phù hợp; strip system settings router khi `HUB_NAME != "central"`; hub con expose 10 endpoint hub-scoped.
 
-**Requirements:** FACTOR-01, FACTOR-02, FACTOR-03
+**Requirements:** FACTOR-01, FACTOR-02, FACTOR-03, FACTOR-04 (FACTOR-04 added 2026-05-22 sau closeout discussion — user direction B "generalize 100% dynamic")
 
 **Success criteria:**
 1. `HUB_NAME=yte` deploy spawn hub con process; central process không bị ảnh hưởng (parallel deploy 4 process FastAPI).
 2. Hub con `GET /api/rag-config` trả 404 (KHÔNG 403 — endpoint không exist do FACTOR-02 strip); `GET /api/health` 200.
 3. Hub con expose 10 endpoint hub-scoped (auth/profile/documents/search/ask/usage); smoke test mỗi endpoint trả 200 hoặc lỗi đúng shape envelope.
+4. **Dynamic hub registration (FACTOR-04):** `make hub-add HUB=tmp_test PORT=8189` → DB tạo + service block append `docker-compose.override.yml` + `docker compose up -d python-api-tmp_test` boot OK + `curl localhost:8189/api/health` 200, KHÔNG sửa code Python/`docker-compose.yml` base. Settings regex validator accept hub mới; reject invalid pattern + reserved name.
 
 **Discuss-phase gray areas (chốt ở `/gsd-discuss-phase 2`):**
 - App factory pattern: 1 `create_app(hub_name)` factory function vs 2 file `main_central.py` + `main_hub.py` (DRY vs explicit).
@@ -91,13 +92,14 @@ Plans:
 - D-V3-Phase2-D (Endpoint matrix): 12 endpoint hub-scoped (4 auth + 2 profile + 3 documents + search + ask + usage).
 - D-V3-Phase2-E (Strip semantic): 404 envelope shape M2 ErrorHandlerMiddleware wrap (KHÔNG 403 — endpoint không exist).
 
-**Plans:** 4 plans (3 waves — Wave 1 × 1 BLOCKING, Wave 2 parallel × 2 file-disjoint, Wave 3 × 1 closeout)
+**Plans:** 5 plans (4 waves — Wave 1 × 1 BLOCKING, Wave 2 parallel × 2 file-disjoint, Wave 3 × 1 closeout FACTOR-01..03, Wave 4 × 1 extension FACTOR-04)
 
 Plans:
 - [x] 02-01-PLAN.md — Refactor create_app() conditional router mount (7 universal + 9 central-only) + unit test boot 4 hub mode (FACTOR-01, FACTOR-02) — **DONE 2026-05-22** (9/9 test PASS, central 63 routes / hub con 29 routes)
 - [x] 02-02-PLAN.md — Docker-compose 4 service FastAPI dedicated với YAML anchor + cocoindex LMDB volume per-hub + port 8180-8183 + MCP re-point central (FACTOR-01) — **DONE 2026-05-22** (`docker compose config --quiet` exit 0, 8 service render: postgres + redis + 4 python-api-* + mcp_service + caddy)
 - [x] 02-03-PLAN.md — Integration test endpoint matrix — 12 hub-scoped mount + 8 central-only strip + envelope shape verify (FACTOR-02, FACTOR-03) — **DONE 2026-05-22** (10/10 test PASS -m "critical and integration", 6.49s; Rule 2 auto-add Starlette HTTPException handler ở app/main.py wrap routing 404 envelope; Rule 3 auto-fix audit queue + SQLAlchemy engine reset trong hub_app_factory; 175/175 unit regression PASS)
-- [ ] 02-04-PLAN.md — Closeout — CLAUDE.md + STATE.md update + smoke compose 2 service (central + yte) curl matrix (FACTOR-01..03 verify)
+- [x] 02-04-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md note (WRN-05 "10 collective / 12 specific endpoints") update + smoke compose 2 service (central + yte) curl matrix (FACTOR-01..03 verify) — **DONE 2026-05-22** (4 commit, Task 1 smoke compose SKIP rationale: Plan 02-03 integration test 10/10 PASS in-process cover FACTOR-02/03 semantic + Phase 1 DSN validator 30/30 PASS regression + Plan 02-02 `docker compose config --quiet` PASS, smoke runtime defer Phase 7 MIGRATE-05)
+- [x] 02-05-PLAN.md — Dynamic hub registration (FACTOR-04 added 2026-05-22 — user direction B): Settings.hub_name `Literal[4]` → `str` regex `^[a-z][a-z0-9_]{0,15}$` + RESERVED_HUB_NAMES blacklist 6 name (postgres/cocoindex/template0/template1/public/medinet) + `scripts/hub-add.sh` 7-step pipeline wrap `hub-init.sh` + sed substitute `docker-compose.override.yml.template` + `make hub-add HUB=<name> [PORT=<port>]` target + README quick start — **DONE 2026-05-22** (4 commit, 40/40 unit test PASS test_config_hub_name + test_config_hub_name_dynamic, Task 3 smoke `make hub-add HUB=tmp_test` SKIP rationale: bash syntax `bash -n` PASS + 20+ unit test coverage validator + `docker compose config --quiet` base PASS, runtime defer Phase 7 MIGRATE-05)
 
 ---
 
@@ -247,7 +249,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **7/~30** | **4/29** | 🔄 **Phase 1 DONE + Phase 2 2/4** | — |
+| **v3.0 Multi-Hub Split** | **7** | **10/~30** | **8/30** | 🔄 **Phase 1+2 DONE (2/7 phase)** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
@@ -266,6 +268,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | FACTOR-01: 1 codebase deploy nhiều lần | 2 | `create_app(hub_name)` factory |
 | FACTOR-02: Strip system settings ở hub con | 2 | `/api/rag-config` 404 ở hub con |
 | FACTOR-03: Hub con expose 10 endpoint | 2 | hub-scoped contract |
+| FACTOR-04: Dynamic hub registration (added 2026-05-22) | 2 | `make hub-add HUB=<name>` — Settings str + regex + reserved blacklist + override.yml auto-gen |
 | SSO-01: JWKS endpoint central | 3 | TTL 1h cache hub con HA |
 | SSO-02: Redis blacklist chung | 3 | Cross-process revoke |
 | SSO-03: JWT claim hub_ids | 3 | Cross-hub access control |
@@ -289,7 +292,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | MIGRATE-04: MCP re-point central | 7 | `mcp_service/config.py` update |
 | MIGRATE-05: Smoke E2E 3 hub + tổng | 7 | Golden path mỗi hub PASS |
 
-**Tổng:** 29 REQ-ID v1 → 7 phase. Coverage: 100% (4+3+4+5+4+4+5=29).
+**Tổng:** 30 REQ-ID v1 (29 gốc + FACTOR-04 added 2026-05-22) → 7 phase. Coverage: 100% (4+4+4+5+4+4+5=30).
 
 ---
 
