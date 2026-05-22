@@ -1,20 +1,36 @@
-"""Auth router — Plan 03-04 (AUTH-01..03).
+"""Auth router — Plan 03-04 (AUTH-01..03 + SSO-02 hub con 307 redirect).
 
-4 endpoint:
-    POST /api/auth/login    — body {email, password} → 200 LoginResponse / 401
-    POST /api/auth/refresh  — body {refresh_token} → 200 LoginResponse / 401
-    POST /api/auth/logout   — Bearer + optional body {refresh_token} → 200
-    GET  /api/auth/me       — Bearer → 200 UserWithRolesResponse / 401 INVALID_TOKEN
+4 endpoint, hành vi tuỳ `settings.hub_name`:
+
+    POST /api/auth/login
+      - central: handle local AuthService.login → 200 LoginResponse / 401
+      - hub con: 307 Location: {central_url}/api/auth/login (D-V3-Phase3-G)
+
+    POST /api/auth/refresh
+      - central: handle local AuthService.refresh → 200 LoginResponse / 401
+      - hub con: 307 Location: {central_url}/api/auth/refresh (D-V3-Phase3-C/G)
+
+    POST /api/auth/logout
+      - cả central + hub con handle local — verify JWT + Redis blacklist chung
+        Plan 03-03. KHÔNG redirect (giảm latency logout).
+
+    GET  /api/auth/me
+      - cả central + hub con handle local — verify JWT qua JWKSCache Plan 03-02
+        (hub con) / local pem (central) + load user.
 
 Mọi response qua `app.pkg.response.ok/error_*` envelope (Plan 03-01) — KHÔNG
 return Pydantic model raw để D6 frontend compat.
+
+Phase 3 Plan 03-04 SSO-02 D-V3-Phase3-G: 307 redirect preserve POST method +
+body (RFC 7231 method-preserving). Browser auto-follow tới central. Frontend
+wire redirect form defer Phase 5 PROXY-02 (D-V3-Phase3-F D6 expire).
 """
 from __future__ import annotations
 
 import logging
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.auth.dependencies import (
     get_auth_service,
@@ -28,6 +44,7 @@ from app.auth.schemas import (
     RefreshRequest,
 )
 from app.auth.service import AuthError, AuthService
+from app.config import get_settings
 from app.models.auth import User
 from app.pkg import response as resp
 
@@ -41,11 +58,55 @@ def _auth_error_to_response(e: AuthError) -> JSONResponse:
     return resp.unauthorized(message=e.message, code=e.code)
 
 
-@router.post("/login")
+def _sso_redirect(target_path: str, hub_name: str) -> JSONResponse | RedirectResponse:
+    """Build 307 RedirectResponse tới central cho hub con login/refresh.
+
+    Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G):
+    - 307 Temporary Redirect preserve POST method + body (RFC 7231).
+    - Browser auto-follow tới `{settings.central_url}{target_path}`.
+    - Defensive 503 envelope nếu central_url None ở runtime (impossible vì
+      Settings validator Task 1 enforce required, nhưng paranoid guard).
+
+    X-SSO-Redirect-Reason + X-SSO-Original-Hub headers cho debug + observability
+    (T-03-04-02 accept — hub_name đã expose qua subpath URL Phase 5).
+    """
+    settings = get_settings()
+    if not settings.central_url:
+        # Settings validator Plan 03-04 Task 1 enforce — impossible reach
+        # ở runtime nhưng paranoid defensive (KHÔNG redirect URL rỗng).
+        return resp.service_unavailable(
+            message=(
+                "Hub con KHÔNG configure CENTRAL_URL env var — "
+                "vui lòng liên hệ admin."
+            ),
+            code="CENTRAL_URL_UNAVAILABLE",
+        )
+    return RedirectResponse(
+        url=f"{settings.central_url}{target_path}",
+        status_code=307,
+        headers={
+            "X-SSO-Redirect-Reason": f"hub_con_no_local_{target_path.rsplit('/', 1)[-1]}",
+            "X-SSO-Original-Hub": hub_name,
+        },
+    )
+
+
+@router.post("/login", response_model=None)
 async def login(
     req: LoginRequest,
     service: AuthService = Depends(get_auth_service),  # noqa: B008
-) -> JSONResponse:
+) -> JSONResponse | RedirectResponse:
+    """Login endpoint — hub con redirect 307 tới central; central handle local.
+
+    Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G): Hub con KHÔNG sinh JWT/refresh
+    token — 100% session lifecycle ở central. Hub con trả 307 Location: central
+    để browser auto-follow + preserve POST method + body (RFC 7231).
+    """
+    settings = get_settings()
+    if settings.hub_name != "central":
+        return _sso_redirect("/api/auth/login", settings.hub_name)
+
+    # Central path — M2 logic carry forward
     try:
         result = await service.login(req)
     except AuthError as e:
@@ -54,11 +115,21 @@ async def login(
     return resp.ok(data=result.model_dump(mode="json"))
 
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=None)
 async def refresh(
     req: RefreshRequest,
     service: AuthService = Depends(get_auth_service),  # noqa: B008
-) -> JSONResponse:
+) -> JSONResponse | RedirectResponse:
+    """Refresh endpoint — hub con redirect 307 tới central (D-V3-Phase3-C/G).
+
+    Hub con KHÔNG sinh refresh token (D-V3-Phase3-C LOCKED — 100% refresh ở
+    central). Plan 03-04 wire cuối cùng: hub con trả 307 thay vì handle local.
+    """
+    settings = get_settings()
+    if settings.hub_name != "central":
+        return _sso_redirect("/api/auth/refresh", settings.hub_name)
+
+    # Central path — M2 logic carry forward
     try:
         result = await service.refresh(req)
     except AuthError as e:
