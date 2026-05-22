@@ -183,42 +183,54 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     # Runtime fail-quiet (refresh task log warning + giữ cached). 24h hard
     # limit ở JWKSCache.get_public_key (R-V3-5 fail-loud delayed).
     # Central KHÔNG cần cache (verify JWT bằng local pem qua JWTManager).
+    #
+    # Test-mode escape hatch: env `JWKS_SKIP_FETCH=1` bypass blocking startup
+    # cho integration test factor_hub_scoped boot lifespan với fake URL trỏ
+    # central KHÔNG có (TestClient in-process, CENTRAL_JWKS_URL fake để pass
+    # Settings validator — pattern song song COCOINDEX_SKIP_SETUP DEF-05-01).
+    # Production KHÔNG bao giờ set flag này → fail-loud behavior giữ nguyên.
     app.state.jwks_cache = None
     if settings.hub_name != "central":
-        from app.auth.jwks import JWKSCache
-
-        if not settings.central_jwks_url:
-            # Settings validator Plan 03-02 Task 1 đã enforce — defensive bao
-            # thêm tránh race khi Settings cache override runtime.
-            raise RuntimeError(
-                f"hub_name={settings.hub_name!r} thiếu CENTRAL_JWKS_URL "
-                "— Settings validator phải đã raise ở boot"
+        if os.environ.get("JWKS_SKIP_FETCH") == "1":
+            logger.warning(
+                "jwks_cache_skipped: JWKS_SKIP_FETCH=1 (test mode — "
+                "lifespan bypass blocking fetch_initial)"
             )
+        else:
+            from app.auth.jwks import JWKSCache
 
-        jwks_cache = JWKSCache(
-            jwks_url=settings.central_jwks_url,
-            refresh_interval=settings.jwks_refresh_interval,
-            max_stale_seconds=settings.jwks_max_stale_seconds,
-        )
-        try:
-            await jwks_cache.fetch_initial()  # blocking, raise on fail
-        except Exception as e:
-            logger.critical(
-                "lifespan_jwks_cache_init_failed: hub_name=%s url=%s error=%s — boot abort",
+            if not settings.central_jwks_url:
+                # Settings validator Plan 03-02 Task 1 đã enforce — defensive
+                # bao thêm tránh race khi Settings cache override runtime.
+                raise RuntimeError(
+                    f"hub_name={settings.hub_name!r} thiếu CENTRAL_JWKS_URL "
+                    "— Settings validator phải đã raise ở boot"
+                )
+
+            jwks_cache = JWKSCache(
+                jwks_url=settings.central_jwks_url,
+                refresh_interval=settings.jwks_refresh_interval,
+                max_stale_seconds=settings.jwks_max_stale_seconds,
+            )
+            try:
+                await jwks_cache.fetch_initial()  # blocking, raise on fail
+            except Exception as e:
+                logger.critical(
+                    "lifespan_jwks_cache_init_failed: hub_name=%s url=%s error=%s — boot abort",
+                    settings.hub_name,
+                    settings.central_jwks_url,
+                    e,
+                )
+                raise  # boot fail-loud D-V3-Phase3-B → uvicorn exit 1
+
+            jwks_cache.start_refresh_task()
+            app.state.jwks_cache = jwks_cache
+            logger.info(
+                "lifespan_jwks_cache_ready: hub_name=%s url=%s refresh_interval=%ds",
                 settings.hub_name,
                 settings.central_jwks_url,
-                e,
+                settings.jwks_refresh_interval,
             )
-            raise  # boot fail-loud D-V3-Phase3-B → uvicorn exit 1
-
-        jwks_cache.start_refresh_task()
-        app.state.jwks_cache = jwks_cache
-        logger.info(
-            "lifespan_jwks_cache_ready: hub_name=%s url=%s refresh_interval=%ds",
-            settings.hub_name,
-            settings.central_jwks_url,
-            settings.jwks_refresh_interval,
-        )
 
     # 5) Anti-timing dummy hash — pre-compute 1 hash để service.login dùng
     #    khi user không tồn tại (response time KHÔNG leak email enumeration —

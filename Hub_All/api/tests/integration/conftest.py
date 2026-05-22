@@ -617,6 +617,20 @@ def hub_app_factory(
         monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
         # APP_ENV=dev — bypass CORS LAN-in-prod validator (Phase 1 carry forward).
         monkeypatch.setenv("APP_ENV", "dev")
+        # Plan 03-02 Task 1 (Phase 3 SSO-01) — Settings validator hub con
+        # required CENTRAL_JWKS_URL. Auto-set fake URL cho hub con để Settings
+        # boot PASS. Đồng thời set JWKS_SKIP_FETCH=1 escape hatch bypass
+        # blocking fetch_initial trong lifespan (test factor mount endpoint
+        # only, KHÔNG verify JWT path — fake URL fetch sẽ fail ConnectError
+        # nếu KHÔNG skip). Pattern song song COCOINDEX_SKIP_SETUP DEF-05-01.
+        # Phase 3 dedicated test (test_jwks_cache_lifecycle) mock httpx riêng
+        # KHÔNG đi qua lifespan blocking fetch.
+        if hub_name != "central":
+            monkeypatch.setenv(
+                "CENTRAL_JWKS_URL",
+                "http://python-api-central:8080/.well-known/jwks.json",
+            )
+            monkeypatch.setenv("JWKS_SKIP_FETCH", "1")
 
         # Force re-parse env (lru_cache singleton).
         get_settings.cache_clear()
