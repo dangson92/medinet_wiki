@@ -1,13 +1,27 @@
-import React, { useState, useEffect } from 'react';
+// Phase 5 PROXY-02 + PROXY-04 — Login.tsx 4 UX state machine (A/B/C/D) + branding render
+// Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md §2 (state machine)
+//         .planning/phases/05-reverse-proxy-frontend-subpath/05-CONTEXT.md §"Decisions C1 + B4 + D2"
+//         .planning/phases/05-reverse-proxy-frontend-subpath/05-VALIDATION.md task 5-04-01 (T-5-04 mitigation)
+//
+// T-5-04 mitigation (open redirect): URL ?return= param phải qua 4-layer validation
+// (strip leading slash → reject //, :// → regex hub format → KNOWN_HUBS allowlist check).
+// Invalid → silent fallback central + dev console.warn.
+
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Mail, Lock, Eye, EyeOff, Loader2, AlertTriangle, ArrowRight,
-  BookOpen, Layers, Users, ShieldCheck, FileText, Search,
+  Layers, Users, ShieldCheck, FileText, Search,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { CURRENT_HUB, APP_BASE } from '../services/api';
+import { getBranding, getContrastTextColor, type BrandingConfig } from '../branding';
 
 type LoginState = 'default' | 'loading' | 'error' | 'locked';
+
+// APP_BASE export referenced để TypeScript KHÔNG warn unused — Task 1 retain import per plan §1A.
+void APP_BASE;
 
 const FEATURES = [
   {
@@ -105,13 +119,64 @@ const LoginPage = () => {
   const [countdown, setCountdown] = useState(0);
 
   const { login, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
+  // ─── T-5-04 mitigation — validate ?return param strict (4-layer) ───
+  const returnHub = useMemo<string | null>(() => {
+    const raw = searchParams.get('return');
+    if (!raw) return null;
+    // Layer 1: Reject absolute URL injection (//evil.com, http://, https://) BEFORE strip
+    if (raw.startsWith('//') || raw.includes('://')) {
+      if (import.meta.env?.DEV) console.warn('[login] Absolute URL injection rejected:', raw);
+      return null;
+    }
+    // Layer 2: Strip leading slash
+    const candidate = raw.replace(/^\//, '');
+    // Layer 3: Validate hub format Settings regex (Plan 02-05 FACTOR-04)
+    if (!/^[a-z][a-z0-9_]{0,15}$/.test(candidate)) {
+      if (import.meta.env?.DEV) console.warn('[login] Invalid hub format rejected:', candidate);
+      return null;
+    }
+    // Layer 4: Validate ∈ KNOWN_HUBS (runtime config or fallback hardcode)
+    const knownHubs: readonly string[] =
+      (typeof window !== 'undefined' && window.__HUB_CONFIG__?.allowlist) ?? ['yte', 'duoc', 'hcns'];
+    if (!knownHubs.includes(candidate)) {
+      if (import.meta.env?.DEV) console.warn('[login] Invalid return hub param rejected:', candidate);
+      return null;
+    }
+    return candidate;
+  }, [searchParams]);
+
+  // ─── State C: hub con direct visit → redirect tới central /login?return=/<hub> ───
+  useEffect(() => {
+    if (CURRENT_HUB !== 'central') {
+      // W-05 fix: Use origin (not host) to inherit protocol — safer against HTTP/HTTPS mismatch in dev environment.
+      // window.location.origin includes protocol (https://localhost), while window.location.host is host-only (localhost).
+      const target = `${window.location.origin}/login?return=/${CURRENT_HUB}`;
+      window.location.replace(target);
+    }
+  }, []);
+
+  // ─── Branding resolution per state machine UI-SPEC §2 ───
+  // State C (hub con) → render skeleton với theme của hub đang ở (CURRENT_HUB)
+  // State A/B/D (central) → branding(returnHub || 'central') — fallback central nếu returnHub invalid
+  const branding: BrandingConfig = useMemo(() => {
+    if (CURRENT_HUB !== 'central') {
+      return getBranding(CURRENT_HUB);
+    }
+    return getBranding(returnHub || 'central');
+  }, [returnHub]);
+
+  const contrastText = getContrastTextColor(branding.themeColor);
+
+  // ─── M2 carry forward: post-auth navigate redirect ───
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true });
+      // Cross-prefix redirect — window.location reset basename + module-level api.ts re-compute
+      const dest = returnHub ? `/${returnHub}/dashboard` : '/';
+      window.location.replace(dest);
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, returnHub]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -146,7 +211,11 @@ const LoginPage = () => {
     const result = await login(email, password);
 
     if (result.success) {
-      navigate('/', { replace: true });
+      // Cross-prefix redirect — window.location reset basename + module-level api.ts re-compute
+      // (KHÔNG dùng react-router navigate — basename scope hiện tại)
+      const dest = returnHub ? `/${returnHub}/dashboard` : '/';
+      window.location.replace(dest);
+      return;
     } else {
       const err = result.error || 'Đăng nhập thất bại';
       setErrorMessage(err);
@@ -170,15 +239,34 @@ const LoginPage = () => {
     disabled ? 'opacity-60 cursor-not-allowed' : ''
   }`;
 
+  // ─── State C early return — skeleton trước khi redirect resolve (UI-SPEC §2.3) ───
+  if (CURRENT_HUB !== 'central') {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center"
+        style={{
+          ['--hub-theme' as string]: branding.themeColor,
+          background: `linear-gradient(135deg, ${branding.themeColor}, color-mix(in srgb, ${branding.themeColor} 60%, black))`,
+        } as React.CSSProperties}
+      >
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-white border-t-transparent" />
+        <p className="mt-4 text-sm font-medium text-white/80">Đang chuyển đến trang đăng nhập trung tâm...</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative flex min-h-screen overflow-x-hidden font-sans"
-      style={{ background: 'linear-gradient(135deg,#4f46e5 0%,#4338ca 52%,#312e81 100%)' }}
+      style={{
+        ['--hub-theme' as string]: branding.themeColor,
+        background: `linear-gradient(135deg, var(--hub-theme) 0%, color-mix(in srgb, var(--hub-theme) 80%, black) 52%, color-mix(in srgb, var(--hub-theme) 60%, black) 100%)`,
+      } as React.CSSProperties}
     >
       {/* Khối mờ trang trí nền */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-80 w-80 rounded-full bg-indigo-400/30 blur-3xl" />
-      <div className="pointer-events-none absolute top-1/3 -left-10 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-purple-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute -top-24 -left-24 h-80 w-80 rounded-full bg-white/20 blur-3xl" />
+      <div className="pointer-events-none absolute top-1/3 -left-10 h-72 w-72 rounded-full bg-white/15 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-white/15 blur-3xl" />
 
       {/* ============ CỘT TRÁI — Thương hiệu ============ */}
       <div className="relative hidden flex-1 flex-col lg:flex">
@@ -187,14 +275,19 @@ const LoginPage = () => {
         <div className="pointer-events-none absolute bottom-20 right-24 h-24 w-28 opacity-25" style={dotStyle('rgba(255,255,255,0.55)')} />
 
         <div className="relative z-10 mx-auto flex h-full w-full max-w-[660px] flex-col justify-between px-8 py-12 text-white xl:py-14">
-          {/* Logo */}
+          {/* Logo — UI-SPEC §1.2 top-left logo + title + tagline branding */}
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-white shadow-lg">
-              <BookOpen size={22} className="text-indigo-600" />
+              <img
+                src={branding.logo}
+                alt={branding.title}
+                className="w-7 h-7 object-contain"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
             </div>
             <div>
-              <h1 className="text-lg font-bold leading-tight tracking-tight">Medinet Wiki</h1>
-              <p className="text-[12px] text-white/60">Hệ thống quản lý tri thức nội bộ</p>
+              <h1 className="text-lg font-bold leading-tight tracking-tight">{branding.title}</h1>
+              <p className="text-[12px] text-white/60">{branding.tagline}</p>
             </div>
           </div>
 
@@ -259,15 +352,35 @@ const LoginPage = () => {
           >
             {/* Tiêu đề */}
             <div className="mb-8 text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-500/20">
-                <BookOpen size={30} className="text-indigo-600 dark:text-indigo-400" />
+              <div
+                className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl"
+                style={{ backgroundColor: `color-mix(in srgb, var(--hub-theme) 10%, white)` }}
+              >
+                <img
+                  src={branding.logo}
+                  alt={branding.title}
+                  className="w-10 h-10 object-contain"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
               </div>
               <h2 className="text-[26px] font-bold tracking-tight text-slate-800 dark:text-slate-100">
                 Đăng nhập
               </h2>
               <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-                Chào mừng bạn trở lại Medinet Wiki
+                Chào mừng bạn trở lại {branding.title}
               </p>
+              {/* State B chip — chỉ render khi returnHub valid (UI-SPEC §2.2) */}
+              {returnHub && (
+                <div
+                  className="mx-auto mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, var(--hub-theme) 12%, white)`,
+                    color: 'var(--hub-theme)',
+                  }}
+                >
+                  <span>Sau đăng nhập sẽ vào {branding.title}</span>
+                </div>
+              )}
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit}>
@@ -353,15 +466,19 @@ const LoginPage = () => {
                 </div>
               )}
 
-              {/* Nút đăng nhập */}
+              {/* Nút đăng nhập — themeColor inline gradient (D-V3-Phase5-D2 LOCKED) */}
               <button
                 type="submit"
                 disabled={disabled}
-                style={isLocked ? undefined : { background: 'linear-gradient(135deg,#4f46e5,#6366f1)' }}
+                style={isLocked ? undefined : {
+                  background: `linear-gradient(135deg, var(--hub-theme), color-mix(in srgb, var(--hub-theme) 85%, white))`,
+                  color: contrastText === 'slate-900' ? '#0f172a' : 'white',
+                  boxShadow: `0 10px 30px -8px color-mix(in srgb, var(--hub-theme) 55%, transparent)`,
+                }}
                 className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all ${
                   isLocked
                     ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-700 dark:text-slate-500'
-                    : 'text-white shadow-[0_10px_30px_-8px_rgba(79,70,229,0.55)] hover:brightness-110 active:brightness-95 disabled:opacity-70'
+                    : 'hover:brightness-110 active:brightness-95 disabled:opacity-70'
                 }`}
               >
                 {isLoading ? (
