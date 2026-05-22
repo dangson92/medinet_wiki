@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Medinet Wiki API — Dynamic hub registration (Plan 02-05 FACTOR-04).
+# Medinet Wiki API — Dynamic hub registration (Plan 02-05 FACTOR-04 + Plan 05-05 PROXY-01 extend).
 #
-# Tao 1 hub moi end-to-end (DB + compose service) bang 1 lenh:
+# 9-step pipeline (Phase 5 v3.0-05 PROXY-01 extend từ 7-step Plan 02-05):
 #   1. Validate hub_name format regex (sync Settings Plan 02-05 + hub-init.sh)
 #   2. Validate hub_name reserved blacklist (sync Settings RESERVED_HUB_NAMES)
 #   3. Validate hub chua co trong docker-compose.yml base + override
 #   4. Auto-detect port (8180 + N hien huu + 1) neu khong truyen explicit
 #   5. Call hub-init.sh <HUB> -> CREATE DATABASE + ext + HNSW + alembic upgrade
 #   6. Sed substitute docker-compose.override.yml.template -> append override
-#   7. In huong dan next step (docker compose up -d python-api-<HUB>)
+#   7. Docker compose config --quiet verify merge
+#   8. (Phase 5 PROXY-01) Cap nhat .env HUBS_ALLOWLIST + HUBS_ALLOWLIST_REGEX
+#      atomic qua tmp file + mv (preserve other env vars). Idempotent skip neu hub
+#      da co trong allowlist.
+#   9. (Phase 5 PROXY-01) Caddy validate config TRUOC reload (Pitfall 7 mitigation
+#      avoid silent rollback) + zero-downtime `caddy reload` + smoke `curl
+#      /<hub>/api/health`. Skip neu caddy container chua running (dev pre-up).
 #
 # Usage:
 #   bash api/scripts/hub-add.sh <hub_name> [<port>]
@@ -22,16 +28,22 @@
 #   - Postgres container dang chay (docker compose up -d postgres)
 #   - api/.env DATABASE_URL tro medinet_central
 #   - Working directory = repo root (chua docker-compose.yml) hoac Hub_All/
+#   - (Optional Phase 5 step 9) caddy container running -> auto-reload sau register
 #
 # Validation chain (fail-fast cac error pre-DB-create):
 #   - Regex format -> reject pre-CREATE DATABASE (orphan DB cleanup deu phai)
 #   - Reserved blacklist -> reject pre-CREATE DATABASE
 #   - Duplicate service detect -> reject pre-CREATE DATABASE
+#
+# T-5-05 mitigation (carry forward Plan 02-05 — Phase 5 KHONG relax):
+#   - $HUB pass validate Step 1-2 (regex + RESERVED blacklist) truoc khi cham .env / caddy
+#   - Tat ca $HUB interpolations TRONG step 8 + 9 deu quote "$HUB"
+#   - sed expressions su dung delimiter "|" thay "/" de tranh collision voi pipe trong REGEX value
 
 set -euo pipefail
 
 # ──────────────────────────────────────────────────────────────────────────
-# (1/7) Parse args
+# (1/9) Parse args
 # ──────────────────────────────────────────────────────────────────────────
 
 HUB=${1:-${HUB:-}}
@@ -45,7 +57,7 @@ if [ -z "$HUB" ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# (2/7) Validate hub_name regex format (sync Settings Plan 02-05)
+# (2/9) Validate hub_name regex format (sync Settings Plan 02-05)
 # ──────────────────────────────────────────────────────────────────────────
 
 if ! [[ "$HUB" =~ ^[a-z][a-z0-9_]{0,15}$ ]]; then
@@ -57,7 +69,7 @@ if ! [[ "$HUB" =~ ^[a-z][a-z0-9_]{0,15}$ ]]; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# (3/7) Validate hub_name reserved blacklist (sync RESERVED_HUB_NAMES)
+# (3/9) Validate hub_name reserved blacklist (sync RESERVED_HUB_NAMES)
 # ──────────────────────────────────────────────────────────────────────────
 
 RESERVED_NAMES=("postgres" "cocoindex" "template0" "template1" "public" "medinet")
@@ -79,7 +91,7 @@ if [ "$HUB" = "central" ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# (4/7) Determine repo root + check docker-compose.yml exist
+# (4/9) Determine repo root + check docker-compose.yml exist
 # ──────────────────────────────────────────────────────────────────────────
 
 # Find compose root: uu tien cwd neu co docker-compose.yml, fallback Hub_All/
@@ -106,7 +118,7 @@ if [ ! -f "$TEMPLATE_PATH" ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# (5/7) Detect duplicate service in base + override
+# (5/9) Detect duplicate service in base + override
 # ──────────────────────────────────────────────────────────────────────────
 
 if grep -q "^  python-api-${HUB}:" "$BASE_PATH"; then
@@ -122,7 +134,7 @@ if [ -f "$OVERRIDE_PATH" ] && grep -q "^  python-api-${HUB}:" "$OVERRIDE_PATH"; 
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# (6/7) Auto-detect port neu chua truyen (max port hien huu + 1)
+# (6/9) Auto-detect port neu chua truyen (max port hien huu + 1)
 # ──────────────────────────────────────────────────────────────────────────
 
 if [ -z "$PORT" ]; then
@@ -162,7 +174,7 @@ if [ -f "$OVERRIDE_PATH" ] && grep -qE "\"${PORT}:8080\"" "$OVERRIDE_PATH"; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
-# (7/7) Execute: hub-init.sh (DB) + sed template (compose) + register volume
+# (7/9) Execute: hub-init.sh (DB) + sed template (compose) + register volume
 # ──────────────────────────────────────────────────────────────────────────
 
 echo "[hub-add] === Tao hub moi '$HUB' (port=$PORT, DB=medinet_hub_$HUB) ==="
@@ -211,6 +223,121 @@ if ! docker compose config --quiet 2>&1; then
     echo "  Override file: $OVERRIDE_PATH"
     echo "  Xoa thu cong block python-api-$HUB neu can rollback."
     exit 3
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# (8/9) Cap nhat .env HUBS_ALLOWLIST + HUBS_ALLOWLIST_REGEX (Phase 5 PROXY-01)
+# ──────────────────────────────────────────────────────────────────────────
+# Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-RESEARCH.md
+#         §"hub-add.sh extension Phase 5 (step 8 + 9)"
+# Atomic edit qua tmp file + mv — preserve other env vars in .env.
+# Idempotent: skip neu hub da co trong HUBS_ALLOWLIST (duplicate detect).
+# Use sed delimiter "|" instead of "/" to avoid collision with REGEX pipe value.
+
+ENV_FILE="$COMPOSE_ROOT/.env"
+
+# Idempotent: tao .env tu .env.example neu chua co
+if [ ! -f "$ENV_FILE" ]; then
+    if [ -f "$COMPOSE_ROOT/.env.example" ]; then
+        cp "$COMPOSE_ROOT/.env.example" "$ENV_FILE"
+        echo "[hub-add] (8) Created .env tu .env.example"
+    else
+        # Minimum .env fallback — Phase 5 minimum keys (base 3 hub Phase 2)
+        echo "HUBS_ALLOWLIST=yte,duoc,hcns" > "$ENV_FILE"
+        echo "HUBS_ALLOWLIST_REGEX=yte|duoc|hcns" >> "$ENV_FILE"
+        echo "[hub-add] (8) Created .env voi minimum HUBS_ALLOWLIST fallback"
+    fi
+fi
+
+# Extract current allowlist (default empty neu missing key)
+CURRENT_ALLOWLIST=$(grep -E "^HUBS_ALLOWLIST=" "$ENV_FILE" | head -1 | cut -d= -f2- || echo "")
+
+# Check duplicate (hub da co trong allowlist — idempotent skip)
+if [[ ",${CURRENT_ALLOWLIST}," == *",${HUB},"* ]]; then
+    echo "[hub-add] (8) HUB '${HUB}' da co trong HUBS_ALLOWLIST — skip env update (idempotent)"
+else
+    # Append hub vao allowlist
+    NEW_ALLOWLIST="${CURRENT_ALLOWLIST:+${CURRENT_ALLOWLIST},}${HUB}"
+    NEW_REGEX=$(echo "${NEW_ALLOWLIST}" | tr ',' '|')
+
+    # Atomic edit qua tmp file + mv (preserve other env vars in .env)
+    TMP_ENV=$(mktemp)
+    trap 'rm -f "$TMP_ENV"' EXIT
+
+    # Update HUBS_ALLOWLIST (sed delimiter "|" tranh collision voi regex pipe)
+    if grep -qE "^HUBS_ALLOWLIST=" "$ENV_FILE"; then
+        sed "s|^HUBS_ALLOWLIST=.*|HUBS_ALLOWLIST=${NEW_ALLOWLIST}|" "$ENV_FILE" > "$TMP_ENV"
+    else
+        cp "$ENV_FILE" "$TMP_ENV"
+        echo "HUBS_ALLOWLIST=${NEW_ALLOWLIST}" >> "$TMP_ENV"
+    fi
+
+    # Update HUBS_ALLOWLIST_REGEX (in tmp file, not original — atomic single mv cuoi)
+    if grep -qE "^HUBS_ALLOWLIST_REGEX=" "$TMP_ENV"; then
+        TMP_ENV2=$(mktemp)
+        sed "s|^HUBS_ALLOWLIST_REGEX=.*|HUBS_ALLOWLIST_REGEX=${NEW_REGEX}|" "$TMP_ENV" > "$TMP_ENV2"
+        mv "$TMP_ENV2" "$TMP_ENV"
+    else
+        echo "HUBS_ALLOWLIST_REGEX=${NEW_REGEX}" >> "$TMP_ENV"
+    fi
+
+    mv "$TMP_ENV" "$ENV_FILE"
+    trap - EXIT
+    echo "[hub-add] (8) Updated .env HUBS_ALLOWLIST=${NEW_ALLOWLIST}"
+    echo "[hub-add] (8) Updated .env HUBS_ALLOWLIST_REGEX=${NEW_REGEX}"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────
+# (9/9) Caddy validate + reload zero-downtime + smoke (Phase 5 PROXY-01)
+# ──────────────────────────────────────────────────────────────────────────
+# Pitfall 7 mitigation (Caddy reload silent rollback):
+#   Caddy silent rollback old config neu new config invalid — operator KHONG biet failure.
+#   PRE-validate `caddy validate --config` TRUOC reload → fail-fast voi explicit
+#   error message + rollback instruction.
+# T-5-16: dev WIKI_PUBLIC_DOMAIN=localhost dung self-signed cert; `-k` flag chap nhan.
+# Prod ACME Let's Encrypt valid cert KHONG can `-k`.
+
+# Check neu caddy container dang chay (dev pre-up — operator chua start compose)
+if docker compose ps caddy --format json 2>/dev/null | grep -q '"State":"running"'; then
+    echo "[hub-add] (9) Validate Caddy config TRUOC reload..."
+
+    # PRE-validate — fail-fast neu config invalid (avoid silent rollback Pitfall 7)
+    if ! docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile 2>&1; then
+        echo "[hub-add] ERROR: Caddy config validate FAIL — rollback .env edit can thiet."
+        echo "  Manual rollback:"
+        echo "    sed -i 's|^HUBS_ALLOWLIST=.*|HUBS_ALLOWLIST=${CURRENT_ALLOWLIST}|' $ENV_FILE"
+        echo "    sed -i 's|^HUBS_ALLOWLIST_REGEX=.*|HUBS_ALLOWLIST_REGEX=$(echo "${CURRENT_ALLOWLIST}" | tr ',' '|')|' $ENV_FILE"
+        exit 4
+    fi
+
+    echo "[hub-add] (9) Validate PASS — reloading Caddy (zero-downtime via admin API)..."
+
+    # Atomic reload qua Caddy admin API (zero-downtime — KHONG restart container)
+    if ! docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>&1; then
+        echo "[hub-add] ERROR: Caddy reload FAIL"
+        exit 4
+    fi
+
+    # Smoke checkpoint: verify hub moi route work post-reload
+    sleep 1  # cho Caddy settle
+
+    if command -v curl >/dev/null 2>&1; then
+        DOMAIN="${WIKI_PUBLIC_DOMAIN:-localhost}"
+        SMOKE_URL="https://${DOMAIN}/${HUB}/api/health"
+        echo "[hub-add] (9) Smoke check: curl -k ${SMOKE_URL}"
+        if curl -k -sf -o /dev/null --max-time 5 "${SMOKE_URL}" 2>/dev/null; then
+            echo "[hub-add] (9) Smoke PASS — hub '${HUB}' route work qua Caddy"
+        else
+            echo "[hub-add] WARN: Smoke check returned non-200 hoac timeout."
+            echo "         Backend container python-api-${HUB} co the chua up."
+            echo "         Run: docker compose up -d python-api-${HUB} && curl -k ${SMOKE_URL}"
+        fi
+    else
+        echo "[hub-add] (9) Skip smoke check (curl khong co)"
+    fi
+else
+    echo "[hub-add] (9) Caddy container chua running — skip reload (se apply khi 'docker compose up')"
+    echo "         Sau khi up: docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile"
 fi
 
 # ──────────────────────────────────────────────────────────────────────────
