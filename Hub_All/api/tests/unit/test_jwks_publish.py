@@ -142,7 +142,11 @@ def test_load_public_key_rejects_missing_file(tmp_path: Path) -> None:
 
 
 def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
-    """Boot env cho create_app() — pattern Phase 2 Plan 02-01."""
+    """Boot env cho create_app() — pattern Phase 2 Plan 02-01.
+
+    Plan 03-02 Task 1 thêm validator hub con required CENTRAL_JWKS_URL —
+    auto-set cho hub con để boot Settings PASS (regression update).
+    """
     if hub_name == "central":
         db = "medinet_central"
     else:
@@ -157,6 +161,11 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
     )
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
+    if hub_name != "central":
+        monkeypatch.setenv(
+            "CENTRAL_JWKS_URL",
+            "http://python-api-central:8080/.well-known/jwks.json",
+        )
     from app.config import get_settings
 
     get_settings.cache_clear()
@@ -211,10 +220,11 @@ def test_jwks_endpoint_mount_central_only(
 def test_settings_central_jwks_url_default_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Settings.central_jwks_url default None ở central + hub con (Plan 03-01).
+    """Settings.central_jwks_url default None ở central (Plan 03-01 ship).
 
-    Plan 03-02 sẽ thêm @model_validator enforce hub con required (fail-loud
-    boot nếu thiếu). Plan 03-01 chỉ ship field default None.
+    Plan 03-02 đã thêm @model_validator enforce hub con required (fail-loud
+    boot nếu thiếu) — test verify CENTRAL hub vẫn default None OK. Hub con
+    case test riêng ở test_config_jwks.py::test_hub_con_requires_central_jwks_url.
     """
     _setup_env(monkeypatch, "central")
     from app.config import get_settings
@@ -222,7 +232,9 @@ def test_settings_central_jwks_url_default_none(
     settings_central = get_settings()
     assert settings_central.central_jwks_url is None
 
-    # Hub con vẫn None ở Plan 03-01 (Plan 03-02 sẽ add validator)
+    # Hub con được set CENTRAL_JWKS_URL ở _setup_env (Plan 03-02 regression update).
     _setup_env(monkeypatch, "yte")
     settings_yte = get_settings()
-    assert settings_yte.central_jwks_url is None
+    assert settings_yte.central_jwks_url == (
+        "http://python-api-central:8080/.well-known/jwks.json"
+    )

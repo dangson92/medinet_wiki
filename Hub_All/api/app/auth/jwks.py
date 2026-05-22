@@ -1,22 +1,23 @@
-"""JWKS publish layer — Plan 03-01 (SSO-01 part 1, D-V3-Phase3-A).
+"""JWKS publish + cache layer — Plan 03-01 (publish) + Plan 03-02 (cache).
 
-Module expose `publish_jwks()` cho central JWKS endpoint RFC 7517:
+Plan 03-01 (SSO-01 part 1, D-V3-Phase3-A) expose `publish_jwks()` cho central
+JWKS endpoint RFC 7517:
     GET /.well-known/jwks.json -> {"keys": [{"kty":"RSA","kid":"...",...}]}
 
-Stack: `cryptography` (M2 baseline qua PyJWT[crypto]) — KHÔNG thêm dep mới
-(KHÔNG dùng `jwcrypto` — analysis cho thấy 10 LOC manual đủ; xem 03-CONTEXT.md
-Claude's Discretion + Plan 03-01 notes).
+Plan 03-02 (SSO-01 part 2, D-V3-Phase3-B/D) thêm `JWKSCache` class cho hub con
+verify JWT: in-process LRU + asyncio refresh task TTL 1h + 24h hard limit
+(503 JWKS_STALE envelope nếu cache > limit — R-V3-5 fail-loud delayed).
 
-Plan 03-02 sẽ thêm `JWKSCache` class cùng module này — publish + cache cùng
-concern JWKS lifecycle. Phase 7 MCP service tái sử dụng cache layer.
+Stack: `cryptography` + `httpx` (M2 baseline) — KHÔNG dep mới `jwcrypto`.
 
 Locked decisions:
     D-V3-Phase3-A — JWKS endpoint (KHÔNG shared keypair / cookie domain)
+    D-V3-Phase3-B — Boot fail-loud + runtime fail-quiet + 24h hard limit
     D-V3-Phase3-D — In-process cache hub con (KHÔNG Redis)
 
-REQ traceability: SSO-01 (Plan 03-01)
+REQ traceability: SSO-01 (Plan 03-01 publish + Plan 03-02 cache)
 Risk mitigation: R-V3-5 (HA — central rotate key -> hub con auto-detect ở
-next TTL refresh thông qua kid mismatch — Plan 03-02 ship cache layer).
+next TTL refresh thông qua kid mismatch).
 """
 from __future__ import annotations
 
@@ -133,4 +134,242 @@ def publish_jwks(public_key_path: Path) -> JWKSet:
     return JWKSet(keys=[jwk])
 
 
-__all__ = ["JWK", "JWKSet", "load_public_key_as_jwk", "publish_jwks"]
+# ────────────────────────────────────────────────────────────────────────────
+# Plan 03-02 — JWKSCache class + lifecycle (SSO-01 part 2, D-V3-Phase3-B/D)
+# ────────────────────────────────────────────────────────────────────────────
+
+import asyncio  # noqa: E402 — module-level import sau Plan 03-01 publish layer
+import logging  # noqa: E402
+import time  # noqa: E402
+
+import httpx  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
+
+class JWKSStaleError(Exception):
+    """Raise khi cache > max_stale_seconds — caller render 503 JWKS_STALE envelope.
+
+    R-V3-5 fail-loud delayed mitigation: cache local 1h TTL + background refresh
+    fail-quiet, NHƯNG nếu sau 24h KHÔNG refresh thành công → mọi JWT verify trả
+    503 (KHÔNG accept stale key vĩnh viễn).
+    """
+
+
+class JWKSKidNotFoundError(Exception):
+    """Raise khi JWT header kid không match key nào trong cache.
+
+    Cause: (a) central rotate keypair (Plan 03-01 _derive_kid SHA-256 PEM đổi
+    kid tự nhiên) + hub con chưa refresh (defer 1h TTL); (b) attacker forge
+    JWT với kid bịa; (c) JWT M2 cũ phát hành trước Plan 03-02 KHÔNG có kid.
+    """
+
+
+def _base64url_to_int(data: str) -> int:
+    """Inverse `_int_to_base64url` — JWK n/e base64url → big-int (RFC 7518 §6.3.1).
+
+    base64.urlsafe_b64decode yêu cầu padding %4 — pad lại để decode OK.
+    """
+    pad = "=" * (-len(data) % 4)
+    raw = base64.urlsafe_b64decode(data + pad)
+    return int.from_bytes(raw, byteorder="big")
+
+
+def jwk_to_public_key(jwk: JWK) -> RSAPublicKey:
+    """JWK dict RFC 7517 → cryptography RSAPublicKey object cho pyjwt.decode().
+
+    Reverse `load_public_key_as_jwk` — verify roundtrip property qua test
+    (sign JWT bằng private.pem → verify bằng pub key reconstruct từ JWK).
+    """
+    if jwk["kty"] != "RSA":
+        raise ValueError(f"JWK kty={jwk['kty']!r}, chỉ support RSA (RS256).")
+    n = _base64url_to_int(jwk["n"])
+    e = _base64url_to_int(jwk["e"])
+    return RSAPublicNumbers(e=e, n=n).public_key()
+
+
+class JWKSCache:
+    """In-process LRU JWKS cache cho hub con verify JWT (D-V3-Phase3-D).
+
+    Lifecycle:
+        1. `fetch_initial()` — blocking httpx.get timeout 5s → exception →
+           boot fail-loud (lifespan startup raise → process exit 1).
+        2. `start_refresh_task()` — spawn asyncio task chạy `_refresh_loop()`
+           mỗi `refresh_interval` sec, fail-quiet (log warning + giữ cached).
+        3. `get_public_key(kid)` — verify hot path; raise `JWKSStaleError`
+           nếu cache > `max_stale_seconds` (R-V3-5 fail-loud delayed).
+        4. `stop_refresh_task()` — graceful shutdown (cancel asyncio task).
+
+    Threat model:
+        - T-03-02-02 (DoS) — httpx timeout 5s chống stuck lifespan
+        - T-03-02-03 (Tampering) — kid mismatch khi key rotation → caller
+          chọn re-fetch hoặc reject; cache TTL hard limit minimize fake window
+        - T-03-02-08 (DoS) — refresh loop wrap try/except global tránh task
+          die câm + 24h hard limit guarantee fail-loud delayed nếu task chết
+
+    Decision traceability: D-V3-Phase3-B (lifecycle) + D-V3-Phase3-D (storage).
+    """
+
+    def __init__(
+        self,
+        jwks_url: str,
+        *,
+        refresh_interval: int = 3600,
+        max_stale_seconds: int = 86400,
+        timeout: float = 5.0,
+    ) -> None:
+        self._jwks_url = jwks_url
+        self._refresh_interval = refresh_interval
+        self._max_stale_seconds = max_stale_seconds
+        self._timeout = timeout
+        self._keys_by_kid: dict[str, RSAPublicKey] = {}
+        self._last_refresh_ts: float = 0.0
+        self._refresh_task: asyncio.Task[None] | None = None
+        self._lock = asyncio.Lock()
+
+    async def fetch_initial(self) -> None:
+        """Blocking fetch — raise nếu fail (boot fail-loud D-V3-Phase3-B)."""
+        try:
+            await self._fetch_and_cache()
+        except Exception as e:
+            logger.critical(
+                "jwks_fetch_initial_failed: url=%s error=%s — boot abort",
+                self._jwks_url,
+                e,
+            )
+            raise
+
+    async def refresh(self) -> None:
+        """Internal refresh — fail-quiet (log warning + giữ cached value).
+
+        D-V3-Phase3-B runtime fail-quiet: central JWKS endpoint blip 5 phút
+        KHÔNG nên kill hub con request. Cache cũ vẫn pass JWT verify cho tới
+        khi 24h hard limit (`max_stale_seconds`) → JWKSStaleError 503.
+        """
+        try:
+            await self._fetch_and_cache()
+        except Exception as e:
+            logger.warning(
+                "jwks_refresh_failed: url=%s error=%s — giữ cached value",
+                self._jwks_url,
+                e,
+            )
+            # KHÔNG raise — fail-quiet runtime D-V3-Phase3-B
+
+    async def _fetch_and_cache(self) -> None:
+        """Fetch JWKS từ URL + populate cache. Internal — caller wrap try/except."""
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(self._jwks_url)
+            resp.raise_for_status()
+            data = resp.json()
+        if not isinstance(data, dict) or "keys" not in data:
+            raise ValueError(
+                f"JWKS response thiếu 'keys' list (got: {type(data).__name__})"
+            )
+        keys = data["keys"]
+        if not isinstance(keys, list) or not keys:
+            raise ValueError(
+                f"JWKS response 'keys' phải là non-empty list (got: {keys!r})"
+            )
+        new_keys: dict[str, RSAPublicKey] = {}
+        for jwk_dict in keys:
+            if not isinstance(jwk_dict, dict) or "kid" not in jwk_dict:
+                logger.warning("jwks_skip_invalid_jwk: %r", jwk_dict)
+                continue
+            try:
+                pub_key = jwk_to_public_key(jwk_dict)  # type: ignore[arg-type]
+            except (ValueError, KeyError) as e:
+                logger.warning(
+                    "jwks_skip_unparseable_key: kid=%s error=%s",
+                    jwk_dict.get("kid"),
+                    e,
+                )
+                continue
+            new_keys[jwk_dict["kid"]] = pub_key
+        if not new_keys:
+            raise ValueError("JWKS response không có key hợp lệ sau parse")
+        async with self._lock:
+            self._keys_by_kid = new_keys
+            self._last_refresh_ts = time.time()
+        logger.info(
+            "jwks_cache_updated: kids=%s last_refresh_ts=%.0f",
+            sorted(new_keys.keys()),
+            self._last_refresh_ts,
+        )
+
+    def is_stale(self) -> bool:
+        """True nếu cache > max_stale_seconds — caller raise 503 JWKS_STALE."""
+        if self._last_refresh_ts == 0.0:
+            return True  # chưa fetch_initial → stale by definition
+        return (time.time() - self._last_refresh_ts) > self._max_stale_seconds
+
+    def get_public_key(self, kid: str) -> RSAPublicKey:
+        """Verify hot path — raise JWKSStaleError nếu cache quá hạn 24h.
+
+        Caller (get_current_user dependency Task 4) catch:
+        - JWKSStaleError → 503 JWKS_STALE envelope
+        - JWKSKidNotFoundError → 401 INVALID_TOKEN (kid mismatch — operator
+          rotate key + hub con chưa refresh, hoặc attacker forge kid bịa)
+        """
+        if self.is_stale():
+            raise JWKSStaleError(
+                f"JWKS cache quá hạn {self._max_stale_seconds}s "
+                f"({time.time() - self._last_refresh_ts:.0f}s since last refresh)"
+            )
+        if kid not in self._keys_by_kid:
+            raise JWKSKidNotFoundError(
+                f"kid={kid!r} không trong JWKS cache "
+                f"(available: {sorted(self._keys_by_kid.keys())})"
+            )
+        return self._keys_by_kid[kid]
+
+    def start_refresh_task(self) -> None:
+        """Spawn asyncio background task refresh mỗi refresh_interval sec."""
+        if self._refresh_task is not None and not self._refresh_task.done():
+            logger.warning("jwks_refresh_task_already_running — skip")
+            return
+        self._refresh_task = asyncio.create_task(self._refresh_loop())
+        logger.info(
+            "jwks_refresh_task_started: interval=%ds", self._refresh_interval
+        )
+
+    async def _refresh_loop(self) -> None:
+        """Asyncio task — sleep refresh_interval + refresh, lặp vô tận.
+
+        Defensive bao try/except global ngăn task chết câm khi exception
+        ngoài _fetch_and_cache (đã log). 24h hard limit guarantee fail-loud
+        delayed nếu task chết (T-03-02-08 mitigation).
+        """
+        while True:
+            try:
+                await asyncio.sleep(self._refresh_interval)
+                await self.refresh()
+            except asyncio.CancelledError:
+                logger.info("jwks_refresh_loop_cancelled")
+                raise
+            except Exception as e:  # noqa: BLE001 — defensive task survival
+                logger.error("jwks_refresh_loop_unexpected: %s", e)
+
+    async def stop_refresh_task(self) -> None:
+        """Graceful shutdown (cancel asyncio task)."""
+        if self._refresh_task is None:
+            return
+        self._refresh_task.cancel()
+        try:
+            await self._refresh_task
+        except asyncio.CancelledError:
+            pass
+        self._refresh_task = None
+        logger.info("jwks_refresh_task_stopped")
+
+
+__all__ = [
+    "JWK",
+    "JWKSCache",
+    "JWKSKidNotFoundError",
+    "JWKSStaleError",
+    "JWKSet",
+    "jwk_to_public_key",
+    "load_public_key_as_jwk",
+    "publish_jwks",
+]
