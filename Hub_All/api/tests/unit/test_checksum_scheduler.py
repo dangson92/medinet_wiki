@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -152,22 +152,22 @@ def test_should_run_daily_at_2am() -> None:
     """_should_run_daily(now, last_run) True khi now.hour==2 + last_run None|yesterday."""
     from app.observability.checksum_scheduler import _should_run_daily
 
-    now_2am = datetime(2026, 5, 22, 2, 30, 0, tzinfo=timezone.utc)
+    now_2am = datetime(2026, 5, 22, 2, 30, 0, tzinfo=UTC)
     # last_run None → True
     assert _should_run_daily(now_2am, None) is True
 
     # last_run yesterday → True
-    yesterday = datetime(2026, 5, 21, 2, 5, 0, tzinfo=timezone.utc)
+    yesterday = datetime(2026, 5, 21, 2, 5, 0, tzinfo=UTC)
     assert _should_run_daily(now_2am, yesterday) is True
 
     # last_run today (same date) → False (KHÔNG chạy 2 lần cùng ngày)
-    today_earlier = datetime(2026, 5, 22, 2, 10, 0, tzinfo=timezone.utc)
+    today_earlier = datetime(2026, 5, 22, 2, 10, 0, tzinfo=UTC)
     assert _should_run_daily(now_2am, today_earlier) is False
 
     # now not 2AM → False
-    now_3am = datetime(2026, 5, 22, 3, 30, 0, tzinfo=timezone.utc)
+    now_3am = datetime(2026, 5, 22, 3, 30, 0, tzinfo=UTC)
     assert _should_run_daily(now_3am, None) is False
-    now_1am = datetime(2026, 5, 22, 1, 30, 0, tzinfo=timezone.utc)
+    now_1am = datetime(2026, 5, 22, 1, 30, 0, tzinfo=UTC)
     assert _should_run_daily(now_1am, None) is False
 
 
@@ -182,7 +182,7 @@ def test_should_run_hourly() -> None:
 
     from app.observability.checksum_scheduler import _should_run_hourly
 
-    now = datetime(2026, 5, 22, 10, 30, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 5, 22, 10, 30, 0, tzinfo=UTC)
     # last_run None → True
     assert _should_run_hourly(now, None) is True
 
