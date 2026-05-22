@@ -365,6 +365,119 @@ Phase 3 KHÔNG Alembic migration schema — rollback chỉ revert source code + 
 
 ---
 
+## Cross-hub Sync Deploy Notes (Phase 4 v3.0)
+
+Phase 4 ship cross-hub data sync infrastructure — chunks + vector denormalized push từ hub con → central qua **outbox + worker pattern** (D-V3-Phase4-A1 LOCKED). 7 plan ship 2026-05-22 SYNC-01..05 + 9 D-V3-Phase4-A1..D3 LOCKED consumed + 6 Prometheus metric infrastructure.
+
+### Architecture
+
+Hub con cocoindex flow `index_document` ingest chunks → Postgres trigger `enqueue_sync_outbox` AFTER INSERT/DELETE chunks atomic cùng transaction → `sync_outbox` table local (per-hub-con) → in-process asyncio worker hub con lifespan poll batch 100/5s + SELECT FOR UPDATE SKIP LOCKED concurrency-safe + push central qua asyncpg pool (`central_sync_pool`) `ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT FROM EXCLUDED.content_hash` 1 SQL atomic idempotent.
+
+Central checksum scheduler (FastAPI lifespan asyncio task) tick daily 2AM `COUNT(*)` per hub vs central → `sync_count_drift{hub_name}` gauge + hourly `TABLESAMPLE BERNOULLI(1)` chunks created last 1h → content_hash diff → `sync_hash_drift{hub_name, drift_type}` counter. Admin `POST /api/sync/replay` endpoint reset dead rows manual recovery.
+
+### Env vars mới (operator MUST set trước `docker compose up`)
+
+**Hub con (yte/duoc/hcns/dynamic FACTOR-04):**
+
+| Env | Required | Format | Note |
+|-----|----------|--------|------|
+| `HUB_YTE_ID` | ✅ | UUID4 | Khớp `medinet_central.hubs.id` row UUID — Phase 7 MIGRATE-01 sẽ centralize. v3.0-b operator export manual |
+| `HUB_DUOC_ID` | ✅ | UUID4 | Tương tự |
+| `HUB_HCNS_ID` | ✅ | UUID4 | Tương tự |
+| `CENTRAL_SYNC_DSN` | ✅ (hub con) | asyncpg DSN tới `medinet_central` | Hardcoded ở docker-compose 3 hub con; production deploy qua secrets backing |
+| `SYNC_BATCH_SIZE` | optional | int (default 100) | Worker claim batch size — operator tune sau observe metrics |
+| `SYNC_POLL_INTERVAL` | optional | float seconds (default 5.0) | Idle sleep khi outbox empty |
+| `SYNC_MAX_ATTEMPTS` | optional | int (default 5) | Mark dead sau N attempts |
+| `SYNC_BACKOFF_SECONDS` | optional | CSV "1,5,30,120" (length = MAX_ATTEMPTS-1) | Exp backoff retry seconds |
+
+**Central:**
+
+| Env | Required | Format | Note |
+|-----|----------|--------|------|
+| `CHECKSUM_HUB_DSNS_JSON` | optional | JSON dict `{"yte":"asyncpg DSN read-only","duoc":"..."}` | Central checksum scheduler connect tới N hub con; empty/None → scheduler no-op (deploy lần đầu CHƯA register hub con) |
+
+### Export env shell example
+
+```bash
+export HUB_YTE_ID="00000000-0000-0000-0000-000000000001"
+export HUB_DUOC_ID="00000000-0000-0000-0000-000000000002"
+export HUB_HCNS_ID="00000000-0000-0000-0000-000000000003"
+export CHECKSUM_HUB_DSNS_JSON='{"yte":"postgresql+asyncpg://medinet_ro:medinet@postgres:5432/medinet_hub_yte","duoc":"postgresql+asyncpg://medinet_ro:medinet@postgres:5432/medinet_hub_duoc","hcns":"postgresql+asyncpg://medinet_ro:medinet@postgres:5432/medinet_hub_hcns"}'
+docker compose up -d
+```
+
+### Per-hub Alembic migration
+
+Apply migration 0005 (sync_outbox per-hub):
+```bash
+cd api
+make migrate-all  # apply 4 DB sequentially: central + yte + duoc + hcns
+# rev 0005 SKIP central runtime guard (sync_outbox per-hub-only — current_database() check)
+alembic -x hub=yte current  # expect rev "0005" (head)
+alembic current             # expect rev "0005" (central — guard skip nhưng vẫn ghi rev alembic_version table)
+```
+
+### Prometheus metrics mới
+
+Scrape `/metrics` endpoint central + hub con — 6 metric mới (label `hub_name` bounded ~240 series):
+
+- `sync_lag_seconds{hub_name}` (histogram) — outbox.created_at → central INSERT processed_at lag
+- `sync_outbox_pending{hub_name}` (gauge) — current pending count
+- `sync_attempt_total{hub_name, status=success|fail}` (counter) — cumulative attempts
+- `sync_dead_total{hub_name, error_class=network|timeout|conflict|unknown}` (counter) — cumulative dead rows
+- `sync_count_drift{hub_name}` (gauge) — daily ratio diff symmetric `abs(diff) / max(hub_count, 1)`
+- `sync_hash_drift{hub_name, drift_type=mismatch|missing}` (counter) — hourly TABLESAMPLE diff
+
+Recommended AlertManager rules (defer Phase 7 deploy guide):
+
+- `sync_count_drift > 0.01` sustained 7 days → STOP (E-V3-5 trigger)
+- `sync_hash_drift_total > 0` increase last 1h → Slack alert
+- `sync_dead_total` increase rate > 0 → Slack alert (1 hub con sync fail systematic)
+
+### Admin replay endpoint
+
+```bash
+# Replay dead rows trong sync_outbox hub yte since 2026-05-22 (manual recovery sau khi fix root cause)
+curl -X POST https://central.medinet.vn/api/sync/replay \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"hub_id":"yte","since":"2026-05-22T00:00:00Z"}'
+
+# Response D6 envelope:
+# {"success":true,"data":{"hub_id":"yte","replayed_count":42,"since":"2026-05-22T00:00:00+00:00"},"error":null,"meta":null}
+```
+
+Endpoint chỉ available ở central (FACTOR-02 extend — hub con strip → 404 NOT_FOUND envelope). Require admin role (Phase 3 SSO-04 `require_role("admin")` dependency carry forward). Reset 4 field dead row atomic (`status='pending', attempt_count=0, last_error=NULL, next_retry_at=NULL`) WHERE status='dead' AND created_at >= since → worker re-pickup. audit_logs INSERT non-repudiation `action='sync.replay'` ghi lại operator + hub_id + since (W8 fix T-04-06-03 reinforced).
+
+### Cross-hub search behavior change
+
+Hub con `POST /api/search/cross-hub` → **404 NOT_FOUND envelope** (FACTOR-02 extend Plan 04-05 D-V3-Phase4-D3). Frontend M2 hardcode same-origin sẽ FAIL ở hub con cho tới Phase 5 PROXY-02 wire base URL detect prefix (D-V3-06 D6 expire formally).
+
+Central `POST /api/search/cross-hub` giữ behavior M2 — public API `SearchService.search_cross_hub(*, body, user)` signature unchanged (backward compat M2 ask_service.py + frontend api.ts crossHubSearch). Implementation refactor 1 SQL aggregated `WHERE c.hub_id = ANY($2::uuid[]) ORDER BY vector <=> $1::vector LIMIT $3` thay fan-out `asyncio.gather(*[_search_one(h) for h in hub_ids])` N task (D-V3-Phase4-D1). HNSW `iterative_scan=relaxed_order` + `ef_search=200` + `max_scan_tuples=20000` SET LOCAL session tuning carry forward M2 Phase 6. Re-rank tự nhiên qua SQL ORDER BY (KHÔNG Python merge sort).
+
+### Rollback procedure
+
+Nếu sync drift > 1% sustained 7 days (E-V3-5 trigger):
+
+1. **Stop worker hub con:** `docker compose stop python-api-yte python-api-duoc python-api-hcns`
+2. **Verify outbox state:**
+   ```bash
+   psql -d medinet_hub_yte -c "SELECT status, COUNT(*) FROM sync_outbox GROUP BY status"
+   ```
+3. **Replay dead rows:** `POST /api/sync/replay { hub_id, since: <root-cause-fix-date> }` (xem section trên).
+4. **Resume worker:** `docker compose start python-api-yte python-api-duoc python-api-hcns`
+5. **Re-discuss GA-V3-D mechanism** (xem `.planning/PROJECT.md` EXIT criteria E-V3-5) nếu drift recurring nhiều lần — có thể chuyển sang Postgres logical replication hoặc cocoindex target thứ 2 (option a/b GA-V3-D đã REJECT 2026-05-22 nhưng có thể revisit nếu evidence chain outbox+worker insufficient).
+
+### Reference
+
+- `.planning/phases/04-cross-hub-data-sync/04-CONTEXT.md` — 9 D-V3-Phase4-A1..D3 LOCKED 2026-05-22.
+- `.planning/phases/04-cross-hub-data-sync/04-{01..07}-PLAN.md` — 7 plan implementation chi tiết.
+- `.planning/phases/04-cross-hub-data-sync/04-{01..07}-SUMMARY.md` — deliverable + commit + test per plan.
+- `.planning/REQUIREMENTS.md` § SYNC-01..05 — REQ-ID spec + Phase 4 closeout note.
+- `Hub_All/CLAUDE.md` section 6 — v3.0 progress + Phase 4 Cross-hub Data Sync pattern subsection.
+
+---
+
 ## Milestone status
 
 - ✅ **M2 v2.0 — Full RAG Rewrite** đang đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS).
