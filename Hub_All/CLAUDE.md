@@ -148,7 +148,7 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 | Phase | Status | Plan count | Date | REQ-ID |
 |-------|--------|------------|------|--------|
 | 1 — Multi-DB Topology + Per-hub Alembic | ✅ DONE | 5 plan | 2026-05-21 | TOPO-01..04 (4) |
-| 2 — Hub-con Codebase Factor | ✅ DONE | 4 plan | 2026-05-22 | FACTOR-01..03 (3) |
+| 2 — Hub-con Codebase Factor | ✅ DONE | 5 plan | 2026-05-22 | FACTOR-01..04 (4 — FACTOR-04 added 2026-05-22 Plan 02-05) |
 | 3 — Auth SSO + hub_ids trong JWT | 📋 Next | — | — | SSO-01..04 |
 | 4 — Cross-hub Data Sync | 📋 | — | — | SYNC-01..05 |
 | 5 — Reverse Proxy + Frontend Subpath | 📋 | — | — | PROXY-01..04 |
@@ -180,9 +180,21 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 
 **Reference:**
 - `.planning/phases/02-hub-con-codebase-factor/02-CONTEXT.md` — 9 D-V3-Phase2 decision LOCKED 2026-05-22.
-- `.planning/phases/02-hub-con-codebase-factor/02-{01..04}-PLAN.md` — implementation chi tiết 4 plan.
-- `.planning/phases/02-hub-con-codebase-factor/02-{01..04}-SUMMARY.md` — deliverable + commit + test count per plan.
+- `.planning/phases/02-hub-con-codebase-factor/02-{01..05}-PLAN.md` — implementation chi tiết 5 plan.
+- `.planning/phases/02-hub-con-codebase-factor/02-{01..05}-SUMMARY.md` — deliverable + commit + test count per plan.
+
+### Phase 2 FACTOR-04 dynamic hub registration (added 2026-05-22 — user direction B)
+
+Operator thêm hub mới không sửa code:
+
+- **`Settings.hub_name`** đổi `Literal[4]` → `str` + regex `^[a-z][a-z0-9_]{0,15}$` + reserved blacklist 6 name (`postgres`, `cocoindex`, `template0`, `template1`, `public`, `medinet`) ở `RESERVED_HUB_NAMES` constant module-level `api/app/config.py`.
+- **`make hub-add HUB=<name> [PORT=<port>]`** → `scripts/hub-add.sh` 7-step pipeline: regex validate + reserved blacklist + duplicate detect + auto-detect port (max+1) + call `hub-init.sh` (DB layer Phase 1) + sed substitute `docker-compose.override.yml.template` → append `docker-compose.override.yml` (gitignored, operator-local) + `docker compose config --quiet` post-write verify merge.
+- **Auto-detect port** = max ports hiện hữu + 1 trong base + override (scan regex `"NNNN:8080"`), fallback 8184 nếu base parse fail. User truyền explicit `PORT=<port>` thì skip auto-detect; validate range 1024-65535 + port conflict check.
+- **Quick start operator:** xem `Hub_All/README.md` section "Add a new hub (dynamic registration — FACTOR-04 Plan 02-05)".
+- **Hub registry source-of-truth defer Phase 6 SETTINGS-04** — long-term sẽ ship `hub_registry` table ở `medinet_central`; central admin CRUD; hub con đọc TTL cache. Plan 02-05 chỉ validate format Settings + sinh compose block.
+
+Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 
 ---
 
-*Cập nhật: 2026-05-22 (Phase 2 DONE — FACTOR-01..03 ship). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2 DONE (9/~30 plan ≈ 28%), Next: `/gsd-discuss-phase 3` Auth SSO.*
+*Cập nhật: 2026-05-22 (Phase 2 DONE — FACTOR-01..04 ship 5 plan; Plan 02-05 FACTOR-04 dynamic hub registration). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2 DONE (10/~32 plan ≈ 31%), Next: `/gsd-discuss-phase 3` Auth SSO.*

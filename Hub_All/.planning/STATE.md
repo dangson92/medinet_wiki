@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: Phase 2 DONE 2026-05-22 ✅. 4 plans / 7 commits / 8+ unit tests + 12+ integration test PASS. create_app() factory conditional mount (7 universal + 9 central-only); docker-compose 4 service dedicated (central/yte/duoc/hcns) port 8180-8183 + cocoindex LMDB volume per-hub; endpoint matrix 12 hub-scoped mount + 8 central-only strip envelope shape. Phase 1+2 = 9/~30 plan ≈ 28%. Next phase 3 — Auth SSO + hub_ids JWT (GA-V3-A chốt). Plan 02-05 Wave 4 FACTOR-04 dynamic hub registration vẫn pending (added 2026-05-22 user direction B — sẽ ship sau Phase 2 closeout).
-last_updated: "2026-05-22T14:00:00.000Z"
+status: Phase 2 DONE 2026-05-22 ✅ (5 plans total — Plan 02-05 ship 2026-05-22 FACTOR-04 dynamic hub registration; user direction B sau Plan 02-04 closeout). 5 plans / 9+ commits / 49+ unit tests + 12+ integration test PASS. create_app() factory conditional mount (7 universal + 9 central-only); docker-compose 4 service dedicated (central/yte/duoc/hcns) port 8180-8183 + cocoindex LMDB volume per-hub; endpoint matrix 12 hub-scoped mount + 8 central-only strip envelope shape; Settings.hub_name str + regex + reserved blacklist 6 name + scripts/hub-add.sh + docker-compose.override.yml.template + Makefile target hub-add (FACTOR-04). Phase 1+2 = 10/~32 plan ≈ 31%. Next phase 3 — Auth SSO + hub_ids JWT (GA-V3-A chốt).
+last_updated: "2026-05-22T15:30:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
-  percent: 28
+  total_plans: 10
+  completed_plans: 10
+  percent: 31
 ---
 
 # State — MEDWIKI (v3.0)
@@ -21,15 +21,15 @@ progress:
 
 ## Current Position
 
-- **Phase:** 2 — Hub-con Codebase Factor ✅ **DONE 2026-05-22 — FACTOR-01..03 closeout shipped (Wave 1 + Wave 2 + Wave 3 ✅); Plan 02-05 Wave 4 FACTOR-04 dynamic hub registration extension pending (added 2026-05-22 user direction B — sẽ execute riêng sau Phase 2 closeout)**
-- **Plan:** 4/4 plans complete (02-01..02-04) cho FACTOR-01..03 ở `.planning/phases/02-hub-con-codebase-factor/`. Tổng 5 plans nếu tính cả 02-05 extension (FACTOR-04, sẽ ship sau).
+- **Phase:** 2 — Hub-con Codebase Factor ✅ **DONE 2026-05-22 — FACTOR-01..04 fully shipped (Wave 1 + Wave 2 + Wave 3 + Wave 4 ✅); Plan 02-05 FACTOR-04 dynamic hub registration ship 2026-05-22 (user direction B sau Plan 02-04 closeout)**
+- **Plan:** 5/5 plans complete (02-01..02-05) cho FACTOR-01..04 ở `.planning/phases/02-hub-con-codebase-factor/`.
 - **Status:** Phase 2 closed FACTOR-01..03 — `create_app()` factory conditional router mount (7 universal + 9 central-only). Docker-compose mở rộng 4 service dedicated với YAML anchor `x-api-template`. Integration test endpoint matrix verify 12 hub-scoped mount + 8 central-only strip với 404 envelope shape M2 ErrorHandlerMiddleware wrap (Starlette HTTPException handler Rule 2 auto-add ở Plan 02-03). Phase 1 `_enforce_hub_dsn_match` validator carry forward (E-V3-3 không regress). CLAUDE.md + STATE.md + REQUIREMENTS.md update FACTOR-03 note "10 collective endpoint group / 12 specific HTTP method endpoints" (WRN-05 fix). Plan 02-04 Task 1 smoke compose runtime SKIP — rationale: Plan 02-03 integration test in-process (10/10 PASS 6.49s) đã cover semantic FACTOR-02/03; Phase 1 DSN validator + routing verify Plan 01-02; `docker compose config --quiet` exit 0 Plan 02-02; smoke compose runtime defer Phase 7 migration smoke E2E (MIGRATE-05).
 - **Last activity:** 2026-05-22 — `/gsd-execute-phase 2` wave-based execution complete cho FACTOR-01..03:
   - **02-01 DONE ✅** (Wave 1 BLOCKING): `create_app()` factory refactor mount conditional 9 central-only router theo `settings.hub_name`; unit test 9/9 PASS boot 4 hub mode (central/yte/duoc/hcns); Phase 1 DSN validator regression KHÔNG break (30/30 PASS). FACTOR-01 + FACTOR-02 đóng unit-level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-01-SUMMARY.md`.
   - **02-02 DONE ✅** (Wave 2, first half): Docker compose refactor 4 service FastAPI dedicated với YAML anchor `x-api-template: &api-template` + cocoindex LMDB volume per-hub (medinet_cocoindex_{central,yte,duoc,hcns}) + port 8180-8183 + mcp_service re-point `python-api-central` (D-V3-02 LOCKED). `docker compose config --quiet` exit 0, 8 service render đúng. FACTOR-01 đóng Docker layer. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-02-SUMMARY.md`.
   - **02-03 DONE ✅** (Wave 2, second half): Integration test endpoint matrix 12 hub-scoped MOUNT + 8 central-only STRIP (sync_router dùng `/api/sync/stats` BLK-01 fix) + envelope shape 404 D6 + autouse cleanup CỤC BỘ (WRN-03 fix). 10/10 test PASS qua TestClient in-process (6.49s). 175/175 unit test regression PASS (KHÔNG break Phase 1 + Plan 02-01). Rule 2 auto-add Starlette HTTPException handler ở `app/main.py` (M2 chỉ register `fastapi.HTTPException` — NOT match Starlette routing 404). Rule 3 auto-fix `reset_queue()` + SQLAlchemy engine sentinel-None reset trong `hub_app_factory` (audit queue cross-loop hang). FACTOR-02 + FACTOR-03 đóng integration level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-03-SUMMARY.md`.
   - **02-04 DONE ✅** (Wave 3 closeout): CLAUDE.md section 6 update Phase 2 DONE + 4 service compose pattern + endpoint matrix reference; STATE.md frontmatter + Current Position + Phase 2 Results Summary + Next Action update; REQUIREMENTS.md FACTOR-03 note "10 collective / 12 specific HTTP method endpoints" inline matrix 12 entry (WRN-05 fix). Task 1 smoke compose SKIP — Plan 02-03 integration test in-process đã cover semantic; smoke compose runtime defer Phase 7. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-04-SUMMARY.md`.
-  - **02-05** (Wave 4 extension, FACTOR-04 dynamic hub registration — pending sau closeout): Settings.hub_name Literal[4] → str + regex `^[a-z][a-z0-9_]{0,15}$` + reserved blacklist 6 name + `scripts/hub-add.sh` wrap hub-init.sh + `docker-compose.override.yml.template` sed substitute + `make hub-add HUB=<name> [PORT=<port>]` + README "Add a new hub" section + smoke `tmp_test` checkpoint. Cho phép operator thêm hub mới không sửa code/compose base.
+  - **02-05 DONE ✅** (Wave 4 extension, FACTOR-04 dynamic hub registration — ship 2026-05-22 sau Plan 02-04 closeout): Settings.hub_name Literal[4] → str + regex `^[a-z][a-z0-9_]{0,15}$` + reserved blacklist 6 name + `scripts/hub-add.sh` wrap hub-init.sh + `docker-compose.override.yml.template` sed substitute + `make hub-add HUB=<name> [PORT=<port>]` + README "Add a new hub" section + CLAUDE.md FACTOR-04 subsection. Task 3 smoke runtime SKIP (pre-resolved user decision — 20+ unit test cover validator + bash syntax check + docker compose config base verify đã PASS Plan 02-02; smoke Docker runtime defer Phase 7 MIGRATE-05 full E2E). 29/29 unit dynamic + 11/11 unit original PASS, ruff + mypy --strict PASS, regression test_main_factory.py 9/9 PASS. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-05-SUMMARY.md`.
 
 ## Phase 2 Planning Summary
 
@@ -39,7 +39,7 @@ progress:
 | 02-02 | 2 | Docker compose 4 service + YAML anchor + cocoindex LMDB per-hub | 1 (auto) | `docker-compose.yml` | FACTOR-01 | ✅ **DONE 2026-05-22** (docker compose config exit 0, 8 service render) |
 | 02-03 | 2 | Integration test 12 hub-scoped + 8 central-only + envelope 404 | 2 (tdd) | `tests/integration/conftest.py`, `tests/integration/test_factor_hub_scoped.py`, `app/main.py` (Rule 2) | FACTOR-02, FACTOR-03 | ✅ **DONE 2026-05-22** (10/10 test PASS, 6.49s; 175/175 unit regression PASS) |
 | 02-04 | 3 | Closeout: docs update + smoke compose checkpoint | 4 (1 checkpoint + 3 auto) | `CLAUDE.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md` | FACTOR-01..03 verify | Ready (Wave 3 — depends on 02-03 ✅) |
-| 02-05 | 4 | Dynamic hub registration: Settings str + regex + reserved blacklist + hub-add.sh + override.yml.template + Makefile + README + smoke checkpoint | 4 (1 checkpoint + 3 auto) | `api/app/config.py`, `tests/unit/test_config_hub_name*.py`, `api/scripts/hub-add.sh`, `docker-compose.override.yml.template`, `Hub_All/Makefile`, `api/Makefile`, `api/scripts/hub-init.sh`, `README.md`, `CLAUDE.md`, `.planning/STATE.md`, `.gitignore` | FACTOR-04 | Ready (Wave 4 — depends on 02-04 closeout; added 2026-05-22 user direction B) |
+| 02-05 | 4 | Dynamic hub registration: Settings str + regex + reserved blacklist + hub-add.sh + override.yml.template + Makefile + README + smoke checkpoint | 4 (1 checkpoint + 3 auto) | `api/app/config.py`, `tests/unit/test_config_hub_name*.py`, `api/scripts/hub-add.sh`, `docker-compose.override.yml.template`, `Hub_All/Makefile`, `api/Makefile`, `api/scripts/hub-init.sh`, `README.md`, `CLAUDE.md`, `.planning/STATE.md`, `.gitignore` | FACTOR-04 | ✅ **DONE 2026-05-22** (29/29 unit dynamic + 11/11 unit original PASS; Task 3 smoke runtime SKIP pre-resolved) |
 
 **Coverage:** 4/4 REQ (FACTOR-01..04) covered ≥ 1 plan/REQ.
 
@@ -107,16 +107,16 @@ progress:
 | 02-02 | 2 | Docker-compose 4 service FastAPI dedicated với YAML anchor + cocoindex LMDB volume per-hub + port 8180-8183 + MCP re-point central | 1 (`05a39a4` feat) | `docker compose config --quiet` exit 0; 8 service render đúng |
 | 02-03 | 2 | Integration test endpoint matrix — 12 hub-scoped mount + 8 central-only strip + envelope shape verify | 2 (`81543e0` test fixture + `c5e6036` test matrix + Rule 2 Starlette handler) | integration 10/10 PASS (test_factor_hub_scoped.py 6.49s); 175/175 unit regression PASS |
 | 02-04 | 3 | Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md note update + smoke compose 2 service (central + yte) checkpoint | 4 (3 task commit + 1 SUMMARY) | Task 1 smoke compose SKIP (rationale rõ); Task 2-4 docs update + grep acceptance criteria PASS |
+| 02-05 | 4 | Dynamic hub registration FACTOR-04 — Settings str + regex + reserved blacklist + scripts/hub-add.sh + docker-compose.override.yml.template + Makefile target + README quick start (user direction B 2026-05-22) | 3 (Task 1 + 2 + 4 — Task 3 smoke runtime SKIP pre-resolved) | unit 29/29 PASS test_config_hub_name_dynamic.py (4 regression + 3 dynamic + 2 boundary + 10 reject pattern + 6 reject reserved + 1 central-not-reserved + 1 size-lock + 2 DSN match dynamic); test_config_hub_name.py 11/11 PASS (test 5 đổi sang test_invalid_hub_name_pattern_raises); ruff + mypy --strict PASS; regression test_main_factory.py 9/9 PASS; bash -n hub-add.sh + hub-init.sh exit 0; docker compose config --quiet exit 0 base parse OK |
 
 **Phase 2 deliverable summary:**
 - 4 service compose dedicated (central + yte + duoc + hcns) deploy được song song mỗi container kết nối DB riêng (`docker compose config --quiet` exit 0).
 - Hub con (yte/duoc/hcns) strip 9 router central-only → 404 envelope shape (FACTOR-02 — integration test 10/10 PASS).
 - Hub con mount 12 endpoint hub-scoped specific (FACTOR-03 contract — ROADMAP label gộp thành "10 collective endpoint group"; xem note REQUIREMENTS.md FACTOR-03).
 - Phase 1 DSN validator + E-V3-3 isolation carry forward — KHÔNG regress (30/30 unit Phase 1 PASS; 175/175 unit toàn bộ PASS).
+- **FACTOR-04 dynamic hub registration (added 2026-05-22 user direction B):** operator add hub mới (vd `phap_che`, `marketing`) bằng `make hub-add HUB=<name> [PORT=<port>]` mà KHÔNG sửa code/compose base. Settings `hub_name: Literal[4]` → `str` + regex `^[a-z][a-z0-9_]{0,15}$` + reserved blacklist 6 name (`postgres`/`cocoindex`/`template0`/`template1`/`public`/`medinet`) + `scripts/hub-add.sh` wrap `hub-init.sh` (DB layer Phase 1) + `docker-compose.override.yml.template` sed-substitute. Hub registry source-of-truth defer Phase 6 SETTINGS-04 (`hub_registry` table central CRUD).
 
 **v3.0-a progress: Phase 1+2 DONE (2/3 phase v3.0-a). Phase 3 Auth SSO sẽ trigger v3.0-a EXIT GATE giữa Phase 3-4 (demo 1 hub con yte + central + JWT SSO + golden path PASS → user accept tiếp tục v3.0-b).**
-
-**Plan 02-05 Wave 4 (FACTOR-04 dynamic hub registration) pending:** Sẽ ship riêng sau Phase 2 closeout — extend Settings str + regex + reserved blacklist + `make hub-add` + override.yml.template. KHÔNG block Phase 3 trigger (FACTOR-04 chỉ enhance ops workflow, KHÔNG đổi factory pattern).
 
 ---
 
@@ -150,9 +150,8 @@ progress:
 ## Next Action
 
 1. **(Recommended) `/gsd-discuss-phase 3`** — Auth SSO + hub_ids trong JWT (GA-V3-A chốt). Gray areas: JWKS endpoint vs shared keypair vs cookie domain `.medinet.vn`; JWKS cache fallback fail-loud vs static keypair embedded; refresh token rotation contract.
-2. (Optional) **Plan 02-05** (Wave 4 extension FACTOR-04 dynamic hub registration — pending) — Settings str + regex + reserved blacklist + `make hub-add` + override.yml.template. Có thể ship trước Phase 3 hoặc parallel.
-3. (Optional) `/gsd-code-review 2` — advisory code review trên 7 commits Phase 2 (workflow.code_review gate).
-4. (Optional) `/gsd-verify-work 2` — manual UAT 3 SC nếu user muốn extra verify ngoài automated test (compose-level smoke checkpoint Plan 02-04 đã SKIP, sẽ verify ở Phase 7 MIGRATE-05 runtime smoke E2E).
+2. (Optional) `/gsd-code-review 2` — advisory code review trên 9+ commits Phase 2 (workflow.code_review gate), nay phủ cả Plan 02-05 FACTOR-04 dynamic hub registration.
+3. (Optional) `/gsd-verify-work 2` — manual UAT 3 SC nếu user muốn extra verify ngoài automated test (compose-level smoke checkpoint Plan 02-04 + Plan 02-05 Task 3 đều SKIP runtime, sẽ verify ở Phase 7 MIGRATE-05 runtime smoke E2E).
 
 ## Accumulated Context (carry forward từ v2.0)
 

@@ -129,6 +129,53 @@ Quality gate: top-3 recall **≥ 75%** PASS · `60-75%` FAIL borderline → iter
 
 ---
 
+## Add a new hub (dynamic registration — FACTOR-04 Plan 02-05)
+
+Thêm hub mới (vd `phap_che`, `marketing`) hoàn chỉnh bằng 1 lệnh — KHÔNG sửa code Python / `docker-compose.yml` base:
+
+```bash
+# 1. Đảm bảo postgres + redis up
+docker compose up -d postgres redis
+
+# 2. Tạo hub mới (DB + ext vector + alembic + compose service block)
+make hub-add HUB=phap_che              # auto-detect port (8184 trở lên)
+# HOẶC explicit port:
+make hub-add HUB=phap_che PORT=8200
+
+# 3. Build + up service mới
+docker compose up -d python-api-phap_che
+
+# 4. Verify health
+curl http://localhost:<port>/api/health
+# Expected: {"success":true,"data":{"status":"ok"},...}
+```
+
+**Validation rules:**
+- Pattern hub name: `^[a-z][a-z0-9_]{0,15}$` (lowercase a-z bắt đầu, max 16 char, a-z0-9_ rest — KHÔNG hyphen/uppercase).
+- Reserved name reject: `postgres`, `cocoindex`, `template0`, `template1`, `public`, `medinet` (Postgres system collision).
+- `central` reject (aggregator special-case đã có sẵn).
+
+**Phía sau hậu trường:**
+- `make hub-add` → `scripts/hub-add.sh` validate format + reserved + duplicate.
+- Call `scripts/hub-init.sh` (Phase 1 ship) — `CREATE DATABASE medinet_hub_<name>` + `CREATE EXTENSION vector` + HNSW verify + `alembic upgrade head`.
+- Sed substitute `docker-compose.override.yml.template` → append `docker-compose.override.yml` (gitignored — operator-local).
+- Docker compose tự merge `docker-compose.yml` base + override khi `up`.
+
+**Cleanup hub mới:**
+```bash
+docker compose stop python-api-<name>
+docker compose rm -f python-api-<name>
+psql -h localhost -U medinet -d postgres -c "DROP DATABASE IF EXISTS medinet_hub_<name>"
+# Manual edit docker-compose.override.yml — xoá block python-api-<name> + volume medinet_cocoindex_<name>
+docker volume rm medinet_cocoindex_<name>
+```
+
+Reverse script (`hub-remove.sh`) defer v3.0-b (Phase 7 MIGRATE-03 sẽ ship tooling truncate central skeleton).
+
+**Hub registry source-of-truth (long-term):** Phase 6 SETTINGS-04 sẽ ship `hub_registry` table ở `medinet_central` — central admin CRUD; hub con đọc TTL cache. Hiện Plan 02-05 chỉ validate format Settings + sinh compose block — operator phải manual track danh sách hub đã add.
+
+---
+
 ## Milestone status
 
 - ✅ **M2 v2.0 — Full RAG Rewrite** đang đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS).
