@@ -18,11 +18,29 @@
 - [x] **TOPO-03** ✅ Phase 1: Cocoindex flow naming per-hub — `medinet_<hub>_ingest` (`medinet_yte_ingest`, `medinet_duoc_ingest`, ...). APP_NAMESPACE per-hub `medinet_<hub>_prod` đảm bảo cocoindex internal tables không đụng nhau giữa các DB. `db_schema_name="cocoindex"` giữ nguyên (R5 carry forward).
 - [x] **TOPO-04** ✅ Phase 1: Per-hub Postgres connection pool + isolation env — `HUB_NAME=yte` → kết nối `medinet_hub_yte` (KHÔNG fallback central). Helper `get_engine(hub_name)` resolve URL từ env + connection pool size config-driven. Test integration: `HUB_NAME=yte` deploy KHÔNG truy cập được `medinet_hub_duoc` qua DB connection (R-V3-3 + E-V3-3 enforce).
 
-### FACTOR — Hub-con Codebase Factor (3 REQ)
+### FACTOR — Hub-con Codebase Factor (4 REQ)
 
 - [ ] **FACTOR-01**: 1 codebase deploy được nhiều lần với env `HUB_NAME=<name>` (`central` vs `yte` vs `duoc` vs `hcns`). App factory `create_app(hub_name)` đọc env, mount router phù hợp, khởi tạo cocoindex flow đúng tên (TOPO-03). Docker compose mở rộng từ 3 service (M2) sang 1 Postgres + 1 Redis + N+1 process FastAPI.
 - [x] **FACTOR-02**: Strip system settings router khi `HUB_NAME != "central"` — hub con KHÔNG mount `/api/rag-config` (GET/PUT), `/api/api-keys` (GET/POST/DELETE), `/api/hubs` (POST/PUT/PATCH), `/api/users` (admin CRUD), `/api/audit-logs` (GET). Test integration: `GET /api/rag-config` ở hub con trả 404 (KHÔNG 403 — endpoint không exist). Central giữ nguyên 100% endpoint M2. — **DONE 2026-05-22** (Plan 02-01 unit-level 9/9 + Plan 02-03 integration-level 10/10 PASS; Starlette HTTPException handler wrap 404 envelope D6 shape — Rule 2 auto-add ở Plan 02-03)
 - [x] **FACTOR-03**: Hub con expose endpoint hạn chế (10 endpoint hub-scoped collective / 12 specific) — `POST/GET /api/auth/*` (4: login/refresh/logout/me), `GET/PATCH /api/profile` (2), `POST/GET/DELETE /api/documents/*` (3), `POST /api/search`, `POST /api/ask`, `GET /api/usage`. KHÔNG expose cross-hub search (đó là endpoint central). Smoke test mỗi endpoint trả 200 hoặc lỗi đúng shape envelope. — **DONE 2026-05-22** (Plan 02-03 integration test verify 3 hub × 12 endpoint = 36 assertion non-404 PASS)
+
+  > **NOTE clarify (Phase 2 closeout 2026-05-22 — WRN-05 fix):** Số "10 endpoint hub-scoped" trong label ROADMAP/REQUIREMENTS gốc là cách đếm **collective endpoint group** (gộp `/api/auth/*` 4 verb thành 1 group, `/api/documents` GET/POST/DELETE thành 1 group, `/api/profile` GET/PATCH thành 1 group, etc.). Implementation thực tế tính theo HTTP method × path = **12 specific HTTP method endpoints**:
+  >
+  > 1. `POST /api/auth/login`
+  > 2. `POST /api/auth/refresh`
+  > 3. `POST /api/auth/logout`
+  > 4. `GET  /api/auth/me`
+  > 5. `GET  /api/profile`
+  > 6. `PATCH /api/profile`
+  > 7. `POST /api/documents`
+  > 8. `GET  /api/documents`
+  > 9. `DELETE /api/documents/{id}`
+  > 10. `POST /api/search`
+  > 11. `POST /api/ask`
+  > 12. `GET  /api/usage`
+  >
+  > Xem `.planning/phases/02-hub-con-codebase-factor/02-CONTEXT.md` D-V3-Phase2-D matrix để hiểu chi tiết breakdown collective vs specific. Integration test `tests/integration/test_factor_hub_scoped.py` (Plan 02-03) verify đúng 12 specific endpoint × 3 hub con = 36 assertion non-404 PASS. CLAUDE.md section 6 cũng có note traceability tương tự.
+- [ ] **FACTOR-04** (added 2026-05-22 sau Phase 2 closeout discussion — user direction B "generalize 100% dynamic"): **Dynamic hub registration** — operator thêm hub mới (vd `medinet_hub_phap_che`) bằng 1 lệnh `make hub-add HUB=<name> [PORT=<port>]` mà **KHÔNG sửa code Python / docker-compose.yml**. (1) `Settings.hub_name` đổi từ `Literal["central","yte","duoc","hcns"]` → `str` với `@field_validator` regex `^[a-z][a-z0-9_]{1,15}$` + reserved-name blacklist (`postgres`, `cocoindex`, `template0`, `template1`, `public`, `medinet` — collision với Postgres system DB / role medinet). "central" + 4 hub gốc accept regression KHÔNG break. (2) `scripts/hub-add.sh` wrap quanh `hub-init.sh` (DB-level Phase 1 Plan 01-05 carry forward) + auto-append service block từ template vào `docker-compose.override.yml` (docker compose auto-merge với base) + auto-detect port `8180 + N` nếu user không truyền explicit. (3) `docker-compose.override.yml.template` snippet với placeholder `{{HUB}}` + `{{PORT}}` + inherit từ `x-api-template` anchor base. (4) Phase 1 `_enforce_hub_dsn_match` validator dùng `self.hub_name` dynamic — KHÔNG sửa. (5) Smoke checkpoint: `make hub-add HUB=tmp_test PORT=8189` → `docker compose up -d python-api-tmp_test` → `curl http://localhost:8189/api/health` 200 → cleanup. Test: `tests/unit/test_config_hub_name_dynamic.py` accept 4 hub gốc + 3 hub mới + reject invalid pattern (uppercase/hyphen/starting-digit/too-long/reserved name).
 
 ### SSO — Auth SSO + hub_ids trong JWT (4 REQ — GA-V3-A chốt ở `/gsd-discuss-phase 3`)
 
