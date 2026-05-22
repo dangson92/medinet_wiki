@@ -13,6 +13,11 @@ sync_router — compat stub cho endpoint Go-era /api/sync/* (D6 — frontend Rea
 chưa sửa vẫn gọi; M2 không port feature sync queue).
 system_settings_router — port endpoint Go-era /api/system-settings (D6 —
 Settings.tsx tab Chung/Bảo mật/Thông báo gọi; persist key-value bảng settings).
+
+v3.0 Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D3) — thêm
+`search_cross_hub_router` re-export từ `app.routers.search.cross_hub_router`.
+Universal `search_router` mount mọi process; `search_cross_hub_router` chỉ mount
+ở central (main.py block central-only). Hub con strip → 404 envelope D6.
 """
 from __future__ import annotations
 
@@ -26,6 +31,7 @@ from app.routers.mcp_oauth import internal_router as mcp_oauth_internal_router
 from app.routers.mcp_oauth import router as mcp_oauth_router
 from app.routers.profile import router as profile_router
 from app.routers.rag_config import router as rag_config_router
+from app.routers.search import cross_hub_router as search_cross_hub_router
 from app.routers.search import router as search_router
 from app.routers.sync import router as sync_router
 from app.routers.system_settings import router as system_settings_router
@@ -43,6 +49,7 @@ __all__ = [
     "mcp_oauth_router",
     "profile_router",
     "rag_config_router",
+    "search_cross_hub_router",
     "search_router",
     "sync_router",
     "system_settings_router",

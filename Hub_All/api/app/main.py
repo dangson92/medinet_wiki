@@ -650,6 +650,7 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
             mcp_oauth_internal_router,
             mcp_oauth_router,
             rag_config_router,
+            search_cross_hub_router,
             sync_router,
             system_settings_router,
             users_router,
@@ -664,6 +665,19 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         app.include_router(sync_router)
         app.include_router(mcp_oauth_router)
         app.include_router(mcp_oauth_internal_router)
+
+        # ──────────────────────────────────────────────────────────────────
+        # Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D3) — Cross-hub aggregated
+        # search central-only. Tách khỏi universal `search_router` (vẫn mount
+        # mọi process cho local /api/search + /api/search/similar). Hub con
+        # strip /api/search/cross-hub → 404 envelope D6 (FACTOR-02 extend).
+        #
+        # Public API `SearchService.search_cross_hub()` signature KHÔNG đổi —
+        # backward compat M2 contract (ask_service.py consumer + frontend
+        # api.ts crossHubSearch). Refactor Plan 04-05 chỉ chạm `_search_cross_hub_impl`
+        # private + tách router cross-hub endpoint.
+        # ──────────────────────────────────────────────────────────────────
+        app.include_router(search_cross_hub_router)
 
         # ──────────────────────────────────────────────────────────────────
         # Phase 3 Plan 03-01 (SSO-01, D-V3-Phase3-A) — JWKS endpoint RFC 7517
