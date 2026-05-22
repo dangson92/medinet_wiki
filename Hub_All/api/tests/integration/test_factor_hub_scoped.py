@@ -41,7 +41,11 @@ pytestmark = [pytest.mark.critical, pytest.mark.integration]
 
 
 # ─── Endpoint matrix D-V3-Phase2-D ─────────────────────────────────────────
-# 12 endpoint hub-scoped — MOUNT ở hub con (FACTOR-03)
+# 12 endpoint hub-scoped tổng (Phase 2 FACTOR-03 baseline). Plan 03-04 SSO-02
+# (D-V3-Phase3-G LOCKED 2026-05-22) split thành 2 group:
+#   - 10 endpoint handle LOCAL ở hub con (status != 404, có thể 200/401/422).
+#   - 2 endpoint SSO REDIRECT 307 (POST /api/auth/login + /api/auth/refresh).
+# central giữ NGUYÊN 12 mount + handle local cho tất cả.
 HUB_SCOPED_ENDPOINTS: list[tuple[str, str]] = [
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/refresh"),
@@ -55,6 +59,19 @@ HUB_SCOPED_ENDPOINTS: list[tuple[str, str]] = [
     ("POST", "/api/search"),
     ("POST", "/api/ask"),
     ("GET", "/api/usage"),
+]
+
+# Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G LOCKED) — Hub con auth login/refresh
+# trả 307 Location: central thay vì handle local. Tách split assertion semantic.
+HUB_SCOPED_SSO_REDIRECT_ENDPOINTS: list[tuple[str, str]] = [
+    ("POST", "/api/auth/login"),    # → 307 Location: central
+    ("POST", "/api/auth/refresh"),  # → 307 Location: central
+]
+
+# 10 endpoint còn lại — hub con handle LOCAL (Phase 2 FACTOR-03 carry forward
+# semantic; Plan 03-04 KHÔNG đụng).
+HUB_SCOPED_LOCAL_ENDPOINTS: list[tuple[str, str]] = [
+    ep for ep in HUB_SCOPED_ENDPOINTS if ep not in HUB_SCOPED_SSO_REDIRECT_ENDPOINTS
 ]
 
 # 8 endpoint central-only — STRIP ở hub con (FACTOR-02)
@@ -165,14 +182,59 @@ def test_hub_strips_central_only(hub_app_factory: Any, hub_name: str) -> None:
 
 @pytest.mark.parametrize("hub_name", ["yte", "duoc", "hcns"])
 def test_hub_mounts_hub_scoped(hub_app_factory: Any, hub_name: str) -> None:
-    """Hub con (yte/duoc/hcns) MOUNT 12 endpoint hub-scoped — status != 404 (FACTOR-03)."""
+    """Hub con (yte/duoc/hcns) MOUNT 12 endpoint hub-scoped — 10 LOCAL + 2 SSO REDIRECT.
+
+    Phase 2 Plan 02-03 ship 12 endpoint không 404. Plan 03-04 SSO-02
+    (D-V3-Phase3-G) refine assertion:
+    - 10 endpoint LOCAL handle: assert != 404 (200/401/422/etc.) — semantic cũ.
+    - 2 endpoint SSO REDIRECT (login + refresh): assert == 307 Location: central
+      (Plan 03-04 Task 2 ship router refactor).
+
+    TestClient `follow_redirects=False` critical — default follow tự động sẽ
+    mất 307 status code, mất Location header (KHÔNG verify được redirect).
+    """
     app = hub_app_factory(hub_name)
-    with TestClient(app) as client:
-        for method, path in HUB_SCOPED_ENDPOINTS:
+    with TestClient(app, follow_redirects=False) as client:
+        # Group 1 — 10 endpoint local handle (Phase 2 FACTOR-03 carry forward)
+        for method, path in HUB_SCOPED_LOCAL_ENDPOINTS:
             resp = _dispatch(client, method, path)
             assert resp.status_code != 404, (
-                f"Hub {hub_name} PHẢI mount {method} {path} (FACTOR-03) — "
+                f"Hub {hub_name} PHẢI mount {method} {path} (FACTOR-03 LOCAL) — "
                 f"actual: {resp.status_code} body: {resp.text[:200]}"
+            )
+
+        # Group 2 — 2 endpoint SSO REDIRECT (Plan 03-04 SSO-02 D-V3-Phase3-G)
+        # IMPORTANT: gửi body Pydantic-valid cho login/refresh — KHÔNG `json={}`
+        # vì Pydantic validation reject 422 TRƯỚC khi handler chạy → KHÔNG có
+        # branch redirect 307. Plan 03-04 router branch hub con check ở
+        # handler-level (sau body parse) nên test phải gửi body hợp lệ.
+        sso_valid_bodies = {
+            "/api/auth/login": {"email": "u@m.vn", "password": "secret"},
+            "/api/auth/refresh": {"refresh_token": "dummy.refresh.token"},
+        }
+        for method, path in HUB_SCOPED_SSO_REDIRECT_ENDPOINTS:
+            body = sso_valid_bodies.get(path, {})
+            resp = client.post(path, json=body) if method == "POST" else _dispatch(
+                client, method, path
+            )
+            assert resp.status_code == 307, (
+                f"Hub {hub_name} {method} {path} — Plan 03-04 SSO-02 phải 307 "
+                f"redirect tới central, got {resp.status_code} body: {resp.text[:200]}"
+            )
+            location = resp.headers.get("location", "")
+            assert location, (
+                f"Hub {hub_name} {method} {path} 307 PHẢI có Location header — "
+                f"headers: {dict(resp.headers)}"
+            )
+            # Verify Location trỏ central (CENTRAL_URL set qua hub_app_factory
+            # fixture conftest.py). Endpoint path match login hoặc refresh.
+            assert "/api/auth/login" in location or "/api/auth/refresh" in location, (
+                f"Hub {hub_name} {method} {path} 307 Location KHÔNG trỏ central "
+                f"auth endpoint: {location!r}"
+            )
+            assert "python-api-central" in location, (
+                f"Hub {hub_name} {method} {path} 307 Location KHÔNG trỏ central "
+                f"service: {location!r}"
             )
 
 
