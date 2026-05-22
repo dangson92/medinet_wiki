@@ -323,7 +323,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
 
 
 def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
-    """Factory tạo FastAPI app — gọi 1 lần ở module-level và trong unit test."""
+    """Factory tạo FastAPI app — gọi 1 lần ở module-level và trong unit test.
+
+    v3.0 Phase 2 FACTOR-01..03 (D-V3-Phase2-A/B):
+    Factory đọc settings.hub_name (Phase 1 TOPO-04 Literal central|yte|duoc|hcns)
+    → conditional mount router. KHÔNG đổi signature no-arg để giữ uvicorn
+    `app.main:app` entrypoint M2 compat. Test override qua monkeypatch.setenv
+    + get_settings.cache_clear() trước khi gọi create_app().
+    """
     settings = get_settings()
 
     # Phase 8.2 (đảo D-04): MCP server KHÔNG còn mount in-process. MCP là process
@@ -365,74 +372,75 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
     app.add_middleware(PrometheusMiddleware)
     app.add_middleware(ErrorHandlerMiddleware)  # LAST add = OUTERMOST
 
-    # Mount auth router (Phase 3 AUTH-01..03 — login/refresh/logout/me).
+    # ──────────────────────────────────────────────────────────────────────
+    # v3.0 Phase 2 Plan 02-01 — Conditional router mount theo settings.hub_name
+    # (FACTOR-01 1-codebase + FACTOR-02 strip central-only ở hub con).
+    # Decision traceability: D-V3-Phase2-A (no-arg factory) + D-V3-Phase2-B
+    # (inline conditional) + D-V3-Phase2-E (404 shape, KHÔNG 403) +
+    # D-V3-Phase2-G (lifespan universal).
+    # ──────────────────────────────────────────────────────────────────────
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Tier 1 — Universal routers (mount ở MỌI process: central + hub con)
+    # FACTOR-03 hub-scoped: auth/documents/profile/search/ask/usage + ai_chat
+    # ──────────────────────────────────────────────────────────────────────
+    # Note WRN-02 (Plan 02-01): ask_router + search_router universal mount —
+    # cross-hub alias /api/ask/cross-hub + /api/search/answer hiện expose
+    # ở hub con runtime (sẽ trả 500/local-fallback do DB hub con không có
+    # data hub khác). KHÔNG có lỗ hổng leak data (DB-level isolation E-V3-3
+    # Phase 1 enforce). Strip cross-hub variant defer Phase 4 SYNC-03.
     from app.auth import auth_router
-
-    app.include_router(auth_router)
-
-    # Mount documents router (Plan 04-04 INGEST-04..05).
-    from app.routers import documents_router
-
-    app.include_router(documents_router)
-
-    # Mount Phase 5 router (HUB-01..03, USER-01..03, AUX-01..02) — Plan 05-06 wiring.
     from app.routers import (
-        api_keys_router,
-        audit_logs_router,
-        hubs_router,
+        ai_chat_router,
+        ask_router,
+        documents_router,
         profile_router,
-        rag_config_router,
-        users_router,
+        search_router,
+        usage_router,
     )
 
-    app.include_router(hubs_router)
-    app.include_router(users_router)
+    app.include_router(auth_router)
+    app.include_router(documents_router)
     app.include_router(profile_router)
-    app.include_router(api_keys_router)
-    app.include_router(audit_logs_router)
-    # rag-config router — port endpoint Go /api/rag-config (ASK-04, build sớm
-    # ngoài Phase 7 theo user request — frontend Settings.tsx đang gọi endpoint này).
-    app.include_router(rag_config_router)
-
-    # Mount search router (Phase 6 SEARCH-01..03 — 3 endpoint POST).
-    from app.routers import search_router
-
     app.include_router(search_router)
-
-    # Mount usage router (Phase 7 ASK-05 — 3 endpoint GET token usage) +
-    # ask router (Phase 7 ASK-01/02/03 — POST /api/ask + /cross-hub +
-    # alias /api/search/answer).
-    from app.routers import ask_router, usage_router
-
-    app.include_router(usage_router)
     app.include_router(ask_router)
-
-    # Mount sync router — compat stub cho endpoint Go-era /api/sync/* (D6 —
-    # frontend React chưa sửa vẫn gọi; M2 không port feature sync queue).
-    from app.routers import sync_router
-
-    app.include_router(sync_router)
-
-    # Mount system-settings router — port endpoint Go-era /api/system-settings
-    # (D6 — Settings.tsx tab Chung/Bảo mật/Thông báo gọi GET/PUT endpoint này).
-    from app.routers import system_settings_router
-
-    app.include_router(system_settings_router)
-
-    # Mount MCP OAuth client routers (Phase 8.3 add-on — per-user pre-registered
-    # OAuth client cho Claude web "Add custom connector" Advanced).
-    # User-facing: /api/mcp/my-oauth-client[+/rotate] — Profile section.
-    # Internal:    /api/internal/mcp/clients/{id} — MCP service gọi (shared secret).
-    from app.routers import mcp_oauth_internal_router, mcp_oauth_router
-
-    app.include_router(mcp_oauth_router)
-    app.include_router(mcp_oauth_internal_router)
-
-    # Mount ai-chat router (Phase 8 COMPAT-01 — POST /api/ai/chat proxy LLM cho
-    # GeminiAssistant; BLOCKER 08-CONTRACT-DIFF — frontend Dashboard golden path).
-    from app.routers import ai_chat_router
-
+    app.include_router(usage_router)
     app.include_router(ai_chat_router)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Tier 2 — Central-only routers (FACTOR-02 strip ở hub con)
+    # 9 router admin/system mount CHỈ khi process = central.
+    # Hub con (yte/duoc/hcns) nhận request central-only → 404 envelope
+    # (ErrorHandlerMiddleware M2 wrap built-in 404 — D-V3-Phase2-E).
+    # ──────────────────────────────────────────────────────────────────────
+    if settings.hub_name == "central":
+        from app.routers import (
+            api_keys_router,
+            audit_logs_router,
+            hubs_router,
+            mcp_oauth_internal_router,
+            mcp_oauth_router,
+            rag_config_router,
+            sync_router,
+            system_settings_router,
+            users_router,
+        )
+
+        app.include_router(hubs_router)
+        app.include_router(users_router)
+        app.include_router(api_keys_router)
+        app.include_router(audit_logs_router)
+        app.include_router(rag_config_router)
+        app.include_router(system_settings_router)
+        app.include_router(sync_router)
+        app.include_router(mcp_oauth_router)
+        app.include_router(mcp_oauth_internal_router)
+    else:
+        logger.info(
+            "central_only_routers_skipped: hub_name=%s — 9 routers stripped "
+            "(FACTOR-02 enforce)",
+            settings.hub_name,
+        )
 
     # Rate limiter (Phase 5 AUX-03 — slowapi). Plan 05-02 tạo module; wiring tại đây.
     # Endpoint Phase 5 decorate @limiter.limit = GET /api/audit-logs (Plan 05-05 W4).
