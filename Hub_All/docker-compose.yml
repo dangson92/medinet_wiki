@@ -274,6 +274,12 @@ services:
     restart: unless-stopped
     environment:
       MCP_PUBLIC_DOMAIN: ${MCP_PUBLIC_DOMAIN:-localhost}
+      # NEW Phase 5 — Wiki reverse proxy env (D-V3-Phase5-A1/A4 LOCKED)
+      # WIKI_PUBLIC_DOMAIN: dev → localhost (self-signed); prod → wiki.medinet.vn (ACME)
+      WIKI_PUBLIC_DOMAIN: ${WIKI_PUBLIC_DOMAIN:-localhost}
+      # HUBS_ALLOWLIST_REGEX: pipe-separated hub names for Caddy path_regexp
+      # Auto-derived from HUBS_ALLOWLIST=yte,duoc,hcns (operator runs `make hub-add` to update both)
+      HUBS_ALLOWLIST_REGEX: ${HUBS_ALLOWLIST_REGEX:-yte|duoc|hcns}
     ports:
       - "80:80"
       - "443:443"
@@ -281,8 +287,13 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - medinet_caddy_data:/data
       - medinet_caddy_config:/config
+      # NEW Phase 5 — Vite dist mount cho Caddy file_server SPA serve
+      # Host build `cd frontend && npm run build` → ./frontend/dist/ → container /srv/wiki/dist read-only
+      - ./frontend/dist:/srv/wiki/dist:ro
     depends_on:
       - mcp_service
+      # NEW Phase 5 — wiki block reverse_proxy python-api-central:8080
+      - python-api-central
     networks: [medinet_net]
 
 volumes:
