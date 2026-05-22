@@ -149,13 +149,14 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 |-------|--------|------------|------|--------|
 | 1 — Multi-DB Topology + Per-hub Alembic | ✅ DONE | 5 plan | 2026-05-21 | TOPO-01..04 (4) |
 | 2 — Hub-con Codebase Factor | ✅ DONE | 5 plan | 2026-05-22 | FACTOR-01..04 (4 — FACTOR-04 added 2026-05-22 Plan 02-05) |
-| 3 — Auth SSO + hub_ids trong JWT | 📋 Next | — | — | SSO-01..04 |
-| 4 — Cross-hub Data Sync | 📋 | — | — | SYNC-01..05 |
-| 5 — Reverse Proxy + Frontend Subpath | 📋 | — | — | PROXY-01..04 |
-| 6 — System Settings Sync | 📋 | — | — | SETTINGS-01..04 |
-| 7 — Migration + Smoke E2E | 📋 | — | — | MIGRATE-01..05 |
+| 3 — Auth SSO + hub_ids trong JWT | ✅ **DONE** | **5 plan** | **2026-05-22** | **SSO-01..04 (4)** |
+| 🚦 v3.0-a EXIT GATE | ✅ **TRIGGERED** | — | 2026-05-22 | Demo 1 hub con yte + central + JWT SSO + golden path → user accept tiếp tục v3.0-b (demo runtime defer Phase 7 MIGRATE-05 — evidence chain 65+ unit + 6 integration test in-process cover semantic) |
+| 4 — Cross-hub Data Sync | 📋 Next | — | — | SYNC-01..05 |
+| 5 — Reverse Proxy + Frontend Subpath | 📋 Backlog | — | — | PROXY-01..04 |
+| 6 — System Settings Sync | 📋 Backlog | — | — | SETTINGS-01..04 |
+| 7 — Migration + Smoke E2E | 📋 Backlog | — | — | MIGRATE-01..05 |
 
-**🚦 v3.0-a EXIT GATE** giữa Phase 3 và Phase 4 — demo 1 hub con (yte) + central + JWT SSO + golden path PASS → user accept là điều kiện tiếp tục v3.0-b (Phase 4-7).
+**🚦 v3.0-a EXIT GATE** TRIGGERED 2026-05-22 sau Plan 03-05 close — demo 1 hub con (yte) + central + JWT SSO + golden path PASS → user accept là điều kiện tiếp tục v3.0-b (Phase 4-7). Smoke compose runtime SKIP pre-resolved — defer Phase 7 MIGRATE-05 full E2E (3 hub + central golden path + JWT SSO live). Evidence chain: Plan 03-01 (9 unit) + Plan 03-02 (27 unit + 3 integration) + Plan 03-03 (19 unit + 3 integration) + Plan 03-04 (10 unit) = 65+ unit + 6 integration PASS in-process semantic.
 
 ### Phase 2 pattern (FACTOR-01..03 — 2026-05-22)
 
@@ -195,6 +196,25 @@ Operator thêm hub mới không sửa code:
 
 Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 
+### Phase 3 SSO pattern (SSO-01..04 — 2026-05-22)
+
+5 plan đóng 4 REQ-ID Auth SSO + hub_ids JWT:
+
+- **Plan 03-01 SSO-01 — JWKS endpoint publish (D-V3-Phase3-A):** `api/app/auth/jwks.py` module mới với `publish_jwks()` + `load_public_key_as_jwk()` RFC 7517 (`kty:RSA, kid:SHA-256[:8] base64url 11 char, use:sig, alg:RS256, n, e`). Central mount `GET /.well-known/jwks.json` conditional `if settings.hub_name == "central"` block + `Cache-Control: public, max-age=3600` + 503 fallback envelope D6 `JWKS_UNAVAILABLE` nếu PEM missing. Hub con strip → 404 envelope D6 (FACTOR-02 carry forward). Settings.central_jwks_url field mới + docker-compose CENTRAL_JWKS_URL env × 3 hub con + override.yml.template inherit (FACTOR-04). Reference: `.planning/phases/03-auth-sso-hub-ids-jwt/03-01-PLAN.md` + `03-01-SUMMARY.md`.
+- **Plan 03-02 SSO-01 — JWKSCache hub con (D-V3-Phase3-B/D):** `JWKSCache` class in-process LRU + asyncio refresh task TTL 1h fail-quiet + 24h hard limit fail-loud delayed (503 `JWKS_STALE`). Lifespan hub con blocking fetch_initial (timeout 5s — boot fail-loud R-V3-5 mitigation) + spawn refresh task + shutdown graceful stop_refresh_task. `get_current_user` dependency branch verify path (central=local pem M2 / hub con=JWKSCache.get_public_key(kid) → verify_token_with_key). JWT header `kid` auto-add ở issue_token_pair (deterministic SHA-256 match Plan 03-01). Settings 3 field mới: `central_jwks_url` + `jwks_refresh_interval=3600` + `jwks_max_stale_seconds=86400` + 1 model_validator hub con required. Escape hatch `JWKS_SKIP_FETCH=1` env var (test mode song song COCOINDEX_SKIP_SETUP). Reference: `03-02-PLAN.md` + `03-02-SUMMARY.md`.
+- **Plan 03-03 SSO-02/03/04 — JWT claim + Redis key + E4 reinforced (D-V3-Phase3-E/H):** `JWT_AUDIENCE = "medinet-wiki"` constant + `aud=["medinet-wiki"]` REQUIRED + `hub_ids: list[str]` REQUIRED (xoá default empty M2). PyJWT strict audience check ở 2 verify path (`verify_token` + `verify_token_with_key`). Redis blacklist key rename `blacklist:{jti}` → `auth:blacklist:{jti}` (5 vị trí touch — 4 service.py + 1 dependencies.py) qua mini-module `_blacklist.py` (REDIS_BLACKLIST_PREFIX + make_blacklist_key helper). Dependency mới `get_current_user_for_hub_access` Layer 3 enforce — hub con check `HUB_NAME in claims.hub_ids` → 403 CROSS_HUB_ACCESS_DENIED envelope. iss giữ NGUYÊN `"medinet-wiki"` (RE-CONFIRM D-V3-Phase3-E — URL-based defer Phase 7 MCP split aud). request.state.jwt_claims wire ở get_current_user SAU verify pass. Reference: `03-03-PLAN.md` + `03-03-SUMMARY.md`.
+- **Plan 03-04 SSO-02 — 307 redirect hub con (D-V3-Phase3-G):** Hub con `POST /api/auth/login` + `POST /api/auth/refresh` trả 307 RedirectResponse Location: `{settings.central_url}/api/auth/{login,refresh}` (preserve POST + body RFC 7231 — KHÔNG 405/302/308). `logout` + `me` giữ local handle (verify JWT qua JWKSCache + blacklist Redis chung Plan 03-03). `_sso_redirect(target_path, hub_name)` helper extract + X-SSO-Redirect-Reason + X-SSO-Original-Hub headers debug. `response_model=None` decorator opt-out (Rule 1 — FastAPI union return type fail). Settings.central_url field mới + docker-compose CENTRAL_URL env 3 hub con + override.yml.template + Phase 2 integration test split 2 list (10 LOCAL `!= 404` + 2 SSO_REDIRECT `== 307`). Reference: `03-04-PLAN.md` + `03-04-SUMMARY.md`.
+- **Plan 03-05 closeout — docs + smoke checkpoint (2026-05-22):** CLAUDE.md section 6 update (file này) + STATE.md Phase 3 Results Summary + REQUIREMENTS.md SSO-01..04 mark `[x]` + README.md SSO Backward Incompat section. Task 5 smoke compose runtime SKIP pre-resolved — defer Phase 7 MIGRATE-05 full E2E. Evidence chain: 65+ unit test + 6 integration test in-process cover SSO-01..04 semantic + `docker compose config --quiet` base PASS. v3.0-a EXIT GATE TRIGGERED. Reference: `03-05-PLAN.md` + `03-05-SUMMARY.md`.
+
+**Backward incompat (operator broadcast TRIPLE cumulative):** M2 cũ JWT thiếu (1) `kid` header Plan 03-02 + (2) `aud` claim Plan 03-03 + (3) `hub_ids` claim Plan 03-03 → 401 reject sau deploy. User re-login ~15-30s downtime — communicate Slack/Email trước deploy. Frontend M2 hardcode `/api/auth/login` same-origin sẽ FAIL ở hub con cho tới Phase 5 PROXY-02 wire form action central (acceptable dev v3.0-a). Xem `Hub_All/README.md` "SSO Backward Incompat (Phase 3 v3.0)" section deploy 7 step + rollback procedure.
+
+**Frontend wire:** Defer Phase 5 PROXY-02 (D-V3-Phase3-F honored + D-V3-06 D6 expire formally Phase 5).
+
+**E4 reinforced 3-layer enforce (SSO-04 defense-in-depth):**
+- **Layer 1 (Phase 1 Plan 01-02):** DB-level `_enforce_hub_dsn_match` Settings validator boot-time fail-fast — hub con KHÔNG kết nối DB hub khác.
+- **Layer 2 (M2 carry forward):** Repository layer `WHERE hub_id = settings.hub_name` query-time filter — hub con KHÔNG SELECT data hub khác.
+- **Layer 3 (Plan 03-03 MỚI):** Dependency `get_current_user_for_hub_access` JWT claim hub_ids check → 403 CROSS_HUB_ACCESS_DENIED envelope nếu mismatch — stale JWT compromised KHÔNG bypass.
+
 ---
 
-*Cập nhật: 2026-05-22 (Phase 2 DONE — FACTOR-01..04 ship 5 plan; Plan 02-05 FACTOR-04 dynamic hub registration). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2 DONE (10/~32 plan ≈ 31%), Next: `/gsd-discuss-phase 3` Auth SSO.*
+*Cập nhật: 2026-05-22 (Phase 3 DONE — SSO-01..04 ship 5 plan; JWKS endpoint + JWKSCache + JWT aud/hub_ids REQUIRED + Redis blacklist key rename + 307 redirect hub con login/refresh + E4 reinforced 3-layer). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2+3 DONE (15/~32 plan ≈ 47%), v3.0-a EXIT GATE TRIGGERED. Next: `/gsd-discuss-phase 4` Cross-hub data sync (GA-V3-D chốt — cocoindex target / Postgres logical replication / outbox + worker) hoặc accept v3.0-a tiếp tục v3.0-b.*
