@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: Phase 2 PLANNED 2026-05-22 — 4 plans (02-01..02-04) trong 3 wave; VERIFICATION PASSED iteration 2/3 sau revision 2 BLK + 5 WRN. Auto-chain --chain active → execute-phase 2 auto-advance. Phase 1 DONE 2026-05-21 ✅ (5 plans / 22 commits / 166 unit tests + 5 integration test PASS).
-last_updated: "2026-05-22T01:00:00.000Z"
+status: Phase 2 EXECUTING 2026-05-22 — Plan 02-01 DONE (Wave 1 BLOCKING ✅); 3 plan remaining (02-02 + 02-03 parallel Wave 2, 02-04 Wave 3). Auto-chain active. Phase 1 DONE 2026-05-21 ✅ (5 plans / 22 commits / 166 unit tests + 5 integration test PASS).
+last_updated: "2026-05-22T02:00:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
-  percent: 14
+  completed_plans: 6
+  percent: 16
 ---
 
 # State — MEDWIKI (v3.0)
@@ -21,29 +21,43 @@ progress:
 
 ## Current Position
 
-- **Phase:** 2 — Hub-con Codebase Factor 🔄 **PLANNED 2026-05-22 — Ready to execute**
-- **Plans:** 4 plans (02-01..02-04) trong 3 wave ở `.planning/phases/02-hub-con-codebase-factor/`
-- **Status:** Plans VERIFIED iteration 2/3 — 2 BLK + 5 WRN đã fix; auto-chain `--chain` active → tiếp tục `/gsd-execute-phase 2 --auto`.
-- **Last activity:** 2026-05-22 — `/gsd-plan-phase 2 --chain` ran. CONTEXT.md seed defaults chốt 3 gray area (App factory DRY / Inline conditional / 4 service docker compose). 4 plan generated theo break-down hint:
-  - **02-01** (Wave 1, BLOCKING): Refactor `create_app()` — wrap 9 central-only router với `if settings.hub_name == "central":` + cross-hub alias defer note Phase 4 + unit test boot 4 hub mode (FACTOR-01, FACTOR-02).
-  - **02-02** (Wave 2, parallel): Docker compose 4 service `&api-template` anchor + port 8180-8183 + cocoindex LMDB per-hub + mcp_service re-point `python-api-central` (FACTOR-01).
-  - **02-03** (Wave 2, parallel): Integration test endpoint matrix 12 hub-scoped + 8 central-only (sync_router dùng `/api/sync/stats` thật) + envelope shape 404 + autouse cleanup cục bộ (FACTOR-02, FACTOR-03).
+- **Phase:** 2 — Hub-con Codebase Factor 🔄 **EXECUTING 2026-05-22 — Plan 02-01 DONE (Wave 1 BLOCKING ✅)**
+- **Plans:** 4 plans (02-01..02-04) trong 3 wave ở `.planning/phases/02-hub-con-codebase-factor/` — **1/4 complete**
+- **Status:** Plan 02-01 ship 2026-05-22 với 2 commits (`8d164ef` feat + `8f0caf8` test) + SUMMARY. Phase 2 Wave 1 BLOCKING ✅ → Wave 2 (02-02 ⊥ 02-03 parallel) sẵn sàng execute. Auto-chain `--chain` active → tiếp tục `/gsd-execute-phase 2 --auto`.
+- **Last activity:** 2026-05-22 — Plan 02-01 executed sequential mode:
+  - **02-01 DONE ✅** (Wave 1 BLOCKING): `create_app()` factory refactor mount conditional 9 central-only router theo `settings.hub_name`; unit test 9/9 PASS boot 4 hub mode (central/yte/duoc/hcns); Phase 1 DSN validator regression KHÔNG break (30/30 PASS). FACTOR-01 + FACTOR-02 đóng unit-level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-01-SUMMARY.md`.
+  - **02-02** (Wave 2, parallel — NEXT): Docker compose 4 service `&api-template` anchor + port 8180-8183 + cocoindex LMDB per-hub + mcp_service re-point `python-api-central` (FACTOR-01).
+  - **02-03** (Wave 2, parallel — NEXT): Integration test endpoint matrix 12 hub-scoped + 8 central-only (sync_router dùng `/api/sync/stats` thật) + envelope shape 404 + autouse cleanup cục bộ (FACTOR-02, FACTOR-03).
   - **02-04** (Wave 3, closeout): CLAUDE.md + STATE.md + REQUIREMENTS.md update "10 collective / 12 specific" + smoke compose checkpoint:human-action.
 
 ## Phase 2 Planning Summary
 
-| Plan | Wave | Objective | Tasks | Files modified | REQ |
-|------|------|-----------|-------|----------------|-----|
-| 02-01 | 1 | create_app() inline conditional 9 central-only router | 2 (auto) | `api/app/main.py`, `tests/unit/test_main_factory.py` | FACTOR-01, FACTOR-02 |
-| 02-02 | 2 | Docker compose 4 service + YAML anchor + cocoindex LMDB per-hub | 1 (auto) | `docker-compose.yml` | FACTOR-01 |
-| 02-03 | 2 | Integration test 12 hub-scoped + 8 central-only + envelope 404 | 2 (tdd) | `tests/integration/conftest.py`, `tests/integration/test_factor_hub_scoped.py` | FACTOR-02, FACTOR-03 |
-| 02-04 | 3 | Closeout: docs update + smoke compose checkpoint | 4 (1 checkpoint + 3 auto) | `CLAUDE.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md` | FACTOR-01..03 verify |
+| Plan | Wave | Objective | Tasks | Files modified | REQ | Status |
+|------|------|-----------|-------|----------------|-----|--------|
+| 02-01 | 1 | create_app() inline conditional 9 central-only router | 2 (auto) | `api/app/main.py`, `tests/unit/test_main_factory.py` | FACTOR-01, FACTOR-02 | ✅ **DONE 2026-05-22** (9/9 test PASS) |
+| 02-02 | 2 | Docker compose 4 service + YAML anchor + cocoindex LMDB per-hub | 1 (auto) | `docker-compose.yml` | FACTOR-01 | Ready (Wave 2) |
+| 02-03 | 2 | Integration test 12 hub-scoped + 8 central-only + envelope 404 | 2 (tdd) | `tests/integration/conftest.py`, `tests/integration/test_factor_hub_scoped.py` | FACTOR-02, FACTOR-03 | Ready (Wave 2) |
+| 02-04 | 3 | Closeout: docs update + smoke compose checkpoint | 4 (1 checkpoint + 3 auto) | `CLAUDE.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md` | FACTOR-01..03 verify | Blocked on 02-02 + 02-03 |
 
 **Coverage:** 3/3 REQ (FACTOR-01..03) covered ≥ 1 plan/REQ.
 
-**Critical path:** 02-01 (BLOCKING) → 02-02 ⊥ 02-03 (parallel Wave 2) → 02-04 (closeout).
+**Critical path:** 02-01 ✅ (BLOCKING DONE) → 02-02 ⊥ 02-03 (parallel Wave 2) → 02-04 (closeout).
 
 **Auto-chain pause expected:** Plan 02-04 Task 1 là `checkpoint:human-action gate=blocking` cho smoke compose 2 service (cần Docker thật). User resume signal `approved` / `skip smoke` / `failed`.
+
+### Plan 02-01 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~12 minutes |
+| Tasks completed | 2/2 |
+| Files modified | 2 (`api/app/main.py` + new `api/tests/unit/test_main_factory.py`) |
+| Tests added | 9 (1 central full mount + 3 parametrize hub strip + 3 explicit hub strip + 1 log evidence + 1 DSN mismatch regression) |
+| Test pass rate | 9/9 (100%) in 5.39s |
+| Phase 1 regression | 30/30 PASS (config_hub_name + alembic_env_hub_arg + flow_per_hub_naming) |
+| Lint | ruff + mypy --strict PASS |
+| Commits | `8d164ef` feat + `8f0caf8` test |
+| Deviations | None (plan executed exactly as written) |
 
 ---
 
