@@ -534,6 +534,102 @@ async def admin_token_pair(
     return await _login_get_token(auth_client, admin_user)
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# Phase 2 v3.0 FACTOR-01..03 (D-V3-Phase2-A/B/D/H) — hub_app_factory fixture
+# Boot create_app() với HUB_NAME + DSN per-hub override. KHÔNG cần
+# testcontainers Postgres thật — Settings validator chỉ check DSN suffix;
+# lifespan asyncpg.create_pool fail-soft (Phase 1 skeleton pattern); cocoindex
+# bypass qua COCOINDEX_SKIP_SETUP=1.
+#
+# Test consume qua TestClient(app) hoặc httpx.AsyncClient + ASGITransport.
+#
+# CLEANUP NOTE (WRN-03 fix): Plan 02-03 KHÔNG đặt autouse cleanup fixture ở
+# conftest.py. Lý do — autouse module-level conftest sẽ chạy cho MỌI test
+# trong thư mục integration/ (bao gồm Phase 1 hub_isolation + Phase 3 v2.0
+# auth_client fixture chain) → có thể clear lru_cache singleton GIỮA assert
+# của test khác → flaky. Cleanup autouse được khai báo CỤC BỘ trong
+# test_factor_hub_scoped.py (Plan 02-03 Task 2) — chỉ áp dụng test file Phase 2.
+# ═════════════════════════════════════════════════════════════════════════
+
+_PHASE2_FAKE_PG_HOST = "localhost"
+_PHASE2_FAKE_PG_PORT = "5432"
+
+
+def _phase2_build_dsn(hub_name: str, async_driver: bool = True) -> str:
+    """Build DSN giả lập trỏ DB theo hub_name (KHÔNG cần Postgres thật).
+
+    Settings._enforce_hub_dsn_match validator chỉ check segment cuối path
+    endswith /medinet_central hay /medinet_hub_<hub>. Host/port/credential
+    KHÔNG bị validate ở Settings layer — lifespan asyncpg pool sẽ fail-soft
+    nếu connect ko được (Phase 1 skeleton accept).
+
+    Phase 2 FACTOR-01..03 (D-V3-Phase2-A/B/D/H) — helper consume bởi
+    `hub_app_factory` fixture và test verify regression Phase 1 DSN validator.
+    """
+    if hub_name == "central":
+        db = "medinet_central"
+    else:
+        db = f"medinet_hub_{hub_name}"
+    prefix = "postgresql+asyncpg" if async_driver else "postgresql"
+    return f"{prefix}://u:p@{_PHASE2_FAKE_PG_HOST}:{_PHASE2_FAKE_PG_PORT}/{db}"
+
+
+@pytest.fixture
+def hub_app_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
+    """Factory tạo FastAPI app cho từng hub_name (Phase 2 FACTOR-01..03).
+
+    Usage trong test:
+        def test_xxx(hub_app_factory):
+            app = hub_app_factory("yte")
+            with TestClient(app) as client:
+                resp = client.get("/api/rag-config")
+                assert resp.status_code == 404
+
+    Phase 2 FACTOR-01 (D-V3-Phase2-A): create_app() factory no-arg, đọc
+    settings.hub_name → conditional mount router.
+
+    KHÔNG cleanup explicit ở yield — monkeypatch tự undo env sau test;
+    get_settings.cache_clear() trong factory; test_factor_hub_scoped.py
+    khai báo autouse cleanup CỤC BỘ (KHÔNG ở conftest.py — tránh affect
+    Phase 1/M2 fixture chain).
+    """
+    from app.config import get_settings
+
+    def _factory(hub_name: str) -> Any:
+        if hub_name not in ("central", "yte", "duoc", "hcns"):
+            raise ValueError(
+                f"hub_name {hub_name!r} không thuộc Literal Settings.hub_name; "
+                f"valid: central|yte|duoc|hcns"
+            )
+        monkeypatch.setenv("HUB_NAME", hub_name)
+        monkeypatch.setenv(
+            "DATABASE_URL", _phase2_build_dsn(hub_name, async_driver=True)
+        )
+        monkeypatch.setenv(
+            "COCOINDEX_DATABASE_URL",
+            f"postgresql://u:p@{_PHASE2_FAKE_PG_HOST}:{_PHASE2_FAKE_PG_PORT}/medinet_cocoindex",
+        )
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+        # COCOINDEX_SKIP_SETUP=1 — bypass cocoindex Environment singleton
+        # (DEF-05-01 pattern M2; create_app() lifespan skip step 3 setup_cocoindex).
+        monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
+        # APP_ENV=dev — bypass CORS LAN-in-prod validator (Phase 1 carry forward).
+        monkeypatch.setenv("APP_ENV", "dev")
+
+        # Force re-parse env (lru_cache singleton).
+        get_settings.cache_clear()
+
+        # Import sau khi env set — create_app() đọc get_settings() top-level
+        # module-import time = OK vì cache_clear() force refresh.
+        from app.main import create_app
+
+        return create_app()
+
+    return _factory
+
+
 # ========================================================================
 # === Phase 7 Plan 07-05 fixtures (Ask API integration test) =============
 # ========================================================================
