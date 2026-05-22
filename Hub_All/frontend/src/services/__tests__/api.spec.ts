@@ -2,7 +2,7 @@
 // Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-VALIDATION.md task 5-02-01
 //         .planning/phases/05-reverse-proxy-frontend-subpath/05-CONTEXT.md §"Implementation Decisions B1" (D-V3-Phase5-B1 LOCKED)
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Helper — reset module state + re-import api.ts với mock window.location
 async function reimportApi(opts: {
@@ -144,5 +144,93 @@ describe('Phase 5 PROXY-02 — api.crossHubSearch ABSOLUTE path override', () =>
 
     fetchSpy.mockRestore();
     localStorage.removeItem('access_token');
+  });
+});
+
+// Phase 5 D-V3-Phase5-C4 — api.tryRefresh redirect: follow audit (B-02 fix)
+// Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-04-PLAN.md Task 4
+//         .planning/phases/03-auth-sso-hub-ids-jwt/03-04-PLAN.md (SSO-02 307 RedirectResponse)
+//         RFC 7231 §6.4.7 — 307 MUST preserve POST + body
+describe('Phase 5 D-V3-Phase5-C4 — api.tryRefresh redirect: follow audit', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete (window as unknown as { __HUB_CONFIG__?: unknown }).__HUB_CONFIG__;
+    localStorage.setItem('access_token', 'fake-access-token');
+    localStorage.setItem('refresh_token', 'fake-refresh-token');
+  });
+
+  afterEach(() => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+  });
+
+  it('Test 10: tryRefresh() fetch is called with explicit `redirect: "follow"` option', async () => {
+    // Mock to hub con yte → tryRefresh would POST /yte/api/auth/refresh → backend 307 → central
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        pathname: '/yte/dashboard',
+        href: 'http://localhost/yte/dashboard',
+        origin: 'http://localhost',
+      },
+      writable: true,
+    });
+
+    const fetchSpy = vi.spyOn(global, 'fetch');
+
+    // First call from request() returns 401 → triggers tryRefresh
+    fetchSpy.mockResolvedValueOnce({
+      status: 401,
+      json: async () => ({ success: false }),
+    } as Response);
+    // Second call is tryRefresh() to /api/auth/refresh — return 200 with new tokens
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { access_token: 'new-access', refresh_token: 'new-refresh' },
+      }),
+    } as Response);
+    // Third call is retry of original request after refresh — return 200
+    fetchSpy.mockResolvedValueOnce({
+      status: 200,
+      json: async () => ({ success: true }),
+    } as Response);
+
+    vi.resetModules();
+    const { api } = await import('../api');
+
+    // Trigger via any authenticated call — first hits 401, triggers tryRefresh
+    try {
+      await api.me();
+    } catch {
+      // ignore; we only care about fetch call assertion
+    }
+
+    // Assert: at least one fetch call to /api/auth/refresh had redirect: 'follow'
+    const refreshCall = fetchSpy.mock.calls.find((call) =>
+      String(call[0]).includes('/api/auth/refresh')
+    );
+    expect(refreshCall).toBeDefined();
+    expect(refreshCall![1]).toEqual(
+      expect.objectContaining({ redirect: 'follow' })
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('Test 11: api.ts source contains `redirect: "follow"` in tryRefresh region (regex grep equivalent)', async () => {
+    // Smoke regression — verify code-level presence via source string match.
+    // Equivalent to: grep -qE "redirect:\s*['\"]follow['\"]" src/services/api.ts
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    // Resolve relative to test file location
+    const apiSourcePath = path.resolve(__dirname, '../api.ts');
+    const src = await fs.readFile(apiSourcePath, 'utf-8');
+    expect(src).toMatch(/redirect:\s*['"]follow['"]/);
+    // Also assert the D-V3-Phase5-C4 reference comment exists
+    expect(src).toMatch(/D-V3-Phase5-C4/);
+    expect(src).toMatch(/preserve POST body through 307 redirect/);
   });
 });

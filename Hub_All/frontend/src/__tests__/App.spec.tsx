@@ -6,6 +6,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
 // Helper — set window.location + re-import App (force module re-eval cho APP_BASE compute)
+// NOTE (Plan 05-04 update): Login.tsx useEffect calls window.location.replace() khi CURRENT_HUB
+// !== 'central' → mock window.location PHẢI include replace stub (jsdom Location instance
+// reject method call qua spread copy). Plan 05-04 Rule 1 fix.
 async function renderAppAtPath(pathname: string) {
   Object.defineProperty(window, 'location', {
     value: {
@@ -13,6 +16,9 @@ async function renderAppAtPath(pathname: string) {
       pathname,
       href: `http://localhost${pathname}`,
       origin: 'http://localhost',
+      search: '',
+      replace: vi.fn(),
+      assign: vi.fn(),
     },
     writable: true,
   });

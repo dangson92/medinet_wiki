@@ -128,10 +128,15 @@ class APIClient {
     const refreshToken = localStorage.getItem('refresh_token');
     if (!refreshToken) return false;
     try {
+      // D-V3-Phase5-C4 LOCKED — preserve POST body through 307 redirect from hub con → central
+      // Plan 03-04 SSO-02: hub con POST /api/auth/refresh → 307 RedirectResponse Location: ${CENTRAL_URL}/api/auth/refresh
+      // RFC 7231 §6.4.7: 307 MUST preserve method + body. Browser fetch default redirect mode is 'follow'
+      // but we set EXPLICIT for clarity + audit trail (B-02 fix per plan-checker iteration 1).
       const res = await fetch(`${this.baseURL}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
+        redirect: 'follow',
       });
       if (!res.ok) return false;
       const data = await res.json();
