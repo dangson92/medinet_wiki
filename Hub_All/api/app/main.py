@@ -392,6 +392,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             logger.warning("search_cache_subscriber_start_failed: %s", e)
 
     # ──────────────────────────────────────────────────────────────────────
+    # 9.5) Phase 4 Plan 04-06 (SYNC-04 / D-V3-Phase4-C3) — Central checksum scheduler
+    # ──────────────────────────────────────────────────────────────────────
+    # Central FastAPI lifespan asyncio task (naive asyncio.sleep loop — KHONG
+    # can APScheduler dep moi). Daily 2AM COUNT(*) drift + Hourly TABLESAMPLE
+    # BERNOULLI(1) hash drift → emit SYNC_COUNT_DRIFT + SYNC_HASH_DRIFT
+    # Prometheus metrics (Plan 04-03 collectors).
+    #
+    # Central-only spawn — D-V3-Phase4-C3 LOCKED. Hub con KHONG own checksum
+    # scheduler (Settings._enforce_checksum_hub_dsns_for_central validator
+    # skip cho hub con — Plan 04-02 carry forward).
+    #
+    # KHONG fail-loud — checksum_scheduler_task la observability concern, fail
+    # spawn → log warning + tiep tuc lifespan (R-V3-1 critical worker la
+    # sync_worker_task hub con, KHONG phai scheduler central).
+    app.state.checksum_scheduler_task = None
+    if settings.hub_name == "central":
+        try:
+            from app.observability.checksum_scheduler import (
+                checksum_scheduler_loop,
+            )
+
+            app.state.checksum_scheduler_task = asyncio.create_task(
+                checksum_scheduler_loop(app)
+            )
+            logger.info("checksum_scheduler_task_started")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("checksum_scheduler_task_start_failed: %s", e)
+    else:
+        logger.info(
+            "checksum_scheduler_task_skipped: hub_name=%s (D-V3-Phase4-C3 — "
+            "central-only)",
+            settings.hub_name,
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
     # 10) Phase 4 Plan 04-04 (SYNC-01/02/05, D-V3-Phase4-A1/A3/A5) — Hub con
     #     sync_worker_task spawn SAU central_sync_pool ready (step 4.5 trên).
     # ──────────────────────────────────────────────────────────────────────
@@ -517,6 +552,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             except Exception as e:  # noqa: BLE001
                 logger.warning("search_cache_task_stop_failed: %s", e)
             app.state.search_cache_task = None
+
+        # ──────────────────────────────────────────────────────────────────
+        # Phase 4 Plan 04-06 (SYNC-04 / D-V3-Phase4-C3) — Graceful shutdown
+        # checksum_scheduler_task (central-only). Pattern song song
+        # sync_worker_task Plan 04-04: cancel + wait_for timeout 10s +
+        # TimeoutError defensive log. Scheduler dung asyncpg pool acquire
+        # per-hub (close trong finally cua checksum_scheduler_loop) — cancel
+        # truoc dispose_engine an toan.
+        # ──────────────────────────────────────────────────────────────────
+        if getattr(app.state, "checksum_scheduler_task", None) is not None:
+            app.state.checksum_scheduler_task.cancel()
+            try:
+                await asyncio.wait_for(
+                    app.state.checksum_scheduler_task, timeout=10.0
+                )
+            except asyncio.CancelledError:
+                pass
+            except TimeoutError:
+                logger.warning(
+                    "checksum_scheduler_shutdown_timeout — forcing exit"
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("checksum_scheduler_stop_failed: %s", e)
+            app.state.checksum_scheduler_task = None
         try:
             from app.db.session import dispose_engine
 
