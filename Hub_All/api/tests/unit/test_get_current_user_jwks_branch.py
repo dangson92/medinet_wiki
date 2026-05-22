@@ -54,6 +54,8 @@ def _common_hub_env(
             "CENTRAL_JWKS_URL",
             "http://python-api-central:8080/.well-known/jwks.json",
         )
+        # Plan 03-04 Task 1 — validator hub con required CENTRAL_URL
+        monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
     from app.config import get_settings
 
     get_settings.cache_clear()
