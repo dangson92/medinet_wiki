@@ -30,11 +30,10 @@ Decision traceability:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
-
 
 # ────────────────────────────────────────────────────────────────────
 # Test 1: stable_chunk_id re-export
@@ -184,7 +183,7 @@ def test_sync_outbox_row_full_parse() -> None:
             "last_error": None,
             "status": "pending",
             "next_retry_at": None,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
             "processed_at": None,
         }
     )
@@ -206,7 +205,7 @@ def test_outbox_row_validates_op_type_invalid() -> None:
                 "op_type": "invalid_op",
                 "chunk_id": uuid.uuid4(),
                 "payload": {},
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
         )
 
