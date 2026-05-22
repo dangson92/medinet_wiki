@@ -9,14 +9,30 @@ Claims shape (KHÁC Go điểm `hub_ids` array thay vì `hub_id` single):
     email      — email người dùng
     name       — full name (có thể null)
     role       — "admin" | "editor" | "viewer"
-    hub_ids    — list[str] UUID hub assignments (M2 multi-hub)
-    iss        — "medinet-wiki" (cố định)
+    hub_ids    — list[str] UUID hub assignments (M2 multi-hub) — Phase 3 Plan
+                 03-03 REQUIRED (M2 cũ JWT thiếu → 401 reject, user re-login)
+    iss        — "medinet-wiki" (cố định — RE-CONFIRM D-V3-Phase3-E, KHÔNG URL)
+    aud        — list[str] — Phase 3 Plan 03-03 REQUIRED (D-V3-Phase3-E, RFC 7519)
+                 single value ["medinet-wiki"] v3.0-a; split per-service defer
+                 Phase 7 MCP MIGRATE-04
     iat/exp    — Unix timestamp
     jti        — UUID4 (cho Redis blacklist Plan 03-04)
     token_type — "access" | "refresh"
 
 T-03-jwt-alg-confusion mitigation: `verify_token` cứng `algorithms=["RS256"]`,
 KHÔNG list lỏng — tránh attacker swap alg=HS256 ký bằng public key.
+
+Phase 3 Plan 03-03 (SSO-02/03, D-V3-Phase3-E): JWT claim refactor add `aud`
+REQUIRED + `hub_ids` REQUIRED. PyJWT decode strict check `audience=JWT_AUDIENCE`
+cả 2 path (verify_token + verify_token_with_key) — InvalidAudienceError raise
+nếu aud sai hoặc MissingRequiredClaimError nếu thiếu aud claim.
+
+M2 backward incompat (Plan 03-03 deploy):
+- JWT cũ KHÔNG có aud → MissingRequiredClaimError → 401 INVALID_TOKEN
+- JWT cũ KHÔNG có hub_ids → pydantic ValidationError → 401 INVALID_TOKEN
+- Combine với Plan 03-02 backward incompat (JWT cũ KHÔNG có kid header hub con
+  reject) → user re-login required (~15-30s downtime acceptable, communicate
+  operator qua Plan 03-05 README banner).
 """
 from __future__ import annotations
 
@@ -35,6 +51,12 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 JWT_ISSUER = "medinet-wiki"
+# Phase 3 Plan 03-03 (D-V3-Phase3-E SSO-02) — single audience cho v3.0-a.
+# Split per-service (vd "medinet-wiki-mcp") defer Phase 7 MIGRATE-04 khi MCP
+# tách thành audience riêng. RE-CONFIRM D-V3-Phase3-E gốc đề xuất URL-based
+# iss "https://central/" — analysis cho thấy chuỗi cố định đủ, URL-based defer
+# Phase 7 MCP split aud. Giữ iss "medinet-wiki" M2 baseline carry forward.
+JWT_AUDIENCE = "medinet-wiki"
 JWT_ALGORITHM = "RS256"
 JWT_ALGORITHMS_ALLOWED = [JWT_ALGORITHM]  # cứng, KHÔNG mở rộng — T-03-jwt-alg-confusion
 
@@ -44,14 +66,27 @@ class JWTError(Exception):
 
 
 class JWTClaims(BaseModel):
-    """Pydantic v2 model cho claims đã decode (validate sớm sau verify)."""
+    """Pydantic v2 model cho claims đã decode (validate sớm sau verify).
+
+    Phase 3 Plan 03-03 (SSO-02/03, D-V3-Phase3-E):
+    - `hub_ids`: REQUIRED (xoá default `[]` M2 baseline). M2 cũ JWT thiếu claim
+      → pydantic ValidationError → JWTError 401 INVALID_TOKEN. Empty list `[]`
+      OK (admin chưa assign hub onboard scenario).
+    - `aud`: REQUIRED list[str] (RFC 7519 audience). PyJWT decode strict check
+      `audience=JWT_AUDIENCE` raise InvalidAudienceError nếu mismatch.
+    """
 
     sub: str
     email: str
     name: str | None = None
     role: Literal["admin", "editor", "viewer"]
-    hub_ids: list[str] = []
+    # Phase 3 Plan 03-03 — hub_ids REQUIRED (D-V3-Phase3-E + SSO-03).
+    # M2 cũ JWT default [] → bỏ default → JWT thiếu claim raise ValidationError.
+    hub_ids: list[str]
     iss: str
+    # Phase 3 Plan 03-03 — aud REQUIRED (D-V3-Phase3-E + RFC 7519). Single value
+    # ["medinet-wiki"] v3.0-a; PyJWT decode strict check qua audience param.
+    aud: list[str]
     iat: int
     exp: int
     jti: str
@@ -128,6 +163,10 @@ class JWTManager:
             "role": role,
             "hub_ids": hub_ids,
             "iss": JWT_ISSUER,
+            # Phase 3 Plan 03-03 (D-V3-Phase3-E SSO-02) — aud REQUIRED list[str]
+            # ["medinet-wiki"]. PyJWT decode verify_token + verify_token_with_key
+            # strict check qua audience=JWT_AUDIENCE param.
+            "aud": [JWT_AUDIENCE],
             "iat": int(now.timestamp()),
         }
         access_claims = {
@@ -188,18 +227,34 @@ class JWTManager:
                 self._public_pem,
                 algorithms=JWT_ALGORITHMS_ALLOWED,
                 issuer=JWT_ISSUER,
+                # Phase 3 Plan 03-03 (D-V3-Phase3-E SSO-02) — audience strict check.
+                # PyJWT raise InvalidAudienceError nếu aud claim mismatch hoặc
+                # MissingRequiredClaimError nếu thiếu aud (M2 cũ JWT reject).
+                audience=JWT_AUDIENCE,
             )
         except pyjwt.ExpiredSignatureError as e:
             raise JWTError("Token đã hết hạn") from e
         except pyjwt.InvalidIssuerError as e:
             raise JWTError("Token không hợp lệ (issuer sai)") from e
+        except pyjwt.InvalidAudienceError as e:
+            raise JWTError(
+                f"Token không hợp lệ (audience sai — yêu cầu {JWT_AUDIENCE!r})"
+            ) from e
+        except pyjwt.MissingRequiredClaimError as e:
+            raise JWTError(
+                f"Token thiếu claim bắt buộc: {e}. "
+                "JWT phát hành trước Phase 3 SSO — vui lòng đăng nhập lại."
+            ) from e
         except pyjwt.InvalidTokenError as e:
             raise JWTError(f"Token không hợp lệ: {e}") from e
 
         try:
             claims = JWTClaims.model_validate(decoded)
-        except Exception as e:  # pydantic.ValidationError
-            raise JWTError(f"Claims không hợp lệ: {e}") from e
+        except Exception as e:  # pydantic.ValidationError (hub_ids missing)
+            raise JWTError(
+                f"Claims không hợp lệ: {e}. "
+                "JWT có thể phát hành trước Phase 3 SSO — vui lòng đăng nhập lại."
+            ) from e
 
         if claims.token_type != expected_type:
             raise JWTError(
@@ -237,18 +292,33 @@ class JWTManager:
                 public_key,
                 algorithms=JWT_ALGORITHMS_ALLOWED,
                 issuer=JWT_ISSUER,
+                # Phase 3 Plan 03-03 (D-V3-Phase3-E SSO-02) — audience strict
+                # check ở hub con path (cùng semantic verify_token).
+                audience=JWT_AUDIENCE,
             )
         except pyjwt.ExpiredSignatureError as e:
             raise JWTError("Token đã hết hạn") from e
         except pyjwt.InvalidIssuerError as e:
             raise JWTError("Token không hợp lệ (issuer sai)") from e
+        except pyjwt.InvalidAudienceError as e:
+            raise JWTError(
+                f"Token không hợp lệ (audience sai — yêu cầu {JWT_AUDIENCE!r})"
+            ) from e
+        except pyjwt.MissingRequiredClaimError as e:
+            raise JWTError(
+                f"Token thiếu claim bắt buộc: {e}. "
+                "JWT phát hành trước Phase 3 SSO — vui lòng đăng nhập lại."
+            ) from e
         except pyjwt.InvalidTokenError as e:
             raise JWTError(f"Token không hợp lệ: {e}") from e
 
         try:
             claims = JWTClaims.model_validate(decoded)
-        except Exception as e:  # pydantic.ValidationError
-            raise JWTError(f"Claims không hợp lệ: {e}") from e
+        except Exception as e:  # pydantic.ValidationError (hub_ids missing)
+            raise JWTError(
+                f"Claims không hợp lệ: {e}. "
+                "JWT có thể phát hành trước Phase 3 SSO — vui lòng đăng nhập lại."
+            ) from e
 
         if claims.token_type != expected_type:
             raise JWTError(

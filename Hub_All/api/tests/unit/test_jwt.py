@@ -42,9 +42,15 @@ def test_issue_token_pair_returns_valid_rs256(jwt_manager: Any) -> None:
     assert pair.access_jti != pair.refresh_jti
 
     # Decode raw cùng public key — verify RS256 đúng.
+    # Plan 03-03 Rule 3 regression: JWT mới include aud claim → pyjwt strict
+    # decode yêu cầu audience param match (KHÔNG là caller mismatch error).
     pub = Path("keys/public.pem").read_bytes()
     decoded = pyjwt.decode(
-        pair.access_token, pub, algorithms=["RS256"], issuer="medinet-wiki"
+        pair.access_token,
+        pub,
+        algorithms=["RS256"],
+        issuer="medinet-wiki",
+        audience="medinet-wiki",  # Phase 3 Plan 03-03 SSO-02
     )
     assert decoded["sub"] == "11111111-1111-1111-1111-111111111111"
     assert decoded["role"] == "admin"
@@ -166,9 +172,14 @@ def test_jwt_claims_shape_matches_spec(jwt_manager: Any) -> None:
         role="viewer",
         hub_ids=["h1"],
     )
+    # Plan 03-03 Rule 3 regression: audience param required (JWT mới có aud claim).
     pub = Path("keys/public.pem").read_bytes()
     decoded = pyjwt.decode(
-        pair.access_token, pub, algorithms=["RS256"], issuer="medinet-wiki"
+        pair.access_token,
+        pub,
+        algorithms=["RS256"],
+        issuer="medinet-wiki",
+        audience="medinet-wiki",  # Phase 3 Plan 03-03 SSO-02
     )
     required = {
         "sub",
@@ -177,6 +188,7 @@ def test_jwt_claims_shape_matches_spec(jwt_manager: Any) -> None:
         "role",
         "hub_ids",
         "iss",
+        "aud",  # Phase 3 Plan 03-03 — REQUIRED
         "iat",
         "exp",
         "jti",

@@ -35,6 +35,7 @@ from app.auth.dependencies import (
 )
 from app.auth.jwt import (
     JWT_ALGORITHM,
+    JWT_AUDIENCE,
     JWT_ISSUER,
     JWTClaims,
     JWTError,
@@ -62,6 +63,7 @@ __all__ = [
     "AuthError",
     "AuthService",
     "JWT_ALGORITHM",
+    "JWT_AUDIENCE",
     "JWT_ISSUER",
     "JWTClaims",
     "JWTError",
