@@ -806,3 +806,69 @@ def _make_vec(seed: float) -> list[float]:
     — helper chung đặt ở conftest cho test Phase 7 tái dùng.
     """
     return [seed] * 1536
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Phase 4 Plan 04-04 Task 3 (W9 fix) — integration_db_pool fixture mới
+# ═════════════════════════════════════════════════════════════════════════
+#
+# Live asyncpg pool tới test Postgres cho integration test thực thi trigger
+# Plan 04-01 (sync_outbox enqueue trên chunks INSERT runtime).
+#
+# Skipif `INTEGRATION_DB_URL` env không set — local dev KHÔNG cần test DB up
+# chạy mọi test integration; chỉ Phase 7 MIGRATE-05 + CI smoke wire URL thật
+# qua testcontainer fixture. Pattern song song checksum scheduler test defer
+# Plan 04-06.
+#
+# Sub-task BLOCKER 2 end-to-end verify: pool có pgvector codec register init
+# để worker push chunks $9::vector cast work end-to-end (mirror lifespan main.py
+# _init_central_sync_conn pattern).
+import os as _phase4_os  # noqa: E402
+from collections.abc import AsyncIterator as _Phase4AsyncIterator  # noqa: E402
+
+import asyncpg as _phase4_asyncpg  # noqa: E402
+import pytest_asyncio as _phase4_pytest_asyncio  # noqa: E402
+
+try:
+    from pgvector.asyncpg import register_vector as _phase4_register_vector
+except ImportError:  # pgvector optional dev — KHÔNG raise import time
+    _phase4_register_vector = None  # type: ignore[assignment]
+
+
+async def _phase4_init_pool_conn(conn: _phase4_asyncpg.Connection) -> None:
+    """Register pgvector codec per connection cho integration_db_pool.
+
+    Mirror lifespan main.py::_init_central_sync_conn pattern.
+    """
+    if _phase4_register_vector is not None:
+        await _phase4_register_vector(conn)
+
+
+@_phase4_pytest_asyncio.fixture(scope="session")
+async def integration_db_pool() -> _Phase4AsyncIterator[
+    _phase4_asyncpg.Pool | None
+]:
+    """Live asyncpg pool tới test DB cho integration test thực thi trigger.
+
+    Skip nếu env INTEGRATION_DB_URL không set — local dev KHÔNG cần testdb
+    up chạy mọi test integration. Phase 7 MIGRATE-05 sẽ wire pytest-docker
+    + alembic apply 0005 trước test live-DB.
+
+    Yields:
+        asyncpg.Pool nếu URL set; None nếu skip (test sẽ skipif xử lý).
+    """
+    url = _phase4_os.environ.get("INTEGRATION_DB_URL")
+    if not url:
+        yield None
+        return
+
+    pool = await _phase4_asyncpg.create_pool(
+        url,
+        init=_phase4_init_pool_conn,
+        min_size=1,
+        max_size=2,
+    )
+    try:
+        yield pool
+    finally:
+        await pool.close()
