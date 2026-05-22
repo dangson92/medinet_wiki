@@ -215,6 +215,16 @@ Plans:
 3. D6 expire formally — `Hub_All/CLAUDE.md` section 3 cập nhật; smoke regression 11 trang React M2 COMPAT-01 PASS (R-V3-2 mitigation).
 4. Per-hub login branding: Hub y_te logo + title VN khác Hub dược, Hub hcns, central; tách `frontend/src/branding/<hub>/` config (logo + title + theme color).
 
+**Plans:** 6 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Caddyfile wiki block (path_regexp + handle + strip + central + .well-known + static SPA) + docker-compose caddy service env (WIKI_PUBLIC_DOMAIN + HUBS_ALLOWLIST_REGEX + frontend/dist mount + depends_on python-api-central) + .env.example 3 env document (PROXY-01 — D-V3-Phase5-A1/A2/A4)
+- [ ] 05-02-PLAN.md — Wave 0 vitest infra install + api.ts module-level prefix detect (PREFIX/API_BASE/APP_BASE/CURRENT_HUB từ window.location + KNOWN_HUBS runtime/fallback hardcode) + App.tsx BrowserRouter basename={APP_BASE} + 10 vitest test (PROXY-02 — D-V3-Phase5-B1/B3 + GA-V3-C confirmed)
+- [ ] 05-03-PLAN.md — Branding registry Vite glob + BrandingConfig type + getBranding fallback central + getContrastTextColor WCAG helper + 4 hub config (central indigo / yte emerald / duoc sky / hcns amber) + 4 SVG placeholder text-only initial (M/Y/D/H) + 17 vitest test (PROXY-04 — D-V3-Phase5-D1/D3)
+- [ ] 05-04-PLAN.md — Login.tsx 4 state machine + branding inline CSS var --hub-theme + T-5-04 strict ?return 4-layer validation + Layout.tsx sidebar header swap + api.crossHubSearch ABSOLUTE path qua requestAbsolute helper (D-V3-Phase4-D3 carry forward) + 12 vitest test (PROXY-02 + PROXY-04 — D-V3-Phase5-B4/C1/D2)
+- [ ] 05-05-PLAN.md — hub-add.sh 7-step → 9-step pipeline extend FACTOR-04 (Step 8 atomic sed-edit .env HUBS_ALLOWLIST + Step 9 PRE-validate + caddy reload zero-downtime + smoke curl) (PROXY-01 + FACTOR-04 extend — D-V3-Phase5-A3)
+- [ ] 05-06-PLAN.md — Closeout docs (CLAUDE.md §3 D6 EXPIRED + §6 progress row + pattern subsection + STATE.md + REQUIREMENTS.md + ROADMAP.md + Hub_All/README.md NEW section Reverse Proxy Subpath Deploy Notes) + manual smoke checkpoint:human-action gate=blocking 4 hub × 11 trang React M2 COMPAT-01 (PROXY-03 + PROXY-04 verify)
+
 **Discuss-phase gray areas (chốt ở `/gsd-discuss-phase 5`):**
 - **GA-V3-C chốt:** 1 build detect prefix vs per-hub `VITE_HUB_NAME=yte` build matrix. Khuyến nghị seed: 1 build (đỡ build matrix). Re-confirm ở discuss-phase.
 - Caddy config layout: 1 Caddyfile centralized với matcher per-hub vs Caddyfile imports per-hub fragment.

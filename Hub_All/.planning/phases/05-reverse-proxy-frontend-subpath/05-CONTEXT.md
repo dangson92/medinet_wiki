@@ -282,6 +282,8 @@ Không có todo nào được fold vào scope Phase 5 — đã review backlog kh
 - **Per-hub favicon + manifest.json** — Branding extensibility. Phase 5 chỉ logo + title + tagline + themeColor. Defer v4.0.
 - **Hub config Database-driven** — `hub_registry` central table (Phase 6 SETTINGS-04) sẽ là source-of-truth cho HUBS_ALLOWLIST runtime; Phase 5 hiện dùng env (`.env`). Phase 6 sẽ sync.
 - **Cross-hub UI redirect logic chốt cụ thể** — Claude's Discretion — `CrossHubSearch.tsx` gọi central root `/api/search/cross-hub` (D-V3-Phase4-D3 LOCKED). Implementation: api.ts có `crossHubSearch` method dùng absolute path `/api/search/cross-hub` KHÔNG prefix HOẶC Caddy server-side rewrite cross-prefix.
+- **`window.__HUB_CONFIG__` runtime injection (Q1 RESOLVED)** — Phase 5 ships fallback hardcode `KNOWN_HUBS=['yte','duoc','hcns']` only. Runtime injection deferred Phase 6 SETTINGS-04 (`hub_registry` central table source-of-truth).
+- **Central-only menuItems filter (Q6 RESOLVED)** — Phase 5 relies on FACTOR-02 strip + 404 envelope. Full menu visibility filter deferred Phase 6 SETTINGS.
 
 ### Reviewed Todos (not folded)
 

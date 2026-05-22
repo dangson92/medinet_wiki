@@ -1246,7 +1246,7 @@ curl -k -i https://localhost/branding/yte/logo.svg # 200 actual SVG
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Caddy `window.__HUB_CONFIG__` injection mechanism** — Recommended seed Caddy `templates` directive HOẶC backend `/index.html` render?
    - What we know: `replace_response` KHÔNG standard. `templates` directive support template engine với `{{env "VAR"}}` placeholder (theo Caddy docs reference).
@@ -1254,30 +1254,42 @@ curl -k -i https://localhost/branding/yte/logo.svg # 200 actual SVG
    - Recommendation: **Backend FastAPI mount `GET /` central serve `index.html` template Jinja2 với `HUBS_ALLOWLIST` env**. Simpler + standard pattern + existing FastAPI/Jinja2 stack. Hub con `GET /` cũng mount same (FACTOR-01 universal endpoint). Caddy `handle /` fallback đi tới upstream `python-api-central` HOẶC `python-api-<hub>` tùy prefix.
    - Plan execution claude's discretion D-V3-Phase5.
 
+   **RESOLVED 2026-05-23:** DEFER Phase 6 SETTINGS-04. Phase 5 ships fallback hardcode `KNOWN_HUBS = ['yte','duoc','hcns']` in `frontend/src/services/api.ts` (CONTEXT.md D-V3-Phase5-B1 already specifies this as the dev safety fallback). The runtime `window.__HUB_CONFIG__.allowlist` injection becomes a Phase 6 enhancement when `hub_registry` table becomes source-of-truth (per CONTEXT.md `## Deferred Ideas` — "Hub config Database-driven — `hub_registry` central table (Phase 6 SETTINGS-04)"). Operators add a hub via FACTOR-04 `make hub-add` → must rebuild FE OR wait for Phase 6 dynamic registry. Acceptable for v3.0-b. Documented in CONTEXT.md `<deferred>` block addition.
+
 2. **Frontend build pipeline integration với Docker compose** — `npm run build` host vs multi-stage Dockerfile?
    - What we know: docker-compose caddy volume mount `./frontend/dist:/srv/wiki/dist:ro` từ host (Plan 05-01 example).
    - What's unclear: Operator workflow — `make hub-add` không build FE; FE build độc lập (CI/CD hoặc manual `npm run build`).
    - Recommendation: Host build pattern Phase 5; document `make build-frontend` target trong `Hub_All/Makefile` chạy `cd frontend && npm install && npm run build`. CI/CD config defer v4.0.
+
+   **RESOLVED 2026-05-23:** RESOLVE per Plan 05-01 decision — Caddy mounts `./frontend/dist:/srv/wiki/dist:ro` (or similar). Operator runs `npm run build` on host before `docker compose up`. Documented in README "Reverse Proxy Subpath Deploy Notes" (Plan 05-06 Task 5a — README section split per W-01 fix). Host build pattern selected; multi-stage Dockerfile defer v4.0.
 
 3. **Manual smoke 4 hub × 11 trang full depth vs pre-resolved partial** — Closeout Plan 05-06 checkpoint signal expectation?
    - What we know: Plan 03-05 + 04-07 pre-resolved SKIP full E2E (defer Phase 7 MIGRATE-05).
    - What's unclear: PROXY-04 + R-V3-2 mitigation requires human UX verify branding 4 hub — KHÔNG defer toàn bộ.
    - Recommendation: Plan 05-06 task default "partial: branding + Login + Dashboard 4 hub PASS = approved" (minimum); 8 page khác có thể defer Phase 7 MIGRATE-05 nếu user resume signal `partial`.
 
+   **RESOLVED 2026-05-23:** RESOLVE per D-V3-Phase5-D4 LOCKED — 4 hub × 11 trang = 44 checkpoints, manual visual inspect. Detail in UI-SPEC.md §7. Plan 05-06 Task 5b (split per W-01) is `checkpoint:human-action gate=blocking` with 3 resume signals: `approved` / `partial: branding only` / `skip smoke`. Auto-fallback `skip smoke` per v3.0-b precedent (Plan 03-05 + 04-07) if no operator response.
+
 4. **Caddy upstream placeholder semantic** — `http://python-api-{re.hub_api.1}:8080` actually work với Docker DNS resolution?
    - What we know: Docker compose service name → Docker DNS → container IP resolve. Placeholder evaluate at request time (Caddy substitute → DNS lookup `python-api-yte` → IP).
    - What's unclear: Caddy DNS cache TTL + behavior khi container restart (different IP).
    - Recommendation: Plan execution Wave 1 verify với 2 hub con — kill `python-api-yte` container, up new (different IP), curl `/yte/api/health` → expect Caddy re-resolve. Document fallback to `dynamic a` upstream module nếu native fail.
+
+   **RESOLVED 2026-05-23:** Caddy resolves `python-api-{hub}` via Docker compose service name DNS (well-known Caddy + Docker Compose pattern — no TTL concerns within compose network because Docker Compose maintains stable service-name DNS resolution across container restarts via the embedded DNS resolver on `medinet_net`). Documented inline in Plan 05-01 Task 1 action. Fallback `dynamic a` upstream module remains a deferred option if native resolution fails in production; defer v4.0 if observed.
 
 5. **Login.tsx multi-render flash UX** — Cross-prefix redirect cycle (mount hub con → useEffect → replace central → mount central → render branding) tạo perceptible flash?
    - What we know: `window.location.replace` cause full page reload — KHÔNG navigate flicker (whole page swap).
    - What's unclear: Perceived flash duration; first paint with hub con branding briefly before redirect fires.
    - Recommendation: Conditional render Login.tsx — `if (CURRENT_HUB !== 'central') return null` (KHÔNG render anything trong window between mount + redirect). useEffect race avoidance — chạy sync trong render body? KHÔNG (React rule — side effect chỉ useEffect/event). Accept flash 100-300ms acceptable UX trade-off.
 
+   **RESOLVED 2026-05-23:** RESOLVE per UI-SPEC.md §2 State C — render loading skeleton during cross-prefix redirect (~300ms tolerable UX flash, not perceptible as broken state). Plan 05-04 Task 1 implements the skeleton with branded gradient background + Vietnamese loading copy "Đang chuyển đến trang đăng nhập trung tâm..." — provides UX continuity vs blank/flash. Final flash duration acceptable per CONTEXT D-V3-Phase5-B4 LOCKED.
+
 6. **Hub con FE menuItems filter central-only items** — Hide vs show với 404 error page?
    - What we know: Layout.tsx menuItems hardcode 11 items M2. Hub con click `/yte/registry` → 404 envelope.
    - What's unclear: UX better — hide entirely (clean, less confusion) HOẶC show + render "feature not available in this hub" page (consistency).
    - Recommendation: Filter approach (hide). Less confusion. Implement `menuItems.filter(item => isCentralOnly(item.to) ? CURRENT_HUB === 'central' : true)` với `isCentralOnly()` helper (defer plan implementation).
+
+   **RESOLVED 2026-05-23:** DEFER Phase 6 SETTINGS. Central-only menu items (HubRegistry, UserManagement, APIKeyManagement, AuditLog) currently 404 on hub con anyway (FACTOR-02 strip → 404 envelope D6 per Phase 2). Manual smoke checklist Plan 05-06 catches any visual regression in Phase 5. Full menu visibility filter logic deferred to Phase 6 settings sync where `hub_registry` central table provides source-of-truth for menu filtering. Documented in CONTEXT.md `<deferred>` block addition.
 
 ---
 
