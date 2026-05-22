@@ -18,3 +18,70 @@
 	# handle_path / uri strip_prefix — sẽ làm discovery 404.
 	reverse_proxy medinet-mcp:8190
 }
+
+# ─── Wiki block (NEW Phase 5 — v3.0-05) ──────────────────────────────────────
+# Caddy auto-TLS:
+#   - WIKI_PUBLIC_DOMAIN=localhost → self-signed cert (Caddy nội bộ)
+#   - WIKI_PUBLIC_DOMAIN=wiki.medinet.vn → ACME Let's Encrypt
+# Source: caddyserver.com/docs/caddyfile/* (path_regexp + handle_path + uri strip_prefix + try_files)
+# Reference: .planning/phases/05-reverse-proxy-frontend-subpath/05-RESEARCH.md Pattern 1
+{$WIKI_PUBLIC_DOMAIN:localhost} {
+	# ─── Match 1: hub API routing (regex + strip prefix) ────────────────────
+	# HUBS_ALLOWLIST_REGEX="yte|duoc|hcns" rendered from HUBS_ALLOWLIST env by hub-add.sh
+	# path_regexp anchor ^/<hub>/api/ (T-5-01 open redirect mitigation — anchor required)
+	@hub_api path_regexp hub_api ^/({$HUBS_ALLOWLIST_REGEX:yte|duoc|hcns})/api/(.*)$
+	handle @hub_api {
+		# Caddy `route` block — order significant; strip prefix TRƯỚC reverse_proxy
+		# Upstream nhận /api/health (KHÔNG /yte/api/health) → M2 router code unchanged
+		# Port STATIC :8080 (Pitfall 1 — placeholder upstream port không support)
+		route {
+			uri strip_prefix /{re.hub_api.1}
+			# Pitfall 1 (05-RESEARCH §"Common Pitfalls"): Caddy CẤM placeholder
+			# trong upstream address khi address có scheme (`http://`). Bỏ scheme
+			# → Caddy default HTTP với port 8080 static; container name dynamic OK.
+			reverse_proxy python-api-{re.hub_api.1}:8080 {
+				header_up Host {host}
+				header_up X-Real-IP {remote_host}
+				header_up X-Forwarded-For {remote_host}
+				header_up X-Forwarded-Proto {scheme}
+				header_up X-Forwarded-Hub {re.hub_api.1}
+			}
+		}
+	}
+
+	# ─── Match 2: central API (KHÔNG strip) ─────────────────────────────────
+	# Caddy auto-sort handle by matcher specificity (Pitfall 10) → @hub_api wins
+	# khi URL match cả 2 (named matcher path_regexp specific hơn glob /api/*)
+	handle /api/* {
+		reverse_proxy http://python-api-central:8080 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# ─── Match 3: .well-known (Phase 3 JWKS central) ────────────────────────
+	# /.well-known/jwks.json mount ở root central (KHÔNG /api/...) — explicit
+	# handle TRƯỚC static SPA catch-all, otherwise file_server lookup 404
+	# → JWKSCache fetch fail boot (Edge case Phase 3 Plan 03-01)
+	handle /.well-known/* {
+		reverse_proxy http://python-api-central:8080
+	}
+
+	# ─── Match 4: static SPA (catch-all fallback) ───────────────────────────
+	# try_files {path} /index.html — SPA fallback cho /yte/dashboard, /login, etc
+	# (Pitfall 2 — thiếu try_files → refresh F5 trên nested route 404 blank page)
+	handle {
+		root * /srv/wiki/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	# ─── Logging structured JSON ─────────────────────────────────────────────
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+}
