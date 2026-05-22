@@ -25,6 +25,9 @@
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Phase 3 Plan 03-01 SSO-01 — Hub con consume JWKS tu central (intra-network)
       CENTRAL_JWKS_URL: http://python-api-central:8080/.well-known/jwks.json
+      # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
+      # toi central qua 307 Location header (preserve POST + body RFC 7231).
+      CENTRAL_URL: http://python-api-central:8080
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:

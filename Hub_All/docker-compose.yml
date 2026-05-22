@@ -127,6 +127,10 @@ services:
       # con JWKSCache lifespan startup blocking fetch URL nay. KHONG can TLS
       # (intra-network medinet_net isolated).
       CENTRAL_JWKS_URL: http://python-api-central:8080/.well-known/jwks.json
+      # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
+      # toi central qua 307 Location. Settings._enforce_central_url_for_hub
+      # validator enforce hub con required (boot fail-fast neu thieu).
+      CENTRAL_URL: http://python-api-central:8080
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -157,6 +161,9 @@ services:
       # Phase 3 Plan 03-01 SSO-01 (D-V3-Phase3-A) — Hub con consume JWKS endpoint
       # tu central qua intra-network HTTP (xem ghi chu python-api-yte).
       CENTRAL_JWKS_URL: http://python-api-central:8080/.well-known/jwks.json
+      # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
+      # toi central qua 307 (xem ghi chu python-api-yte).
+      CENTRAL_URL: http://python-api-central:8080
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -187,6 +194,9 @@ services:
       # Phase 3 Plan 03-01 SSO-01 (D-V3-Phase3-A) — Hub con consume JWKS endpoint
       # tu central qua intra-network HTTP (xem ghi chu python-api-yte).
       CENTRAL_JWKS_URL: http://python-api-central:8080/.well-known/jwks.json
+      # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
+      # toi central qua 307 (xem ghi chu python-api-yte).
+      CENTRAL_URL: http://python-api-central:8080
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:

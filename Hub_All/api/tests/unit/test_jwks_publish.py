@@ -146,6 +146,8 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
 
     Plan 03-02 Task 1 thêm validator hub con required CENTRAL_JWKS_URL —
     auto-set cho hub con để boot Settings PASS (regression update).
+    Plan 03-04 Task 1 thêm validator hub con required CENTRAL_URL — auto-set
+    cùng pattern.
     """
     if hub_name == "central":
         db = "medinet_central"
@@ -166,6 +168,8 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
             "CENTRAL_JWKS_URL",
             "http://python-api-central:8080/.well-known/jwks.json",
         )
+        # Plan 03-04 — hub con required CENTRAL_URL
+        monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
     from app.config import get_settings
 
     get_settings.cache_clear()

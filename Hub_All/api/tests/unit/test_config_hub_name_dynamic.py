@@ -38,11 +38,14 @@ def _set_env(
     # test cũ Plan 02-05 (regression FACTOR-04) KHÔNG fail. Test REJECT pattern
     # vẫn raise sớm ở hub_name regex validator (before model_validator), nên
     # CENTRAL_JWKS_URL không ảnh hưởng đó.
+    # Plan 03-04 Task 1 — validator `_enforce_central_url_for_hub` cũng yêu cầu
+    # hub con set CENTRAL_URL. Auto-set cùng pattern.
     if hub_name is not None and hub_name != "central":
         monkeypatch.setenv(
             "CENTRAL_JWKS_URL",
             "http://python-api-central:8080/.well-known/jwks.json",
         )
+        monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
     get_settings.cache_clear()
 
 

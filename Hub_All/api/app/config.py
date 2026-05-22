@@ -116,6 +116,15 @@ class Settings(BaseSettings):
     jwks_refresh_interval: int = 3600
     jwks_max_stale_seconds: int = 86400
 
+    # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh.
+    # Base URL central cho 307 redirect (vd "http://python-api-central:8080").
+    # Hub con required (model_validator `_enforce_central_url_for_hub` enforce);
+    # central None OK. Tách khỏi `central_jwks_url` vì base URL dùng cho N
+    # endpoint khác login/refresh (Phase 5 PROXY-02 frontend cũng consume).
+    # docker-compose 3 hub con set env
+    #   CENTRAL_URL=http://python-api-central:8080
+    central_url: str | None = None
+
     # File storage
     file_store_dir: Path = Path("./file_store")
 
@@ -293,6 +302,36 @@ class Settings(BaseSettings):
                 f"hub_name={self.hub_name!r} (hub con) yêu cầu CENTRAL_JWKS_URL "
                 f"env var. Set CENTRAL_JWKS_URL=http://python-api-central:8080"
                 f"/.well-known/jwks.json (xem docker-compose.yml 3 hub con block)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_central_url_for_hub(self) -> Settings:
+        """Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con required CENTRAL_URL.
+
+        Hub con (yte/duoc/hcns/dynamic) redirect POST /api/auth/login +
+        /api/auth/refresh tới central qua 307 Location header (D-V3-Phase3-G
+        LOCKED — browser auto-follow + preserve POST method + body RFC 7231).
+        Thiếu CENTRAL_URL → boot fail-fast ở validator (KHÔNG defer runtime
+        router handler — tránh silent failure mọi login request trả 503 silent).
+
+        Tách field khỏi `central_jwks_url`:
+        - `central_jwks_url` = full URL endpoint `/.well-known/jwks.json`.
+        - `central_url` = base URL không suffix — build N URL khác (login,
+          refresh, future endpoints).
+
+        Threat model:
+        - T-03-04-01 Spoofing — operator KHÔNG set CENTRAL_URL → hub con boot
+          OK nhưng login → 503/500 silent. Fail-fast validator chống production
+          deploy bug câm lặng.
+        - T-03-04-04 DoS — thiếu CENTRAL_URL → mọi login locked out. Validator
+          fail-fast hub con KHÔNG start được nếu thiếu — KHÔNG silent failure.
+        """
+        if self.hub_name != "central" and not self.central_url:
+            raise ValueError(
+                f"hub_name={self.hub_name!r} (hub con) yêu cầu CENTRAL_URL "
+                f"env var. Set CENTRAL_URL=http://python-api-central:8080 "
+                f"(xem docker-compose.yml 3 hub con block — Plan 03-04 SSO-02)."
             )
         return self
 

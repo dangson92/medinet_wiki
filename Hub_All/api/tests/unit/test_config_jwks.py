@@ -29,8 +29,10 @@ def _common_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
         "postgresql://u:p@localhost:5432/medinet_cocoindex",
     )
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-    # Clear potential leftover CENTRAL_JWKS_URL from previous test/env.
+    # Clear potential leftover CENTRAL_JWKS_URL + CENTRAL_URL from previous
+    # test/env (test parametrize ngược thứ tự — chống pollution).
     monkeypatch.delenv("CENTRAL_JWKS_URL", raising=False)
+    monkeypatch.delenv("CENTRAL_URL", raising=False)
     monkeypatch.delenv("JWKS_REFRESH_INTERVAL", raising=False)
     monkeypatch.delenv("JWKS_MAX_STALE_SECONDS", raising=False)
 
@@ -75,12 +77,18 @@ def test_hub_con_requires_central_jwks_url(
 def test_hub_con_with_central_jwks_url_ok(
     monkeypatch: pytest.MonkeyPatch, hub_name: str
 ) -> None:
-    """Hub con + central_jwks_url set → OK."""
+    """Hub con + central_jwks_url set → OK.
+
+    Plan 03-04 Task 1: thêm CENTRAL_URL setenv để pass validator mới
+    `_enforce_central_url_for_hub` (hub con required CENTRAL_URL).
+    """
     _common_env(monkeypatch, hub_name)
     monkeypatch.setenv(
         "CENTRAL_JWKS_URL",
         "http://python-api-central:8080/.well-known/jwks.json",
     )
+    # Plan 03-04 Rule 3 regression — validator mới yêu cầu hub con set CENTRAL_URL
+    monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
     from app.config import Settings, get_settings
 
     get_settings.cache_clear()
@@ -98,6 +106,8 @@ def test_jwks_refresh_interval_override(monkeypatch: pytest.MonkeyPatch) -> None
         "CENTRAL_JWKS_URL",
         "http://python-api-central:8080/.well-known/jwks.json",
     )
+    # Plan 03-04 Rule 3 regression — validator mới yêu cầu hub con set CENTRAL_URL
+    monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
     monkeypatch.setenv("JWKS_REFRESH_INTERVAL", "60")
     monkeypatch.setenv("JWKS_MAX_STALE_SECONDS", "3600")
     from app.config import Settings, get_settings
@@ -106,3 +116,63 @@ def test_jwks_refresh_interval_override(monkeypatch: pytest.MonkeyPatch) -> None
     s = Settings()
     assert s.jwks_refresh_interval == 60
     assert s.jwks_max_stale_seconds == 3600
+
+
+# ────────────────────────────────────────────────────────────────────
+# Plan 03-04 Task 1 — central_url field + validator (D-V3-Phase3-G)
+# ────────────────────────────────────────────────────────────────────
+
+
+def test_central_url_default_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """central_url default None ở central (KHÔNG cần redirect — local handle)."""
+    _common_env(monkeypatch, "central")
+    from app.config import Settings, get_settings
+
+    get_settings.cache_clear()
+    s = Settings()
+    assert s.central_url is None
+
+
+@pytest.mark.parametrize("hub_name", ["yte", "duoc", "hcns", "phap_che"])
+def test_hub_con_requires_central_url(
+    monkeypatch: pytest.MonkeyPatch, hub_name: str
+) -> None:
+    """Hub con + central_url=None → ValidationError (T-03-04-01/04 mitigation).
+
+    KHÔNG bù bằng central_jwks_url — 2 field tách biệt:
+    - central_jwks_url: full URL endpoint /.well-known/jwks.json (Plan 03-01/02).
+    - central_url: base URL build N endpoint khác login/refresh (Plan 03-04).
+    """
+    _common_env(monkeypatch, hub_name)
+    monkeypatch.setenv(
+        "CENTRAL_JWKS_URL",
+        "http://python-api-central:8080/.well-known/jwks.json",
+    )
+    # KHÔNG set CENTRAL_URL — validator mới phải raise
+    from app.config import Settings, get_settings
+
+    get_settings.cache_clear()
+    with pytest.raises(ValidationError, match="CENTRAL_URL"):
+        Settings()
+
+
+@pytest.mark.parametrize("hub_name", ["yte", "duoc", "hcns", "phap_che"])
+def test_hub_con_with_both_central_urls_ok(
+    monkeypatch: pytest.MonkeyPatch, hub_name: str
+) -> None:
+    """Hub con + cả CENTRAL_URL + CENTRAL_JWKS_URL set → OK (production wire)."""
+    _common_env(monkeypatch, hub_name)
+    monkeypatch.setenv(
+        "CENTRAL_JWKS_URL",
+        "http://python-api-central:8080/.well-known/jwks.json",
+    )
+    monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
+    from app.config import Settings, get_settings
+
+    get_settings.cache_clear()
+    s = Settings()
+    assert s.hub_name == hub_name
+    assert s.central_url == "http://python-api-central:8080"
+    assert s.central_jwks_url == (
+        "http://python-api-central:8080/.well-known/jwks.json"
+    )

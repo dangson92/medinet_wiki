@@ -625,11 +625,17 @@ def hub_app_factory(
         # nếu KHÔNG skip). Pattern song song COCOINDEX_SKIP_SETUP DEF-05-01.
         # Phase 3 dedicated test (test_jwks_cache_lifecycle) mock httpx riêng
         # KHÔNG đi qua lifespan blocking fetch.
+        # Plan 03-04 Task 1 — Settings validator hub con required CENTRAL_URL
+        # (D-V3-Phase3-G hub con redirect login/refresh tới central). Auto-set
+        # cùng pattern. Plan 03-04 Task 3 integration test (cùng file
+        # test_factor_hub_scoped.py) assert login/refresh trả 307 — router
+        # handler đọc settings.central_url để build Location URL.
         if hub_name != "central":
             monkeypatch.setenv(
                 "CENTRAL_JWKS_URL",
                 "http://python-api-central:8080/.well-known/jwks.json",
             )
+            monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
             monkeypatch.setenv("JWKS_SKIP_FETCH", "1")
 
         # Force re-parse env (lru_cache singleton).

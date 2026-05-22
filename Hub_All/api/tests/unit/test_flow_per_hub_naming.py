@@ -160,6 +160,8 @@ def test_module_app_name_per_hub_yte_subprocess() -> None:
             "REDIS_URL": "redis://localhost:6379/0",
             # Plan 03-02 Task 1 — validator hub con required CENTRAL_JWKS_URL.
             "CENTRAL_JWKS_URL": "http://python-api-central:8080/.well-known/jwks.json",
+            # Plan 03-04 Task 1 — validator hub con required CENTRAL_URL.
+            "CENTRAL_URL": "http://python-api-central:8080",
         },
         script,
     )
