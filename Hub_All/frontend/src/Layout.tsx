@@ -26,6 +26,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import GeminiAssistant from './components/GeminiAssistant';
 import { useTheme } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
+import { getBranding, getContrastTextColor } from './branding';
+import { CURRENT_HUB } from './services/api';
+
+// Phase 5 PROXY-04 — branding resolution module-level (compute 1 lần)
+// Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md §3
+const HUB_BRANDING = getBranding(CURRENT_HUB);
+const HUB_CONTRAST = getContrastTextColor(HUB_BRANDING.themeColor);
 
 const SidebarItem = ({
   to,
@@ -124,7 +131,11 @@ const Layout = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden relative">
+    <div
+      className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden relative"
+      style={{ ['--hub-theme' as string]: HUB_BRANDING.themeColor } as React.CSSProperties}
+    >
+      {/* Phase 5 PROXY-04 — outermost wrapper inject CSS var --hub-theme (UI-SPEC §8.2) */}
       {/* Mobile Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -159,10 +170,31 @@ const Layout = () => {
               animate={{ opacity: 1, x: 0 }}
               className="flex items-center gap-2"
             >
-              <div className="w-8 h-8 rounded-xl bg-brand-indigo flex items-center justify-center text-white shadow-lg">
-                <Database size={18} />
+              {/* Phase 5 PROXY-04 — sidebar header logo + title từ HUB_BRANDING (D-V3-Phase5-D2 LOCKED) */}
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center shadow-lg shrink-0"
+                style={{ backgroundColor: HUB_BRANDING.themeColor }}
+              >
+                <img
+                  src={HUB_BRANDING.logo}
+                  alt={HUB_BRANDING.title}
+                  className="w-5 h-5 object-contain"
+                  style={{ filter: HUB_CONTRAST === 'slate-900' ? 'invert(1)' : 'none' }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    const fallback = (e.currentTarget as HTMLImageElement).nextElementSibling as HTMLElement | null;
+                    if (fallback) fallback.style.display = 'block';
+                  }}
+                />
+                <Database
+                  size={18}
+                  className="hidden"
+                  style={{ color: HUB_CONTRAST === 'slate-900' ? '#0f172a' : 'white' }}
+                />
               </div>
-              <span className="font-bold text-slate-900 dark:text-white tracking-tight text-lg">Medinet Wiki</span>
+              <span className="font-bold text-slate-900 dark:text-white tracking-tight text-lg truncate max-w-[160px]">
+                {HUB_BRANDING.title}
+              </span>
             </motion.div>
           )}
           <button
@@ -215,8 +247,9 @@ const Layout = () => {
           <div className={cn("flex items-center gap-3", collapsed ? "justify-center" : "")}>
             <Link
               to="/profile"
-              className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-xs hover:ring-2 hover:ring-brand-indigo/30 transition-all cursor-pointer shrink-0"
+              className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-xs hover:ring-2 transition-all cursor-pointer shrink-0"
               title="Thông tin cá nhân"
+              style={{ ['--tw-ring-color' as string]: `color-mix(in srgb, ${HUB_BRANDING.themeColor} 30%, transparent)` } as React.CSSProperties}
             >
               {user?.user.name?.charAt(0).toUpperCase() || 'U'}
             </Link>
