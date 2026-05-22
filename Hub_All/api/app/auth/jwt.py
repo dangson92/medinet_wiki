@@ -24,12 +24,15 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import jwt as pyjwt
 from pydantic import BaseModel
 
 from app.config import Settings
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 JWT_ISSUER = "medinet-wiki"
 JWT_ALGORITHM = "RS256"
@@ -78,6 +81,12 @@ class JWTManager:
         self._public_pem = self._load_key(settings.jwt_public_key_path)
         self._access_ttl = timedelta(seconds=settings.jwt_access_token_ttl)
         self._refresh_ttl = timedelta(seconds=settings.jwt_refresh_token_ttl)
+        # Phase 3 Plan 03-02 SSO-01 — kid derive deterministic SHA-256 public.pem
+        # (cùng pattern jwks.py::_derive_kid). Hub con JWKSCache match qua kid
+        # ở JWT header để chọn đúng public key verify (Task 4 get_current_user).
+        from app.auth.jwks import _derive_kid
+
+        self._kid = _derive_kid(self._public_pem)
 
     @staticmethod
     def _load_key(path: Path) -> bytes:
@@ -133,11 +142,21 @@ class JWTManager:
             "jti": refresh_jti,
             "token_type": "refresh",
         }
+        # Phase 3 Plan 03-02 SSO-01 — Header kid để hub con JWKSCache match
+        # public key (Task 4 get_current_user). M2 backward incompat note:
+        # JWT cũ KHÔNG có kid → hub con reject 401 sau Plan 03-02 deploy
+        # (acceptable downtime 15-30s — Plan 03-05 README banner).
         access_token = pyjwt.encode(
-            access_claims, self._private_pem, algorithm=JWT_ALGORITHM
+            access_claims,
+            self._private_pem,
+            algorithm=JWT_ALGORITHM,
+            headers={"kid": self._kid},
         )
         refresh_token = pyjwt.encode(
-            refresh_claims, self._private_pem, algorithm=JWT_ALGORITHM
+            refresh_claims,
+            self._private_pem,
+            algorithm=JWT_ALGORITHM,
+            headers={"kid": self._kid},
         )
 
         return TokenPair(
@@ -167,6 +186,55 @@ class JWTManager:
             decoded = pyjwt.decode(
                 token,
                 self._public_pem,
+                algorithms=JWT_ALGORITHMS_ALLOWED,
+                issuer=JWT_ISSUER,
+            )
+        except pyjwt.ExpiredSignatureError as e:
+            raise JWTError("Token đã hết hạn") from e
+        except pyjwt.InvalidIssuerError as e:
+            raise JWTError("Token không hợp lệ (issuer sai)") from e
+        except pyjwt.InvalidTokenError as e:
+            raise JWTError(f"Token không hợp lệ: {e}") from e
+
+        try:
+            claims = JWTClaims.model_validate(decoded)
+        except Exception as e:  # pydantic.ValidationError
+            raise JWTError(f"Claims không hợp lệ: {e}") from e
+
+        if claims.token_type != expected_type:
+            raise JWTError(
+                f"Loại token sai: yêu cầu {expected_type!r}, "
+                f"nhận {claims.token_type!r}"
+            )
+        return claims
+
+    def verify_token_with_key(
+        self,
+        token: str,
+        public_key: bytes | RSAPublicKey,
+        *,
+        expected_type: Literal["access", "refresh"],
+    ) -> JWTClaims:
+        """Verify JWT bằng public key external (Plan 03-02 hub con JWKS cache).
+
+        Phase 3 Plan 03-02 SSO-01 (D-V3-Phase3-D). Hub con verify JWT bằng
+        public key từ JWKSCache (KHÔNG dùng self._public_pem — local pem
+        chỉ có ở central). Logic decode + validate giống `verify_token`,
+        chỉ khác key source.
+
+        Args:
+            token: JWT string.
+            public_key: RSAPublicKey object (từ JWKSCache.get_public_key)
+                hoặc PEM bytes (backward compat).
+            expected_type: "access" | "refresh".
+
+        Raises:
+            JWTError với message tiếng Việt (alg/issuer/exp/type mismatch).
+        """
+        try:
+            decoded = pyjwt.decode(
+                token,
+                public_key,
                 algorithms=JWT_ALGORITHMS_ALLOWED,
                 issuer=JWT_ISSUER,
             )

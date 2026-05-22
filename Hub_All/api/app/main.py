@@ -175,6 +175,51 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
         app.state.jwt_manager = None
         logger.warning("jwt_manager_init_failed: %s", e)
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 3 Plan 03-02 (SSO-01, D-V3-Phase3-B/D) — Hub con JWKS cache
+    # ──────────────────────────────────────────────────────────────────────
+    # Boot fail-loud nếu central JWKS endpoint down (D-V3-Phase3-B): timeout
+    # 5s, exception → re-raise → uvicorn exit 1 (operator deploy thấy ngay).
+    # Runtime fail-quiet (refresh task log warning + giữ cached). 24h hard
+    # limit ở JWKSCache.get_public_key (R-V3-5 fail-loud delayed).
+    # Central KHÔNG cần cache (verify JWT bằng local pem qua JWTManager).
+    app.state.jwks_cache = None
+    if settings.hub_name != "central":
+        from app.auth.jwks import JWKSCache
+
+        if not settings.central_jwks_url:
+            # Settings validator Plan 03-02 Task 1 đã enforce — defensive bao
+            # thêm tránh race khi Settings cache override runtime.
+            raise RuntimeError(
+                f"hub_name={settings.hub_name!r} thiếu CENTRAL_JWKS_URL "
+                "— Settings validator phải đã raise ở boot"
+            )
+
+        jwks_cache = JWKSCache(
+            jwks_url=settings.central_jwks_url,
+            refresh_interval=settings.jwks_refresh_interval,
+            max_stale_seconds=settings.jwks_max_stale_seconds,
+        )
+        try:
+            await jwks_cache.fetch_initial()  # blocking, raise on fail
+        except Exception as e:
+            logger.critical(
+                "lifespan_jwks_cache_init_failed: hub_name=%s url=%s error=%s — boot abort",
+                settings.hub_name,
+                settings.central_jwks_url,
+                e,
+            )
+            raise  # boot fail-loud D-V3-Phase3-B → uvicorn exit 1
+
+        jwks_cache.start_refresh_task()
+        app.state.jwks_cache = jwks_cache
+        logger.info(
+            "lifespan_jwks_cache_ready: hub_name=%s url=%s refresh_interval=%ds",
+            settings.hub_name,
+            settings.central_jwks_url,
+            settings.jwks_refresh_interval,
+        )
+
     # 5) Anti-timing dummy hash — pre-compute 1 hash để service.login dùng
     #    khi user không tồn tại (response time KHÔNG leak email enumeration —
     #    T-03-04-timing-oracle mitigation).
@@ -247,7 +292,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
     try:
         yield
     finally:
-        # Shutdown ngược thứ tự init — watchdog → sqlalchemy → jwt → cocoindex → redis → db_pool.
+        # Shutdown ngược thứ tự init — jwks_cache → watchdog → sqlalchemy → jwt → cocoindex → redis → db_pool.
+        # Phase 3 Plan 03-02 — graceful shutdown JWKS cache asyncio task TRƯỚC
+        # các shutdown khác (refresh task chỉ dùng httpx KHÔNG dùng DB/Redis,
+        # cancel sớm để asyncio.sleep wake fast — KHÔNG block teardown khác).
+        _shutdown_jwks_cache = getattr(app.state, "jwks_cache", None)
+        if _shutdown_jwks_cache is not None:
+            try:
+                await _shutdown_jwks_cache.stop_refresh_task()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("jwks_cache_stop_failed: %s", e)
+            app.state.jwks_cache = None
         # Cancel watchdog task TRƯỚC dispose_engine — watchdog_tick dùng engine,
         # cancel sớm tránh race "engine disposed mid-tick" (Plan 04-05 APPEND-ONLY).
         if getattr(app.state, "watchdog_task", None) is not None:

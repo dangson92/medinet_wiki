@@ -64,6 +64,13 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
     )
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("COCOINDEX_SKIP_SETUP", "1")
+    # Plan 03-02 Task 1 — validator hub con required CENTRAL_JWKS_URL.
+    # Auto-set cho hub con để boot Settings PASS (regression update).
+    if hub_name != "central":
+        monkeypatch.setenv(
+            "CENTRAL_JWKS_URL",
+            "http://python-api-central:8080/.well-known/jwks.json",
+        )
     # Force re-parse env mỗi test (lru_cache singleton)
     from app.config import get_settings
 
