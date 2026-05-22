@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { APP_BASE } from './services/api';
 import Layout from './Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -36,7 +37,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    // Phase 5 D-V3-Phase5-B3 LOCKED — basename auto prepend cho mọi route khi hub con
+    // (APP_BASE='/yte'|''|'/duoc'|...). 13 sub-route giữ NGUYÊN path absolute.
+    <BrowserRouter basename={APP_BASE}>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
