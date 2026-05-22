@@ -1,4 +1,4 @@
-"""Search service — core vector query engine Phase 6.
+"""Search service — core vector query engine Phase 6 + Plan 04-05 refactor.
 
 `SearchService.search()` chạy single-hub union search (SEARCH-01) trên pgvector
 qua asyncpg pool: embed query (D-09), set HNSW session tuning (SEARCH-02 / D-08),
@@ -13,14 +13,20 @@ Predicate "tập hub admin search" = `is_active = TRUE` — NHẤT QUÁN với 0
 `search_cross_hub` (`SELECT id FROM hubs WHERE is_active = TRUE`). KHÔNG dùng
 predicate cột `status` ở bất kỳ đâu (chỉ `is_active`).
 
-Cross-hub fan-out (`search_cross_hub`) — fan-out song song mỗi hub qua
-`asyncio.gather` rồi aggregate + re-rank theo score (SEARCH-03 / D-06). Cache
-cross-hub tách namespace `search:cross:` (06-03 invalidation xử lý chung prefix
-`search:`). `find_similar` (D-04) — find-similar không có REQ-ID, KHÔNG cache.
+Cross-hub (`search_cross_hub`) — Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D1)
+refactor: 1 SQL aggregated `WHERE hub_id = ANY($1::uuid[])` thay fan-out
+parallel `_search_one(hub_id)` per hub qua asyncio.gather. Re-rank tự nhiên qua
+ORDER BY vector <=> embedding LIMIT $k. HNSW iterative_scan=relaxed_order +
+ef_search=200 + max_scan_tuples=20000 carry forward M2 Phase 6 (_run_vector_query
+SET LOCAL session tuning). Cache cross-hub tách namespace `search:cross:` (06-03
+invalidation xử lý chung prefix `search:`). Public API
+`SearchService.search_cross_hub()` signature giữ NGUYÊN (backward compat M2
+contract — ask_service.py consumer + frontend client).
+
+`find_similar` (D-04) — find-similar không có REQ-ID, KHÔNG cache.
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -322,10 +328,12 @@ class SearchService:
         body: SearchRequest,
         user: UserWithHubs,
     ) -> dict[str, Any]:
-        """Cross-hub fan-out search (SEARCH-03 / D-06).
+        """Cross-hub aggregated search (SEARCH-03 / D-06 + Plan 04-05 D-V3-Phase4-D1).
 
-        Query SONG SONG mỗi hub qua `asyncio.gather` (mỗi hub lấy `top_k`
-        riêng), aggregate toàn bộ rồi re-rank theo score desc → global top-k.
+        Phase 4 Plan 04-05 refactor — 1 SQL aggregated `WHERE c.hub_id = ANY`
+        thay fan-out per-hub. Re-rank tự nhiên qua ORDER BY vector <=> embedding
+        LIMIT $k của SQL (KHÔNG cần Python merge sort). Public API signature
+        giữ NGUYÊN — backward compat M2 contract.
 
         Plan 10-02 HARD-02: wrap toàn body bằng `SEARCH_LATENCY` histogram
         (label `hub_scope="cross"`).
@@ -335,7 +343,7 @@ class SearchService:
         with SEARCH_LATENCY.labels(hub_scope="cross").time():
             return await self._search_cross_hub_impl(body=body, user=user)
 
-    async def _search_cross_hub_impl(  # noqa: C901 — chuỗi step fan-out + cache phẳng
+    async def _search_cross_hub_impl(
         self,
         *,
         body: SearchRequest,
@@ -343,23 +351,38 @@ class SearchService:
     ) -> dict[str, Any]:
         """Implementation `search_cross_hub()` — tách để wrap SEARCH_LATENCY ở public method.
 
-        Khác `_search_single_impl` (1 câu SQL union): fan-out per-hub cần danh
-        sách hub cụ thể — admin không filter → query tất cả hub `is_active = TRUE`
-        (predicate NHẤT QUÁN branch admin-all của `_run_vector_query` ở 06-01).
+        Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D1) — Refactor 1 SQL aggregated
+        thay fan-out parallel per-hub. Single `_run_vector_query(hub_ids=[<all>])`
+        dùng `WHERE c.hub_id = ANY($2::uuid[])` + ORDER BY vector <=> embedding
+        LIMIT $k → re-rank tự nhiên + giảm N connection acquire + N HNSW seek
+        về 1.
+
+        Public API `SearchService.search_cross_hub()` signature KHÔNG đổi —
+        backward compat M2 contract (ask_service.py consumer + frontend client).
+        HNSW iterative_scan=relaxed_order + ef_search=200 + max_scan_tuples=20000
+        carry forward (M2 Phase 6 `_run_vector_query` SET LOCAL session tuning).
+
+        E-V3-2: cross-hub p95 < 1.5s — single SQL avoid concurrent gather
+        overhead + N-times re-rank merge. Khác `_search_single_impl` ở chỗ admin
+        no-filter cần query danh sách hub `is_active = TRUE` rồi pass vào
+        `_run_vector_query` với `all_hubs=False` (KHÔNG dùng `all_hubs=True`
+        branch của single search để giữ total_hubs_searched semantic = số hub
+        fan-in thực sự).
         """
         t0 = time.perf_counter()
         top_k = _resolve_top_k(body.top_k)
         hub_ids = intersect_hubs(body.hub_ids, user.hub_ids, user.user.role)
 
-        # admin không filter: fan-out cần danh sách hub cụ thể → query tất cả hub
-        # active. Predicate `is_active = TRUE` NHẤT QUÁN branch admin-all của
+        # admin không filter: cần danh sách hub cụ thể để pass vào aggregated SQL
+        # với `WHERE c.hub_id = ANY` + giữ total_hubs_searched = len(hub_ids).
+        # Predicate `is_active = TRUE` NHẤT QUÁN branch admin-all của
         # `_run_vector_query` (06-01). TUYỆT ĐỐI KHÔNG dùng cột `status`.
         if user.user.role == "admin" and not body.hub_ids:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch("SELECT id FROM hubs WHERE is_active = TRUE")
             hub_ids = [str(r["id"]) for r in rows]
 
-        # Không hub nào để fan-out (non-admin chưa assign / không hub active) →
+        # Không hub nào để query (non-admin chưa assign / không hub active) →
         # empty result hợp lệ.
         if not hub_ids:
             return SearchResponse(
@@ -386,30 +409,25 @@ class SearchService:
         # router để map 400 / 502 (KHÔNG catch ở service).
         query_vector = await embed_text(body.query)
 
-        # Fan-out per-hub qua asyncio.gather — `_run_vector_query` trả tuple
-        # `(rows, count)`; `_search_one` CHỈ lấy phần tử [0] (`rows`).
-        async def _search_one(hub_id: str) -> list[Any]:
-            rows, _ = await self._run_vector_query(
-                query_vector=query_vector,
-                hub_ids=[hub_id],
-                top_k=top_k,
-                all_hubs=False,
-            )
-            return rows
-
-        per_hub = await asyncio.gather(*[_search_one(h) for h in hub_ids])
-
-        # Aggregate + re-rank theo score desc → global top-k.
-        all_rows = [r for rows in per_hub for r in rows]
-        all_rows.sort(key=lambda r: float(r["score"]), reverse=True)
-        items = [_row_to_item(r) for r in all_rows[:top_k]]
+        # Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D1) — 1 SQL aggregated thay
+        # fan-out per-hub. `_run_vector_query` đã handle `hub_ids: list[str]`
+        # multi-element qua `WHERE c.hub_id = ANY($2::uuid[])` (M2 Phase 6 carry
+        # forward). ORDER BY vector <=> $1::vector LIMIT $3 trim global top-k tự
+        # nhiên — KHÔNG cần Python re-rank merge sort.
+        rows, _hubs_queried = await self._run_vector_query(
+            query_vector=query_vector,
+            hub_ids=hub_ids,  # ALL hubs in 1 list — ANY($1::uuid[])
+            top_k=top_k,
+            all_hubs=False,
+        )
+        items = [_row_to_item(r) for r in rows]
 
         # min_score filter (D-14) — categories/tags/date_* accept-but-noop M2.
         if body.min_score is not None:
             items = [it for it in items if it.score >= body.min_score]
 
-        # total_hubs_searched = số hub fan-out thực sự (với admin-all `hub_ids`
-        # đã = danh sách hub `is_active = TRUE`).
+        # total_hubs_searched = số hub fan-in thực sự (với admin-all `hub_ids`
+        # đã = danh sách hub `is_active = TRUE` từ SELECT trên).
         result = SearchResponse(
             results=items,
             total_hubs_searched=len(hub_ids),
@@ -418,7 +436,7 @@ class SearchService:
         ).model_dump(mode="json")
 
         # Cache ghi — fail-open. tag_cache_key gắn cache key cross-hub vào SET
-        # hub-tag cho TỪNG hub fan-out (06-03 / D-12) — NẰM TRONG cùng block
+        # hub-tag cho TỪNG hub queried (06-03 / D-12) — NẰM TRONG cùng block
         # try/except fail-open với redis.set.
         if self.redis is not None:
             try:
