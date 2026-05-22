@@ -120,6 +120,25 @@ Plans:
 - JWKS cache fallback: fail-loud nếu central down khi TTL expire vs fallback static keypair embedded ở deploy time (security trade-off).
 - Refresh token rotation: chỉ central handle (hub con KHÔNG sinh refresh) — re-confirm contract.
 
+**Decisions (chốt 2026-05-22 theo planner seed defaults Auto Mode `--auto --chain`, KHÔNG `/gsd-discuss-phase 3` interactive — 8 D-V3-Phase3 LOCKED):**
+- D-V3-Phase3-A: JWKS endpoint pattern RFC 7517 (KHÔNG shared keypair / cookie domain).
+- D-V3-Phase3-B: Boot fail-loud (timeout 5s blocking) + runtime fail-quiet + 24h hard limit.
+- D-V3-Phase3-C: Hub con KHÔNG sinh refresh — 100% lifecycle ở central.
+- D-V3-Phase3-D: In-process LRU JWKSCache (KHÔNG Redis cache JWKS).
+- D-V3-Phase3-E: iss=`"medinet-wiki"` (RE-CONFIRM Plan 03-03 — KHÔNG URL-based) + aud=`["medinet-wiki"]` REQUIRED + hub_ids REQUIRED.
+- D-V3-Phase3-F: Frontend redirect (form action central) defer Phase 5 PROXY-02.
+- D-V3-Phase3-G: Hub con login + refresh → 307 Location: central (RFC 7231 preserve POST + body).
+- D-V3-Phase3-H: Redis blacklist key `auth:blacklist:{jti}` + TTL=exp-now + value `"1"` marker + Redis instance M2 chung.
+
+**Plans:** 5 plans (5 waves — Wave 1 BLOCKING, Wave 2 depend 03-01, Wave 3 depend 03-02, Wave 4 depend 03-03, Wave 5 closeout depend 03-04)
+
+Plans:
+- [ ] 03-01-PLAN.md — JWKS endpoint central publish RFC 7517 (`publish_jwks` + `load_public_key_as_jwk` + central mount conditional + `Settings.central_jwks_url` + docker-compose env `CENTRAL_JWKS_URL`) (SSO-01)
+- [ ] 03-02-PLAN.md — JWKSCache hub con (in-process LRU + asyncio refresh + 24h hard limit + lifespan startup blocking fetch + dependency branch verify path + `JWTManager.verify_token_with_key` + Settings 3 field + model_validator enforce hub con required) (SSO-01)
+- [ ] 03-03-PLAN.md — JWT claim refactor (`aud` + `hub_ids` REQUIRED + PyJWT strict audience check 2 path) + Redis blacklist key rename `auth:blacklist:` (5 vị trí + `_blacklist.py` helper module) + SSO-04 E4 reinforced dependency `get_current_user_for_hub_access` Layer 3 enforce (SSO-02, SSO-03, SSO-04)
+- [ ] 03-04-PLAN.md — Auth router refactor hub con 307 redirect login/refresh + `Settings.central_url` + docker-compose `CENTRAL_URL` env + Phase 2 integration test assertion update (split 10 LOCAL + 2 SSO_REDIRECT) + REQUIREMENTS.md FACTOR-03 note extend (SSO-02)
+- [ ] 03-05-PLAN.md — Closeout — CLAUDE.md section 6 + STATE.md Phase 3 Results Summary + REQUIREMENTS.md SSO-01..04 mark `[x]` + README.md SSO Backward Incompat section + smoke compose checkpoint Task 5 (central + yte runtime verify) + v3.0-a EXIT GATE TRIGGERED
+
 ---
 
 ### 🚦 v3.0-a EXIT GATE (giữa Phase 3 và 4)
