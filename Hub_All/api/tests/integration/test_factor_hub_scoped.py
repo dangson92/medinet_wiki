@@ -74,10 +74,17 @@ HUB_SCOPED_LOCAL_ENDPOINTS: list[tuple[str, str]] = [
     ep for ep in HUB_SCOPED_ENDPOINTS if ep not in HUB_SCOPED_SSO_REDIRECT_ENDPOINTS
 ]
 
-# 8 endpoint central-only — STRIP ở hub con (FACTOR-02)
+# 9 endpoint central-only — STRIP ở hub con (FACTOR-02 + FACTOR-02 extend)
 # NOTE BLK-01 fix: sync_router thực tế (api/app/routers/sync.py M2 compat stub)
 # chỉ có /stats, /batches, /batches/{id}, approve, reject (KHÔNG có /run legacy).
 # Plan 02-03 dùng GET /api/sync/stats làm proxy verify FACTOR-02 strip semantic.
+#
+# Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D3) — FACTOR-02 extend: thêm
+# POST /api/search/cross-hub vào CENTRAL_ONLY list. Tach khoi universal
+# `search_router` (van mount moi process cho /api/search + /api/search/similar).
+# Hub con KHONG own cross-hub aggregated data (medinet_central.chunks
+# denormalized read replica per D-V3-02) → strip endpoint la correct semantic.
+# Hub con request → 404 NOT_FOUND envelope D6.
 CENTRAL_ONLY_ENDPOINTS: list[tuple[str, str]] = [
     ("GET", "/api/rag-config"),
     ("GET", "/api/api-keys"),
@@ -87,6 +94,8 @@ CENTRAL_ONLY_ENDPOINTS: list[tuple[str, str]] = [
     ("GET", "/api/system-settings"),
     ("GET", "/api/sync/stats"),
     ("GET", "/api/mcp/my-oauth-client"),
+    # Phase 4 Plan 04-05 SYNC-03 — Cross-hub aggregated search central-only:
+    ("POST", "/api/search/cross-hub"),
 ]
 
 
@@ -262,6 +271,76 @@ def test_404_envelope_unknown_route_central(hub_app_factory: Any) -> None:
         assert resp.status_code == 404
         assert _is_envelope_404(resp), (
             f"Central 404 unknown route PHẢI envelope shape — body: {resp.text[:300]}"
+        )
+
+
+# ─── Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D3) dedicated tests ────────
+# Cross-hub aggregated search central-only mount. Hub con strip → 404 envelope
+# (FACTOR-02 extend). Public API SearchService.search_cross_hub signature
+# KHONG doi — backward compat M2 contract.
+
+
+@pytest.mark.parametrize("hub_name", ["yte", "duoc", "hcns"])
+def test_hub_con_strips_search_cross_hub(
+    hub_app_factory: Any, hub_name: str
+) -> None:
+    """Plan 04-05 SYNC-03 / D-V3-Phase4-D3 — Hub con strip /api/search/cross-hub.
+
+    Hub con (yte/duoc/hcns) KHONG mount cross_hub_router → request → 404
+    NOT_FOUND envelope D6 qua Starlette HTTPException handler (Plan 02-03
+    carry forward). KHONG dung 403 (leak endpoint existence — FACTOR-02 lock).
+    """
+    app = hub_app_factory(hub_name)
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/search/cross-hub",
+            json={"query": "test", "top_k": 5},
+        )
+        assert resp.status_code == 404, (
+            f"Hub {hub_name} PHAI strip POST /api/search/cross-hub → 404 "
+            f"(FACTOR-02 extend), actual: {resp.status_code} body: {resp.text[:200]}"
+        )
+        assert _is_envelope_404(resp), (
+            f"Hub {hub_name} POST /api/search/cross-hub 404 PHAI envelope shape "
+            f"{{success:false, data:null, error:{{code,message}}, meta:null}} — "
+            f"actual body: {resp.text[:300]}"
+        )
+
+
+def test_central_mounts_search_cross_hub(hub_app_factory: Any) -> None:
+    """Plan 04-05 SYNC-03 — Central giu mount /api/search/cross-hub.
+
+    Central process include search_cross_hub_router (main.py block central-only).
+    Endpoint ton tai → response != 404 (200/401/422 acceptable theo auth +
+    body validation; KHONG 404 endpoint missing).
+    """
+    app = hub_app_factory("central")
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/search/cross-hub",
+            json={"query": "test", "top_k": 5},
+        )
+        assert resp.status_code != 404, (
+            f"Central PHAI mount POST /api/search/cross-hub (SYNC-03 D-V3-Phase4-D3), "
+            f"actual: {resp.status_code} body: {resp.text[:200]}"
+        )
+
+
+def test_hub_con_mounts_search_local(hub_app_factory: Any) -> None:
+    """Plan 04-05 — Hub con van mount POST /api/search (universal router).
+
+    Universal `search_router` mount moi process. Hub con dung local DB
+    `medinet_hub_yte` cho local single-hub search (E-V3-3 isolation).
+    """
+    app = hub_app_factory("yte")
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/search",
+            json={"query": "test", "top_k": 5},
+        )
+        assert resp.status_code != 404, (
+            f"Hub yte PHAI mount POST /api/search (universal — local single-hub), "
+            f"actual: {resp.status_code} body: {resp.text[:200]}"
         )
 
 
