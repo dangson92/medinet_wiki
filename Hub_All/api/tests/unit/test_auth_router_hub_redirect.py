@@ -53,6 +53,11 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
             "CENTRAL_SYNC_DSN",
             "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
         )
+        # Plan 04-04 Task 2 — lifespan central_sync_pool blocking fetch fail-loud
+        # khi DSN trỏ host KHÔNG có Postgres. Test KHÔNG verify sync path → skip
+        # qua SYNC_SKIP_CENTRAL_POOL=1 escape hatch (pattern song song
+        # JWKS_SKIP_FETCH Plan 03-02 + COCOINDEX_SKIP_SETUP DEF-05-01).
+        monkeypatch.setenv("SYNC_SKIP_CENTRAL_POOL", "1")
     from app.config import get_settings
 
     get_settings.cache_clear()

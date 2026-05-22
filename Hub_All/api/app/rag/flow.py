@@ -179,7 +179,33 @@ async def index_document(
       sẽ set 'failed' với chunk_count=0.
     """
     doc_id = uuid.UUID(str(doc_row["id"]))
-    hub_id = uuid.UUID(str(doc_row["hub_id"]))
+    doc_hub_id = uuid.UUID(str(doc_row["hub_id"]))
+
+    # Phase 4 Plan 04-04 (D-V3-Phase4-D2) — Defensive guard hub_id wire khớp
+    # Settings.hub_id (operator deploy responsibility set HUB_ID UUID khớp
+    # medinet_central.hubs.id row). KHÔNG declare chunk row có hub_id sai
+    # (E-V3-3 isolation enforce — Layer 1 DB validator carry forward Phase 1).
+    #
+    # Settings.hub_id None ở central → skip guard (central KHÔNG ingest M2 stack
+    # current — guard chỉ cho hub con). Hub con thiếu HUB_ID → Settings
+    # validator Plan 04-02 đã raise boot.
+    _phase4_settings = _get_settings()
+    if _phase4_settings.hub_id is not None:
+        expected_hub_id = uuid.UUID(_phase4_settings.hub_id)
+        if doc_hub_id != expected_hub_id:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "ingest_skip_hub_id_mismatch: doc_id=%s doc_hub_id=%s "
+                "settings_hub_id=%s hub_name=%s",
+                doc_id,
+                doc_hub_id,
+                expected_hub_id,
+                _phase4_settings.hub_name,
+            )
+            # Skip — KHÔNG declare chunk row với hub_id sai.
+            return
+
+    hub_id = doc_hub_id
     file_path_str = doc_row["file_path"]
 
     # 1) Extract text + scanned-detect

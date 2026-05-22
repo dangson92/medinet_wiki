@@ -637,6 +637,23 @@ def hub_app_factory(
             )
             monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
             monkeypatch.setenv("JWKS_SKIP_FETCH", "1")
+            # Plan 04-02 Task 1 — Settings validator hub con required HUB_ID +
+            # CENTRAL_SYNC_DSN. Auto-set cùng pattern.
+            monkeypatch.setenv(
+                "HUB_ID", "12345678-1234-1234-1234-123456789012"
+            )
+            monkeypatch.setenv(
+                "CENTRAL_SYNC_DSN",
+                "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+            )
+            # Plan 04-04 Task 2 — lifespan central_sync_pool fail-loud nếu DSN
+            # trỏ host KHÔNG có Postgres. Hub_app_factory consumer (Phase 2
+            # factor test) KHÔNG verify sync path → skip qua SYNC_SKIP_CENTRAL_POOL=1
+            # escape hatch (pattern song song JWKS_SKIP_FETCH Plan 03-02 +
+            # COCOINDEX_SKIP_SETUP DEF-05-01). Phase 4 dedicated test
+            # test_sync_lifespan_integration mock asyncpg.create_pool riêng —
+            # KHÔNG cần skip flag.
+            monkeypatch.setenv("SYNC_SKIP_CENTRAL_POOL", "1")
 
         # Force re-parse env (lru_cache singleton).
         get_settings.cache_clear()

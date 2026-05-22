@@ -45,6 +45,28 @@ from app.middleware import (
 )
 from app.pkg import response as resp
 
+# Phase 4 Plan 04-04 — pgvector codec register cho central_sync_pool connections.
+# BLOCKER 2 end-to-end serialization fix: Plan 04-03 PUSH_INSERT_CHUNK_SQL truyền
+# $9 = list[float] → pgvector cần codec register per connection để encode list
+# sang binary format vector. Optional import — pgvector dev dependency available
+# tại runtime (pin pgvector==0.4.2 pyproject.toml).
+try:
+    from pgvector.asyncpg import register_vector
+except ImportError:  # pgvector optional dev — KHÔNG raise import time
+    register_vector = None
+
+
+async def _init_central_sync_conn(conn: asyncpg.Connection) -> None:
+    """Register pgvector codec cho central_sync_pool connections (BLOCKER 2 fix).
+
+    Truyền vào `asyncpg.create_pool(init=...)` để mỗi connection trong pool có
+    codec register sẵn → asyncpg encode list[float] → pgvector binary format
+    khi worker push chunks qua $9 parameter (PUSH_INSERT_CHUNK_SQL Plan 04-03).
+    """
+    if register_vector is not None:
+        await register_vector(conn)
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -225,6 +247,81 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
                 settings.jwks_refresh_interval,
             )
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 4 Plan 04-04 (SYNC-01, D-V3-Phase4-A1/A3) — Hub con central_sync_pool
+    # ──────────────────────────────────────────────────────────────────────
+    # Hub con (settings.hub_name != "central") spawn dedicated asyncpg pool trỏ
+    # medinet_central — worker (Plan 04-03 sync_worker_loop) push chunks ON
+    # CONFLICT (id) DO UPDATE qua pool này.
+    #
+    # T-04-04-01 Spoofing mitigation: SELECT current_database() == 'medinet_central'
+    # fail-fast nếu operator paste sai DSN (trỏ medinet_hub_yte thay vì
+    # medinet_central) → boot raise → uvicorn exit 1. KHÔNG silent corrupt.
+    #
+    # BLOCKER 2 fix: create_pool(init=_init_central_sync_conn) register pgvector
+    # codec per connection. KHÔNG register → worker truyền list[float] qua $9
+    # parameter sẽ fail runtime mid-batch.
+    #
+    # R-V3-1 fail-loud — hub con KHÔNG init được central_sync_pool → re-raise
+    # exit 1. Outbox accumulate vô tận nếu silent skip; chấp nhận downtime hub
+    # con thay vì silent data loss.
+    #
+    # Test-mode escape hatch: env `SYNC_SKIP_CENTRAL_POOL=1` bypass blocking
+    # create_pool cho integration test factor_hub_scoped boot lifespan với
+    # fake URL trỏ medinet_hub_<hub> KHÔNG có Postgres thật (pattern song song
+    # COCOINDEX_SKIP_SETUP DEF-05-01 + JWKS_SKIP_FETCH Plan 03-02). Phase 4
+    # dedicated test (test_sync_lifespan_integration) mock asyncpg.create_pool
+    # riêng — KHÔNG cần skip flag. Production KHÔNG bao giờ set flag này.
+    app.state.central_sync_pool = None
+    if settings.hub_name != "central" and os.environ.get("SYNC_SKIP_CENTRAL_POOL") == "1":
+        logger.warning(
+            "central_sync_pool_skipped: SYNC_SKIP_CENTRAL_POOL=1 (test mode — "
+            "lifespan bypass blocking create_pool)"
+        )
+    elif settings.hub_name != "central":
+        try:
+            if not settings.central_sync_dsn:
+                # Defensive guard — Settings validator (_enforce_central_sync_dsn_for_hub
+                # Plan 04-02) đã raise nếu thiếu. Bao thêm tránh race khi Settings
+                # cache override runtime.
+                raise RuntimeError(
+                    f"hub_name={settings.hub_name!r} thiếu CENTRAL_SYNC_DSN — "
+                    "Settings validator phải đã raise ở boot."
+                )
+            app.state.central_sync_pool = await asyncpg.create_pool(
+                dsn=_to_asyncpg_dsn(settings.central_sync_dsn),
+                init=_init_central_sync_conn,  # BLOCKER 2 fix — pgvector codec per conn
+                min_size=1,
+                max_size=5,
+                command_timeout=30,
+            )
+            # T-04-04-01 mitigation — verify pool kết nối ĐÚNG medinet_central
+            async with app.state.central_sync_pool.acquire() as _verify_conn:
+                actual_db = await _verify_conn.fetchval("SELECT current_database()")
+            if actual_db != "medinet_central":
+                raise RuntimeError(
+                    f"CENTRAL_SYNC_DSN trỏ sai DB: expected 'medinet_central', "
+                    f"got {actual_db!r}. Operator paste sai env — T-04-04-01."
+                )
+            logger.info(
+                "central_sync_pool_ready: hub=%s target_db=%s pgvector_codec=%s",
+                settings.hub_name,
+                actual_db,
+                register_vector is not None,
+            )
+        except Exception as exc:
+            logger.critical(
+                "central_sync_pool_init_failed_fail_fast: hub=%s err=%s",
+                settings.hub_name,
+                exc,
+            )
+            raise  # R-V3-1 fail-loud — hub con boot abort
+    else:
+        logger.info(
+            "central_sync_pool_skipped: hub_name=central (D-V3-Phase4-A3 — "
+            "central KHÔNG self-push)"
+        )
+
     # 5) Anti-timing dummy hash — pre-compute 1 hash để service.login dùng
     #    khi user không tồn tại (response time KHÔNG leak email enumeration —
     #    T-03-04-timing-oracle mitigation).
@@ -294,9 +391,81 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
         except Exception as e:  # noqa: BLE001
             logger.warning("search_cache_subscriber_start_failed: %s", e)
 
+    # ──────────────────────────────────────────────────────────────────────
+    # 10) Phase 4 Plan 04-04 (SYNC-01/02/05, D-V3-Phase4-A1/A3/A5) — Hub con
+    #     sync_worker_task spawn SAU central_sync_pool ready (step 4.5 trên).
+    # ──────────────────────────────────────────────────────────────────────
+    # In-process asyncio task (D-V3-Phase4-A3 LOCKED) — KHÔNG separate worker
+    # container, KHÔNG central worker SPOF. Worker poll local sync_outbox →
+    # push central qua app.state.central_sync_pool.
+    #
+    # Central skip spawn (D-V3-Phase4-A3) — log evidence sync_worker_skipped.
+    # KHÔNG fail-loud worker (warning) vì Plan 04-03 worker logic đã defensive
+    # skip nếu pool None; nếu spawn fail → log warning, lifespan tiếp tục
+    # (R-V3-1 pool đã fail-loud ở step trên — KHÔNG cần double fail).
+    app.state.sync_worker_task = None
+    if settings.hub_name == "central":
+        logger.info("sync_worker_task_skipped: hub_name=central (D-V3-Phase4-A3)")
+    elif os.environ.get("SYNC_SKIP_CENTRAL_POOL") == "1":
+        # Test mode — central_sync_pool đã skip, worker KHÔNG có pool acquire.
+        logger.warning(
+            "sync_worker_task_skipped: SYNC_SKIP_CENTRAL_POOL=1 (test mode)"
+        )
+    else:
+        try:
+            from app.sync import sync_worker_loop
+
+            app.state.sync_worker_task = asyncio.create_task(
+                sync_worker_loop(app)
+            )
+            logger.info(
+                "sync_worker_task_started: hub=%s batch_size=%d poll_interval=%.1fs",
+                settings.hub_name,
+                settings.sync_batch_size,
+                settings.sync_poll_interval,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("sync_worker_task_start_failed: %s", e)
+
     try:
         yield
     finally:
+        # ──────────────────────────────────────────────────────────────────
+        # Phase 4 Plan 04-04 — Shutdown sync_worker_task + central_sync_pool
+        # TRƯỚC mọi shutdown khác (worker chỉ dùng asyncpg + Pydantic — KHÔNG
+        # dùng SQLAlchemy engine + Redis + cocoindex; cancel sớm tránh hold
+        # outbox lock khi local db_pool đang shutdown).
+        # ──────────────────────────────────────────────────────────────────
+        # Graceful cancel — set_event đầu tiên KHÔNG có (worker dùng
+        # CancelledError propagate); task.cancel() + wait_for timeout 10s.
+        # Sau timeout 10s force re-cancel (defensive vs worker hang push
+        # central runtime).
+        if getattr(app.state, "sync_worker_task", None) is not None:
+            app.state.sync_worker_task.cancel()
+            try:
+                await asyncio.wait_for(
+                    app.state.sync_worker_task, timeout=10.0
+                )
+            except asyncio.CancelledError:
+                pass
+            except TimeoutError:
+                logger.warning(
+                    "sync_worker_task_shutdown_timeout: hub=%s — forcing exit",
+                    settings.hub_name,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("sync_worker_task_stop_failed: %s", e)
+            app.state.sync_worker_task = None
+
+        # Close central_sync_pool SAU khi worker đã cancel (KHÔNG release pool
+        # khi còn task acquire connection — asyncpg sẽ warn + block).
+        if getattr(app.state, "central_sync_pool", None) is not None:
+            try:
+                await app.state.central_sync_pool.close()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("central_sync_pool_close_failed: %s", e)
+            app.state.central_sync_pool = None
+
         # Shutdown ngược thứ tự init — jwks_cache → watchdog → sqlalchemy → jwt → cocoindex → redis → db_pool.
         # Phase 3 Plan 03-02 — graceful shutdown JWKS cache asyncio task TRƯỚC
         # các shutdown khác (refresh task chỉ dùng httpx KHÔNG dùng DB/Redis,
