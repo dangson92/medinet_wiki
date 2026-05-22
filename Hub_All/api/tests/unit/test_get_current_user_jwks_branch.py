@@ -193,3 +193,100 @@ async def test_hub_con_jwks_stale_returns_503(
     assert exc_info.value.status_code == 503
     assert isinstance(exc_info.value.detail, dict)
     assert exc_info.value.detail["code"] == "JWKS_STALE"
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Plan 03-03 Task 3 — get_current_user_for_hub_access SSO-04 E4 reinforced
+# Verify defense-in-depth Layer 3: JWT.hub_ids claim enforcement ở dependency.
+# Central bypass + hub con strict check + defensive AUTH_STATE_MISSING bug guard.
+# ════════════════════════════════════════════════════════════════════════
+
+
+async def test_central_bypass_hub_access_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Central → get_current_user_for_hub_access return user (bypass — cross-hub by design)."""
+    _common_hub_env(monkeypatch, "central")
+
+    from app.auth.dependencies import get_current_user_for_hub_access
+
+    user_mock = MagicMock()
+    request_mock = MagicMock()
+    # KHÔNG cần state.jwt_claims cho central (bypass — central is cross-hub)
+    result = await get_current_user_for_hub_access(
+        request=request_mock, user=user_mock
+    )
+    assert result is user_mock
+
+
+async def test_hub_con_reject_cross_hub_jwt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hub yte + claims.hub_ids=['duoc'] → 403 CROSS_HUB_ACCESS_DENIED (T-03-03-01)."""
+    _common_hub_env(monkeypatch, "yte")
+
+    from app.auth.dependencies import get_current_user_for_hub_access
+
+    user_mock = MagicMock()
+    claims_mock = MagicMock()
+    claims_mock.hub_ids = ["duoc"]  # stale JWT cross-hub forge scenario
+    request_mock = MagicMock()
+    request_mock.state.jwt_claims = claims_mock
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user_for_hub_access(
+            request=request_mock, user=user_mock
+        )
+    assert exc_info.value.status_code == 403
+    detail = exc_info.value.detail
+    assert isinstance(detail, dict)
+    assert detail["code"] == "CROSS_HUB_ACCESS_DENIED"
+    # Message phải reveal hub mismatch (helpful — KHÔNG leak data)
+    assert "yte" in detail["message"]
+
+
+async def test_hub_con_accept_matching_hub_jwt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hub yte + claims.hub_ids=['yte', 'duoc'] → return user (yte in hub_ids)."""
+    _common_hub_env(monkeypatch, "yte")
+
+    from app.auth.dependencies import get_current_user_for_hub_access
+
+    user_mock = MagicMock()
+    claims_mock = MagicMock()
+    claims_mock.hub_ids = ["yte", "duoc"]  # user assigned cả 2 hub
+    request_mock = MagicMock()
+    request_mock.state.jwt_claims = claims_mock
+
+    result = await get_current_user_for_hub_access(
+        request=request_mock, user=user_mock
+    )
+    assert result is user_mock
+
+
+async def test_hub_con_state_missing_raises_500(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defensive — request.state.jwt_claims=None → 500 AUTH_STATE_MISSING (bug guard).
+
+    Vi phạm dependency contract — get_current_user PHẢI set request.state.jwt_claims
+    sau verify pass. Nếu missing = internal bug (dep chain broken). Raise 500
+    để phát hiện sớm thay vì silent bypass authorization check.
+    """
+    _common_hub_env(monkeypatch, "yte")
+
+    from app.auth.dependencies import get_current_user_for_hub_access
+
+    user_mock = MagicMock()
+    request_mock = MagicMock()
+    request_mock.state.jwt_claims = None  # missing — broken contract
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_user_for_hub_access(
+            request=request_mock, user=user_mock
+        )
+    assert exc_info.value.status_code == 500
+    detail = exc_info.value.detail
+    assert isinstance(detail, dict)
+    assert detail["code"] == "AUTH_STATE_MISSING"

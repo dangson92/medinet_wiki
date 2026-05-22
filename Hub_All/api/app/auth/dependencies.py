@@ -211,6 +211,13 @@ async def get_current_user(  # noqa: C901 — Phase 3 branch verify path hub con
                 headers={"WWW-Authenticate": "Bearer"},
             ) from e
 
+    # Phase 3 Plan 03-03 Task 3 (SSO-04 E4 reinforced) — attach claims vào
+    # request.state để get_current_user_for_hub_access dependency reuse
+    # KHÔNG cần re-decode JWT. Cả 2 branch (central + hub con) sau verify pass
+    # đều set state — pattern này cho phép defense-in-depth Layer 3 enforcement
+    # ở endpoint hub-scoped sensitive (xem get_current_user_for_hub_access).
+    request.state.jwt_claims = claims
+
     # Blacklist check — Plan 03-03 D-V3-Phase3-H key `auth:blacklist:{jti}`
     # qua helper (cross-process central + hub con cùng 1 Redis instance M2 baseline).
     if redis is not None:
@@ -314,6 +321,75 @@ async def get_current_user_with_hubs(
     stmt = select(UserHub.hub_id).where(UserHub.user_id == user.id)
     hub_ids = [str(h) for h in (await db.execute(stmt)).scalars().all()]
     return UserWithHubs(user=user, hub_ids=hub_ids)
+
+
+async def get_current_user_for_hub_access(
+    request: Request,
+    user: User = Depends(get_current_user),  # noqa: B008 — FastAPI pattern
+) -> User:
+    """Phase 3 Plan 03-03 SSO-04 — Hub con verify HUB_NAME in JWT.hub_ids (E4 reinforced).
+
+    Defense-in-depth Layer 3 bên cạnh:
+    - Layer 1: Phase 1 `_enforce_hub_dsn_match` DB-level isolation (Settings validator)
+    - Layer 2: repository `WHERE hub_id = settings.hub_name` (M2 carry forward)
+    - Layer 3 (MỚI Phase 3 Plan 03-03): JWT claim hub_ids enforcement ở dependency
+
+    Central (hub_name="central"): bypass check — cross-hub by design (admin
+        endpoint + cross-hub search expose ở central).
+    Hub con (yte/duoc/hcns/dynamic): claims.hub_ids load từ JWT (verified
+        signature qua JWKSCache Plan 03-02). Check HUB_NAME in claims.hub_ids
+        → reject 403 CROSS_HUB_ACCESS_DENIED nếu mismatch.
+
+    Usage:
+        @router.post("/api/documents",
+                     dependencies=[Depends(get_current_user_for_hub_access)])
+        async def upload(user=Depends(get_current_user_for_hub_access)): ...
+
+    Behavior:
+        - get_current_user fail (401) → exception raise trước, dep này KHÔNG run.
+        - Central: return user (bypass — cross-hub by design).
+        - Hub con + HUB_NAME in claims.hub_ids: return user.
+        - Hub con + HUB_NAME not in claims.hub_ids: raise 403 CROSS_HUB_ACCESS_DENIED.
+
+    Threat model (T-03-03-01 SSO-04):
+        - Stale JWT cross-hub access — JWT issued cho user duoc với
+          hub_ids=["duoc"] post tới hub yte → settings.hub_name="yte" NOT IN
+          ["duoc"] → 403 CROSS_HUB_ACCESS_DENIED envelope. KHÔNG 404 (leak hub
+          existence) / 500 (server error) / 200 (data leak).
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+    if settings.hub_name == "central":
+        return user  # cross-hub by design
+
+    claims = getattr(request.state, "jwt_claims", None)
+    if claims is None:
+        # Defensive — get_current_user phải set claims; bug nếu missing
+        # (vi phạm dependency contract — phát hiện sớm thay vì silent pass).
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "AUTH_STATE_MISSING",
+                "message": (
+                    "request.state.jwt_claims không set — internal bug "
+                    "(get_current_user dependency chain broken)"
+                ),
+            },
+        )
+
+    if settings.hub_name not in claims.hub_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CROSS_HUB_ACCESS_DENIED",
+                "message": (
+                    f"Token KHÔNG có quyền truy cập hub "
+                    f"{settings.hub_name!r} (hub_ids JWT = {claims.hub_ids!r})"
+                ),
+            },
+        )
+    return user
 
 
 async def get_api_key_or_jwt(
