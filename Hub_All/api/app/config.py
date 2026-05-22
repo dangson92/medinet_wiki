@@ -101,11 +101,20 @@ class Settings(BaseSettings):
     jwt_refresh_token_ttl: int = 604800
     # Phase 3 Plan 03-01 SSO-01 (D-V3-Phase3-A) — Hub con consume JWKS endpoint
     # từ central qua intra-network HTTP. Default None ở central (KHÔNG cần fetch
-    # — central có local private.pem). Plan 03-02 sẽ thêm @model_validator
-    # enforce hub con phải set field này KHÔNG None (fail-loud boot nếu thiếu).
+    # — central có local private.pem). Plan 03-02 add @model_validator
+    # `_enforce_central_jwks_url_for_hub` enforce hub con phải set field này
+    # KHÔNG None (fail-loud boot nếu thiếu).
     # docker-compose 3 hub con set env
     #   CENTRAL_JWKS_URL=http://python-api-central:8080/.well-known/jwks.json
     central_jwks_url: str | None = None
+
+    # Phase 3 Plan 03-02 SSO-01 (D-V3-Phase3-B) — Hub con cache lifecycle
+    # 1h refresh interval matching Cache-Control max-age=3600 ở Plan 03-01.
+    # 24h hard limit (86400s): nếu cached value > limit → 503 JWKS_STALE
+    # envelope cho mọi JWT verify (R-V3-5 fail-loud delayed). Override qua env
+    # JWKS_REFRESH_INTERVAL + JWKS_MAX_STALE_SECONDS nếu test rotation nhanh.
+    jwks_refresh_interval: int = 3600
+    jwks_max_stale_seconds: int = 86400
 
     # File storage
     file_store_dir: Path = Path("./file_store")
@@ -262,6 +271,28 @@ class Settings(BaseSettings):
                 f"DSN mismatch hub_name: HUB_NAME={self.hub_name!r} yêu cầu "
                 f"database {expected_db!r} nhưng DATABASE_URL trỏ "
                 f"{actual_db!r}. E-V3-3 enforce — KHÔNG fallback central."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_central_jwks_url_for_hub(self) -> Settings:
+        """Phase 3 Plan 03-02 SSO-01 (D-V3-Phase3-B) — Hub con required CENTRAL_JWKS_URL.
+
+        Central (hub_name="central") tự có private.pem local → KHÔNG cần fetch.
+        Hub con (yte/duoc/hcns/dynamic) PHẢI set CENTRAL_JWKS_URL trỏ central
+        endpoint để JWKSCache.fetch_initial() blocking startup. Thiếu → boot fail
+        ở Settings validation (ValidationError trước khi tới lifespan).
+
+        Threat model:
+        - T-03-02-01 Tampering — env thiếu CENTRAL_JWKS_URL → hub con boot OK
+          nhưng mọi JWT verify trả 500 (chưa lifespan startup). Fail-fast ở
+          validator tránh production bug câm lặng.
+        """
+        if self.hub_name != "central" and not self.central_jwks_url:
+            raise ValueError(
+                f"hub_name={self.hub_name!r} (hub con) yêu cầu CENTRAL_JWKS_URL "
+                f"env var. Set CENTRAL_JWKS_URL=http://python-api-central:8080"
+                f"/.well-known/jwks.json (xem docker-compose.yml 3 hub con block)."
             )
         return self
 

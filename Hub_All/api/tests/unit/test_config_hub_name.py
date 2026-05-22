@@ -61,7 +61,16 @@ def test_central_matches_central_dsn_ok(
 
 # === Test 2: hub yte với DSN medinet_hub_yte ===
 def test_yte_matches_yte_dsn_ok(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HUB_NAME=yte + DSN /medinet_hub_yte — instantiate OK."""
+    """HUB_NAME=yte + DSN /medinet_hub_yte — instantiate OK.
+
+    Plan 03-02 SSO-01 (Task 1) thêm validator `_enforce_central_jwks_url_for_hub`
+    → hub con phải có CENTRAL_JWKS_URL. Set env để pass validator (regression
+    update — KHÔNG đụng semantic test DSN match).
+    """
+    monkeypatch.setenv(
+        "CENTRAL_JWKS_URL",
+        "http://python-api-central:8080/.well-known/jwks.json",
+    )
     _set_env(
         monkeypatch,
         hub_name="yte",
@@ -167,7 +176,13 @@ def test_dsn_with_query_string_validates(
 ) -> None:
     """Validator strip `?option=value` trước khi check suffix — DSN production
     thường có `?sslmode=require` hoặc tương tự.
+
+    Plan 03-02 Task 1 thêm CENTRAL_JWKS_URL required cho hub con.
     """
+    monkeypatch.setenv(
+        "CENTRAL_JWKS_URL",
+        "http://python-api-central:8080/.well-known/jwks.json",
+    )
     _set_env(
         monkeypatch,
         hub_name="yte",
