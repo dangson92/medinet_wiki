@@ -493,6 +493,61 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
             content=body, status_code=exc.status_code, headers=headers
         )
 
+    # v3.0 Plan 02-03 (D-V3-Phase2-E) — Starlette HTTPException handler wrap
+    # built-in 404 routing-not-matched → envelope shape `{success:false,
+    # data:null, error:{code:"NOT_FOUND", message}, meta:null}`.
+    #
+    # Lý do: handler `@app.exception_handler(HTTPException)` phía trên đăng ký
+    # cho `fastapi.HTTPException` — KHÔNG match `starlette.exceptions.HTTPException`
+    # mà Starlette routing raise khi path không match (router không mount). Hậu
+    # quả: client nhận `{"detail":"Not Found"}` raw thay vì envelope D6.
+    #
+    # FACTOR-02 (Phase 2) yêu cầu hub con trả 404 envelope cho 8 router
+    # central-only đã strip — D-V3-Phase2-E lock NOT_FOUND code (KHÔNG 403).
+    # Handler riêng cho Starlette base class cover cả 2 trường hợp:
+    # (1) router không mount ở hub con (FACTOR-02 strip), (2) path không tồn
+    # tại ở central (typo URL). Cả 2 đều render envelope D6 shape.
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    @app.exception_handler(StarletteHTTPException)
+    async def starlette_http_exception_handler(
+        request: FastAPIRequest, exc: StarletteHTTPException
+    ) -> StarletteJSONResponse:
+        """Map Starlette HTTPException (routing 404, ...) → envelope D6.
+
+        Plan 02-03 Task 2 / D-V3-Phase2-E — FACTOR-02 enforce 404 envelope
+        khi router central-only strip ở hub con. KHÔNG dùng 403 (leak endpoint
+        existence). Tận dụng `resp.not_found` helper để giữ đúng shape.
+        """
+        detail = exc.detail
+        if isinstance(detail, dict) and "code" in detail and "message" in detail:
+            code = str(detail["code"])
+            message = str(detail["message"])
+        elif isinstance(detail, str):
+            # Starlette routing 404 set detail="Not Found" — map sang code
+            # NOT_FOUND chuẩn (resp.not_found default). Code tường minh giúp
+            # frontend switch trên error.code thay vì status_code thuần.
+            if exc.status_code == 404:
+                code = "NOT_FOUND"
+            elif exc.status_code == 405:
+                code = "METHOD_NOT_ALLOWED"
+            else:
+                code = "ERROR"
+            message = detail
+        else:
+            code = "ERROR"
+            message = str(detail)
+        body = {
+            "success": False,
+            "data": None,
+            "error": {"code": code, "message": message},
+            "meta": None,
+        }
+        headers = exc.headers or None
+        return StarletteJSONResponse(
+            content=body, status_code=exc.status_code, headers=headers
+        )
+
     # HubIsolationError → 403 envelope handler (HUB-02 / E4).
     from app.repositories.hub_isolation import HubIsolationError
 

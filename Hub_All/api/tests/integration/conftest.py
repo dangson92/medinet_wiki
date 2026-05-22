@@ -621,6 +621,28 @@ def hub_app_factory(
         # Force re-parse env (lru_cache singleton).
         get_settings.cache_clear()
 
+        # DEF-05-01 carry forward — reset module-global state TRƯỚC khi boot
+        # app mới. Mỗi test parametrize (yte/duoc/hcns) tạo 1 app instance
+        # mới với TestClient (lifespan boot fresh). `_queue` audit_service +
+        # `_engine` SQLAlchemy là module-global → nếu giữ state từ test trước
+        # (bound vào event loop cũ đã teardown bởi `with TestClient(...)`
+        # context manager) → `audit_flush_loop` test sau treo vĩnh viễn ở
+        # `queue.get()` vì queue bound vào dead loop.
+        # Pattern này đã có ở `app_with_auth` fixture (Phase 3 Plan 05) — Plan
+        # 02-03 carry forward cho factory pattern.
+        from app.services.audit_service import reset_queue
+
+        reset_queue()
+        # Force-reset SQLAlchemy engine global — lifespan shutdown gọi
+        # dispose_engine() ở test trước nhưng nếu test trước fail giữa
+        # chừng, shutdown KHÔNG chạy → _engine còn bound vào dead loop.
+        # Defensive reset bằng cách set sentinel None trực tiếp (KHÔNG await
+        # dispose vì có thể ở context sync).
+        from app.db import session as _db_session
+
+        _db_session._engine = None
+        _db_session._session_factory = None
+
         # Import sau khi env set — create_app() đọc get_settings() top-level
         # module-import time = OK vì cache_clear() force refresh.
         from app.main import create_app
