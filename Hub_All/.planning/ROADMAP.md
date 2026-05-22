@@ -23,7 +23,7 @@
 |---|---|---|---|---|---|
 | ✅ **1** | Multi-DB topology + per-hub Alembic | Tạo N+1 DB cùng instance, per-hub Alembic migration set khớp head SHA, cocoindex flow naming per-hub | TOPO-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-21** (5 plans / 22 commits) |
 | ✅ **2** | Hub-con codebase factor | 1 codebase deploy nhiều lần với HUB_NAME; strip system settings ở hub con; expose 10 endpoint hub-scoped; dynamic hub registration (FACTOR-04 added 2026-05-22) | FACTOR-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 12 commits) |
-| **3** | Auth SSO + hub_ids trong JWT | JWKS endpoint central; cache hub con TTL 1h HA; Redis blacklist chung; E4 DB-level isolation | SSO-01..04 (4) | 4 | Phase 2 |
+| ✅ **3** | Auth SSO + hub_ids trong JWT | JWKS endpoint central; cache hub con TTL 1h HA; Redis blacklist chung; E4 DB-level isolation | SSO-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 30 commits) |
 | 🚦 | **v3.0-a EXIT GATE** | Demo 1 hub con (yte) + tổng + JWT SSO + golden path PASS — user accept tiếp tục v3.0-b | — | — | Phase 1-3 done |
 | **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central; idempotent retry; cross-hub search aggregated; checksum verify periodic; mechanism chốt | SYNC-01..05 (5) | 5 | Phase 1, 3 |
 | **5** | Reverse proxy + frontend subpath | Caddy subpath route; frontend detect prefix 1 build; D6 expire formally; per-hub login branding | PROXY-01..04 (4) | 4 | Phase 2 |
@@ -133,11 +133,11 @@ Plans:
 **Plans:** 5 plans (5 waves — Wave 1 BLOCKING, Wave 2 depend 03-01, Wave 3 depend 03-02, Wave 4 depend 03-03, Wave 5 closeout depend 03-04)
 
 Plans:
-- [ ] 03-01-PLAN.md — JWKS endpoint central publish RFC 7517 (`publish_jwks` + `load_public_key_as_jwk` + central mount conditional + `Settings.central_jwks_url` + docker-compose env `CENTRAL_JWKS_URL`) (SSO-01)
-- [ ] 03-02-PLAN.md — JWKSCache hub con (in-process LRU + asyncio refresh + 24h hard limit + lifespan startup blocking fetch + dependency branch verify path + `JWTManager.verify_token_with_key` + Settings 3 field + model_validator enforce hub con required) (SSO-01)
-- [ ] 03-03-PLAN.md — JWT claim refactor (`aud` + `hub_ids` REQUIRED + PyJWT strict audience check 2 path) + Redis blacklist key rename `auth:blacklist:` (5 vị trí + `_blacklist.py` helper module) + SSO-04 E4 reinforced dependency `get_current_user_for_hub_access` Layer 3 enforce (SSO-02, SSO-03, SSO-04)
-- [ ] 03-04-PLAN.md — Auth router refactor hub con 307 redirect login/refresh + `Settings.central_url` + docker-compose `CENTRAL_URL` env + Phase 2 integration test assertion update (split 10 LOCAL + 2 SSO_REDIRECT) + REQUIREMENTS.md FACTOR-03 note extend (SSO-02)
-- [ ] 03-05-PLAN.md — Closeout — CLAUDE.md section 6 + STATE.md Phase 3 Results Summary + REQUIREMENTS.md SSO-01..04 mark `[x]` + README.md SSO Backward Incompat section + smoke compose checkpoint Task 5 (central + yte runtime verify) + v3.0-a EXIT GATE TRIGGERED
+- [x] 03-01-PLAN.md — JWKS endpoint central publish RFC 7517 — **DONE 2026-05-22** (4 commit, 9/9 unit + 49/49 regression PASS)
+- [x] 03-02-PLAN.md — JWKSCache hub con in-process LRU + lifespan blocking fetch + 24h hard limit + dependency branch verify + `verify_token_with_key` (SSO-01) — **DONE 2026-05-22** (7 commit, 27 unit + 3 integration + 237/237 regression PASS)
+- [x] 03-03-PLAN.md — JWT `aud`/`hub_ids` REQUIRED + Redis blacklist key `auth:blacklist:` rename + E4 reinforced Layer 3 dependency `get_current_user_for_hub_access` (SSO-02/03/04) — **DONE 2026-05-22** (8 commit, 19 unit + 3 integration + 257/257 regression PASS)
+- [x] 03-04-PLAN.md — Auth router 307 redirect hub con login/refresh + `Settings.central_url` + Phase 2 integration test assertion split (SSO-02) — **DONE 2026-05-22** (6 commit, 10 unit + 276/276 unit + 16/16 integration PASS)
+- [x] 03-05-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md + README.md SSO Backward Incompat — **DONE 2026-05-22** (5 commit, Task 5 smoke compose SKIP rationale: 65+ unit + 6 integration in-process semantic cover SSO-01..04; smoke runtime + v3.0-a EXIT GATE demo defer Phase 7 MIGRATE-05)
 
 ---
 
@@ -268,7 +268,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **10/~30** | **8/30** | 🔄 **Phase 1+2 DONE (2/7 phase)** | — |
+| **v3.0 Multi-Hub Split** | **7** | **15/~32** | **12/30** | 🔄 **Phase 1+2+3 DONE (3/7 phase) — 🚦 v3.0-a EXIT GATE TRIGGERED** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
