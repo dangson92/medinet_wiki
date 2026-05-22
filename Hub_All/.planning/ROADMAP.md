@@ -96,7 +96,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Refactor create_app() conditional router mount (7 universal + 9 central-only) + unit test boot 4 hub mode (FACTOR-01, FACTOR-02) — **DONE 2026-05-22** (9/9 test PASS, central 63 routes / hub con 29 routes)
 - [x] 02-02-PLAN.md — Docker-compose 4 service FastAPI dedicated với YAML anchor + cocoindex LMDB volume per-hub + port 8180-8183 + MCP re-point central (FACTOR-01) — **DONE 2026-05-22** (`docker compose config --quiet` exit 0, 8 service render: postgres + redis + 4 python-api-* + mcp_service + caddy)
-- [ ] 02-03-PLAN.md — Integration test endpoint matrix — 12 hub-scoped mount + 8 central-only strip + envelope shape verify (FACTOR-02, FACTOR-03)
+- [x] 02-03-PLAN.md — Integration test endpoint matrix — 12 hub-scoped mount + 8 central-only strip + envelope shape verify (FACTOR-02, FACTOR-03) — **DONE 2026-05-22** (10/10 test PASS -m "critical and integration", 6.49s; Rule 2 auto-add Starlette HTTPException handler ở app/main.py wrap routing 404 envelope; Rule 3 auto-fix audit queue + SQLAlchemy engine reset trong hub_app_factory; 175/175 unit regression PASS)
 - [ ] 02-04-PLAN.md — Closeout — CLAUDE.md + STATE.md update + smoke compose 2 service (central + yte) curl matrix (FACTOR-01..03 verify)
 
 ---

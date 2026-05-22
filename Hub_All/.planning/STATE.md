@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: Phase 2 EXECUTING 2026-05-22 — Plan 02-01 ✅ + 02-02 ✅ DONE (Wave 1 + first half Wave 2); 2 plan remaining (02-03 Wave 2 parallel, 02-04 Wave 3). Auto-chain active. Phase 1 DONE 2026-05-21 ✅ (5 plans / 22 commits / 166 unit tests + 5 integration test PASS).
-last_updated: "2026-05-22T03:00:00.000Z"
+status: Phase 2 EXECUTING 2026-05-22 — Plan 02-01 ✅ + 02-02 ✅ + 02-03 ✅ DONE (Wave 1 + Wave 2 FINAL); 1 plan remaining (02-04 Wave 3 closeout với checkpoint smoke compose). Auto-chain active. Phase 1 DONE 2026-05-21 ✅ (5 plans / 22 commits / 166 unit tests + 5 integration test PASS).
+last_updated: "2026-05-22T10:40:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
-  percent: 19
+  completed_plans: 8
+  percent: 22
 ---
 
 # State — MEDWIKI (v3.0)
@@ -21,14 +21,14 @@ progress:
 
 ## Current Position
 
-- **Phase:** 2 — Hub-con Codebase Factor 🔄 **EXECUTING 2026-05-22 — Plan 02-01 + 02-02 DONE (Wave 1 BLOCKING + Wave 2 first half ✅)**
-- **Plans:** 4 plans (02-01..02-04) trong 3 wave ở `.planning/phases/02-hub-con-codebase-factor/` — **2/4 complete**
-- **Status:** Plan 02-01 ship 2026-05-22 (`8d164ef` + `8f0caf8`) + Plan 02-02 ship 2026-05-22 (`05a39a4`) + 2 SUMMARY + STATE update. Phase 2 Wave 1 ✅ + Wave 2 first half ✅ → 02-03 sẵn sàng execute (parallel hoặc sau). Auto-chain `--chain` active → tiếp tục `/gsd-execute-phase 2 --auto`.
-- **Last activity:** 2026-05-22 — Plan 02-02 executed sequential mode:
+- **Phase:** 2 — Hub-con Codebase Factor 🔄 **EXECUTING 2026-05-22 — Plan 02-01 + 02-02 + 02-03 DONE (Wave 1 BLOCKING + Wave 2 FINAL ✅)**
+- **Plans:** 4 plans (02-01..02-04) trong 3 wave ở `.planning/phases/02-hub-con-codebase-factor/` — **3/4 complete**
+- **Status:** Plan 02-03 ship 2026-05-22 (`81543e0` + `c5e6036`) + SUMMARY + STATE update. Phase 2 Wave 1 ✅ + Wave 2 ✅ FINAL → 02-04 sẵn sàng execute (Wave 3 closeout với 1 checkpoint:human-action gate cho smoke compose). Auto-chain `--chain` active → tiếp tục `/gsd-execute-phase 2 --auto`.
+- **Last activity:** 2026-05-22 — Plan 02-03 executed sequential mode:
   - **02-01 DONE ✅** (Wave 1 BLOCKING): `create_app()` factory refactor mount conditional 9 central-only router theo `settings.hub_name`; unit test 9/9 PASS boot 4 hub mode (central/yte/duoc/hcns); Phase 1 DSN validator regression KHÔNG break (30/30 PASS). FACTOR-01 + FACTOR-02 đóng unit-level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-01-SUMMARY.md`.
   - **02-02 DONE ✅** (Wave 2, first half): Docker compose refactor 4 service FastAPI dedicated với YAML anchor `x-api-template: &api-template` + cocoindex LMDB volume per-hub (medinet_cocoindex_{central,yte,duoc,hcns}) + port 8180-8183 + mcp_service re-point `python-api-central` (D-V3-02 LOCKED). `docker compose config --quiet` exit 0, 8 service render đúng. FACTOR-01 đóng Docker layer. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-02-SUMMARY.md`.
-  - **02-03** (Wave 2, parallel — NEXT): Integration test endpoint matrix 12 hub-scoped + 8 central-only (sync_router dùng `/api/sync/stats` thật) + envelope shape 404 + autouse cleanup cục bộ (FACTOR-02, FACTOR-03).
-  - **02-04** (Wave 3, closeout): CLAUDE.md + STATE.md + REQUIREMENTS.md update "10 collective / 12 specific" + smoke compose checkpoint:human-action.
+  - **02-03 DONE ✅** (Wave 2, second half): Integration test endpoint matrix 12 hub-scoped MOUNT + 8 central-only STRIP (sync_router dùng `/api/sync/stats` BLK-01 fix) + envelope shape 404 D6 + autouse cleanup CỤC BỘ (WRN-03 fix). 10/10 test PASS qua TestClient in-process (6.49s). 175/175 unit test regression PASS (KHÔNG break Phase 1 + Plan 02-01). Rule 2 auto-add Starlette HTTPException handler ở `app/main.py` (M2 chỉ register `fastapi.HTTPException` — NOT match Starlette routing 404). Rule 3 auto-fix `reset_queue()` + SQLAlchemy engine sentinel-None reset trong `hub_app_factory` (audit queue cross-loop hang). FACTOR-02 + FACTOR-03 đóng integration level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-03-SUMMARY.md`.
+  - **02-04** (Wave 3, closeout — NEXT): CLAUDE.md section 2 + STATE.md + REQUIREMENTS.md update "10 collective / 12 specific" + smoke compose 2 service (central + yte) checkpoint:human-action.
 
 ## Phase 2 Planning Summary
 
@@ -36,8 +36,8 @@ progress:
 |------|------|-----------|-------|----------------|-----|--------|
 | 02-01 | 1 | create_app() inline conditional 9 central-only router | 2 (auto) | `api/app/main.py`, `tests/unit/test_main_factory.py` | FACTOR-01, FACTOR-02 | ✅ **DONE 2026-05-22** (9/9 test PASS) |
 | 02-02 | 2 | Docker compose 4 service + YAML anchor + cocoindex LMDB per-hub | 1 (auto) | `docker-compose.yml` | FACTOR-01 | ✅ **DONE 2026-05-22** (docker compose config exit 0, 8 service render) |
-| 02-03 | 2 | Integration test 12 hub-scoped + 8 central-only + envelope 404 | 2 (tdd) | `tests/integration/conftest.py`, `tests/integration/test_factor_hub_scoped.py` | FACTOR-02, FACTOR-03 | Ready (Wave 2) |
-| 02-04 | 3 | Closeout: docs update + smoke compose checkpoint | 4 (1 checkpoint + 3 auto) | `CLAUDE.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md` | FACTOR-01..03 verify | Blocked on 02-02 + 02-03 |
+| 02-03 | 2 | Integration test 12 hub-scoped + 8 central-only + envelope 404 | 2 (tdd) | `tests/integration/conftest.py`, `tests/integration/test_factor_hub_scoped.py`, `app/main.py` (Rule 2) | FACTOR-02, FACTOR-03 | ✅ **DONE 2026-05-22** (10/10 test PASS, 6.49s; 175/175 unit regression PASS) |
+| 02-04 | 3 | Closeout: docs update + smoke compose checkpoint | 4 (1 checkpoint + 3 auto) | `CLAUDE.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md` | FACTOR-01..03 verify | Ready (Wave 3 — depends on 02-03 ✅) |
 
 **Coverage:** 3/3 REQ (FACTOR-01..03) covered ≥ 1 plan/REQ.
 
@@ -70,6 +70,21 @@ progress:
 | Acceptance criteria | 15/15 PASS (anchor + 4 service + inherit + HUB_NAME + DSN + ports + cocoindex vol + MCP re-point + 8 service signature) |
 | Commits | `05a39a4` feat |
 | Deviations | None (plan executed exactly as written; 1 micro-adjustment comment wording để acceptance grep match đúng 4, KHÔNG đổi YAML semantic) |
+
+### Plan 02-03 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~65 minutes (bao gồm 2 Rule 2/3 deviation auto-fix Starlette HTTPException handler + audit queue reset) |
+| Tasks completed | 2/2 |
+| Files modified | 3 (`tests/integration/conftest.py` +96 append-only; `tests/integration/test_factor_hub_scoped.py` mới 228 LOC; `app/main.py` +57 Rule 2 fix) |
+| Tests added | 10 (1 central full mount + 3 parametrize hub strip + 3 parametrize hub mount + 1 envelope shape verify + 1 envelope unknown route central + 1 DSN mismatch regression) |
+| Test pass rate | 10/10 (100%) -m "critical and integration" in 6.49s |
+| Phase 1+02-01 regression | 20/20 PASS (test_main_factory.py + test_config_hub_name.py) — KHÔNG break |
+| Full unit suite regression | 175/175 PASS — KHÔNG break |
+| Lint | ruff + mypy --strict PASS (conftest + test file + main.py) |
+| Commits | `81543e0` test (Task 1 hub_app_factory fixture) + `c5e6036` test (Task 2 endpoint matrix + Rule 2 Starlette handler + Rule 3 audit reset) |
+| Deviations | 3 (Rule 2 auto-add Starlette HTTPException handler — M2 docs claim sai; Rule 3 auto-fix audit queue cross-loop hang — `reset_queue` pattern carry forward Phase 3 Plan 05; Rule 3 comment refactor BLK-01 grep guard) |
 
 ---
 
