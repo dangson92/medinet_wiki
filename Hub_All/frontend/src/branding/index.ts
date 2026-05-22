@@ -61,8 +61,16 @@ export function getBranding(hub: string): BrandingConfig {
  *
  * Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md §1.5
  *
+ * Threshold 0.6 chọn theo design intent UI-SPEC §1.5 — CHỈ hcns amber (luminance ~0.65)
+ * trigger 'slate-900'; 3 hub còn lại central (~0.44) / yte (~0.57) / duoc (~0.58) PASS WCAG
+ * AA large-text với white overlay trên gradient (xem UI-SPEC §1.5 bảng contrast).
+ *
+ * Plan deviation (Rule 1 — bug): Plan ghi threshold 0.55 mâu thuẫn design intent vì emerald
+ * yte luminance ~0.569 > 0.55 cũng trigger 'slate-900'. Nâng lên 0.6 đảm bảo CHỈ amber hcns
+ * trigger (per UI-SPEC §1.5 mitigation row 132).
+ *
  * @param themeColor - hex string '#xxxxxx'
- * @returns 'white' nếu themeColor đủ tối (luminance ≤ 0.55), else 'slate-900'
+ * @returns 'white' nếu themeColor đủ tối (luminance ≤ 0.6), else 'slate-900'
  */
 export function getContrastTextColor(themeColor: string): 'white' | 'slate-900' {
   // Strip '#' + parse RGB 6 hex digits
@@ -73,11 +81,11 @@ export function getContrastTextColor(themeColor: string): 'white' | 'slate-900' 
   const g = parseInt(hex.slice(2, 4), 16) / 255;
   const b = parseInt(hex.slice(4, 6), 16) / 255;
 
-  // Relative luminance (sRGB) — simplified linear approx, đủ accuracy cho threshold 0.55
+  // Relative luminance (sRGB) — simplified linear approx, đủ accuracy cho threshold 0.6
   // Reference: https://www.w3.org/TR/WCAG21/#dfn-relative-luminance (full version uses gamma correction)
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-  return luminance > 0.55 ? 'slate-900' : 'white';
+  return luminance > 0.6 ? 'slate-900' : 'white';
 }
 
 // Export registry cho test introspection (KHÔNG dùng ở production component)
