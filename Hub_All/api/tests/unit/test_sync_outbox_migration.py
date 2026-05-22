@@ -33,8 +33,6 @@ import inspect
 import pathlib
 import re
 
-import pytest
-
 # === Load migration 0005 module qua importlib (KHÔNG phải module Python chuẩn) ===
 _MIGRATION_PATH = (
     pathlib.Path(__file__).resolve().parents[2]
