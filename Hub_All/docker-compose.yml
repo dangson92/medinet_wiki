@@ -1,5 +1,45 @@
 name: medinet-wiki
 
+# ═════════════════════════════════════════════════════════════════════════
+# Phase 2 v3.0 FACTOR-01 (D-V3-Phase2-C) — Shared template cho 4 service
+# FastAPI dedicated (central + yte + duoc + hcns). Mỗi service inherit qua
+# merge-key inherit (<< api-template) rồi override HUB_NAME + DATABASE_URL + COCOINDEX volume
+# + container_name + ports. KHÔNG dùng deploy.replicas — replicas không cho
+# phép env per-replica khác nhau (docker compose limitation; Swarm mode khác).
+# Note: docker compose YAML merge key `<<:` KHÔNG merge dict lồng cấp 2
+# (environment / volumes là list/dict — override 1 key sẽ XOÁ TOÀN BỘ template
+# environment). Mỗi service VIẾT LẠI đầy đủ environment + volumes ở dưới.
+# ═════════════════════════════════════════════════════════════════════════
+x-api-template: &api-template
+  build:
+    context: ./api
+    dockerfile: Dockerfile
+  env_file:
+    - ./api/.env
+  environment:
+    REDIS_URL: redis://redis:6379/0
+    APP_NAMESPACE: medinet_prod
+    COCOINDEX_DB_SCHEMA: cocoindex
+    JWT_PRIVATE_KEY_PATH: /keys/private.pem
+    JWT_PUBLIC_KEY_PATH: /keys/public.pem
+    FILE_STORE_DIR: /file_store
+    APP_ENV: ${APP_ENV:-dev}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    # Gap SC5 (Phase 1 Plan 01-04): ép cocoindex LMDB state vào thư mục tuyệt
+    # đối writable trong container. environment: thắng env_file.
+    COCOINDEX_DB: /app/.cocoindex/state.lmdb
+    COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
+  volumes:
+    - ./api/keys:/keys:ro
+    - ./file_store:/file_store
+    # cocoindex LMDB volume override per-service (medinet_cocoindex_<hub>)
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks: [medinet_net]
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -35,14 +75,16 @@ services:
       retries: 10
     networks: [medinet_net]
 
-  python-api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    container_name: medinet-api
-    env_file:
-      - ./api/.env
+  # ─────────────────────────────────────────────────────────────────────
+  # Phase 2 v3.0 — Central process (HUB_NAME=central, DB medinet_central)
+  # Port host 8180 = M2 backward-compat (frontend api.ts hardcode + Hyper-V
+  # excluded range 8038-8137 Windows). Cocoindex LMDB volume riêng.
+  # ─────────────────────────────────────────────────────────────────────
+  python-api-central:
+    <<: *api-template
+    container_name: medinet-api-central
     environment:
+      HUB_NAME: central
       DATABASE_URL: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
       COCOINDEX_DATABASE_URL: postgresql://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_cocoindex
       REDIS_URL: redis://redis:6379/0
@@ -53,25 +95,95 @@ services:
       FILE_STORE_DIR: /file_store
       APP_ENV: ${APP_ENV:-dev}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Gap SC5: ép cocoindex LMDB state vào thư mục tuyệt đối writable trong container.
-      # environment: thắng env_file → host (native) vẫn dùng .cocoindex/ tương đối.
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
       - ./api/keys:/keys:ro
       - ./file_store:/file_store
-      - medinet_cocoindex_state:/app/.cocoindex
-    # Host 8180 → container 8080. Frontend `api.ts` hardcode port 8180
-    # (Hyper-V excluded range 8038-8137 trên Windows). Container nội bộ +
-    # Dockerfile EXPOSE/uvicorn vẫn 8080 — chỉ map ở compose (D6: KHÔNG sửa frontend).
+      - medinet_cocoindex_central:/app/.cocoindex
     ports:
       - "8180:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks: [medinet_net]
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Phase 2 v3.0 — Hub y_te (HUB_NAME=yte, DB medinet_hub_yte). Port 8181.
+  # ─────────────────────────────────────────────────────────────────────
+  python-api-yte:
+    <<: *api-template
+    container_name: medinet-api-yte
+    environment:
+      HUB_NAME: yte
+      DATABASE_URL: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_hub_yte
+      COCOINDEX_DATABASE_URL: postgresql://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_cocoindex
+      REDIS_URL: redis://redis:6379/0
+      APP_NAMESPACE: medinet_prod
+      COCOINDEX_DB_SCHEMA: cocoindex
+      JWT_PRIVATE_KEY_PATH: /keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/public.pem
+      FILE_STORE_DIR: /file_store
+      APP_ENV: ${APP_ENV:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      COCOINDEX_DB: /app/.cocoindex/state.lmdb
+      COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
+    volumes:
+      - ./api/keys:/keys:ro
+      - ./file_store:/file_store
+      - medinet_cocoindex_yte:/app/.cocoindex
+    ports:
+      - "8181:8080"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Phase 2 v3.0 — Hub duoc (HUB_NAME=duoc, DB medinet_hub_duoc). Port 8182.
+  # ─────────────────────────────────────────────────────────────────────
+  python-api-duoc:
+    <<: *api-template
+    container_name: medinet-api-duoc
+    environment:
+      HUB_NAME: duoc
+      DATABASE_URL: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_hub_duoc
+      COCOINDEX_DATABASE_URL: postgresql://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_cocoindex
+      REDIS_URL: redis://redis:6379/0
+      APP_NAMESPACE: medinet_prod
+      COCOINDEX_DB_SCHEMA: cocoindex
+      JWT_PRIVATE_KEY_PATH: /keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/public.pem
+      FILE_STORE_DIR: /file_store
+      APP_ENV: ${APP_ENV:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      COCOINDEX_DB: /app/.cocoindex/state.lmdb
+      COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
+    volumes:
+      - ./api/keys:/keys:ro
+      - ./file_store:/file_store
+      - medinet_cocoindex_duoc:/app/.cocoindex
+    ports:
+      - "8182:8080"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Phase 2 v3.0 — Hub hcns (HUB_NAME=hcns, DB medinet_hub_hcns). Port 8183.
+  # ─────────────────────────────────────────────────────────────────────
+  python-api-hcns:
+    <<: *api-template
+    container_name: medinet-api-hcns
+    environment:
+      HUB_NAME: hcns
+      DATABASE_URL: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_hub_hcns
+      COCOINDEX_DATABASE_URL: postgresql://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_cocoindex
+      REDIS_URL: redis://redis:6379/0
+      APP_NAMESPACE: medinet_prod
+      COCOINDEX_DB_SCHEMA: cocoindex
+      JWT_PRIVATE_KEY_PATH: /keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/public.pem
+      FILE_STORE_DIR: /file_store
+      APP_ENV: ${APP_ENV:-dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      COCOINDEX_DB: /app/.cocoindex/state.lmdb
+      COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
+    volumes:
+      - ./api/keys:/keys:ro
+      - ./file_store:/file_store
+      - medinet_cocoindex_hcns:/app/.cocoindex
+    ports:
+      - "8183:8080"
 
   # MCP Service — Phase 8.3. Process độc lập expose RAG tools qua MCP cho Claude
   # web connector. KHÔNG map port host: chỉ Caddy expose public (mọi truy cập
@@ -88,8 +200,10 @@ services:
       - path: ./mcp_service/.env
         required: false
     environment:
-      # Gọi API Service qua docker network — KHÔNG localhost.
-      MCP_API_BASE_URL: http://python-api:8080
+      # Phase 2 v3.0 (D-V3-Phase2-C): re-point từ python-api (M2) → python-api-central.
+      # MCP service gọi central cho cross-hub aggregate (LOCKED D-V3-02 — KHÔNG fan-out
+      # N hub con). Phase 7 MIGRATE-04 re-confirm contract.
+      MCP_API_BASE_URL: http://python-api-central:8080
       # Issuer = domain public HTTPS. Operator set ở .env gốc compose:
       #   MCP_OAUTH_ISSUER_URL=https://${MCP_PUBLIC_DOMAIN}  (prod).
       # Đổi reverse proxy (Caddy <-> Cloudflare Tunnel) chỉ cần đổi biến này.
@@ -99,7 +213,7 @@ services:
     volumes:
       - medinet_mcp_oauth_state:/app/.oauth
     depends_on:
-      python-api:
+      python-api-central:
         condition: service_healthy
     networks: [medinet_net]
 
@@ -127,7 +241,15 @@ services:
 volumes:
   medinet_pgdata:
   medinet_redis_data:
-  medinet_cocoindex_state:
+  # Phase 2 v3.0 (D-V3-Phase2-C): cocoindex LMDB volume per-hub.
+  # cocoindex 1.0.3 Environment singleton KHÔNG share state cross HUB_NAME.
+  # Mỗi container mount 1 volume riêng → state isolated. XOÁ medinet_cocoindex_state
+  # M2 cũ (no longer referenced — Phase 1 đã reset cocoindex state, M2 data orphan
+  # accepted cho v3.0-a; Phase 7 migrate formally).
+  medinet_cocoindex_central:
+  medinet_cocoindex_yte:
+  medinet_cocoindex_duoc:
+  medinet_cocoindex_hcns:
   # Phase 8.3 — OAuth state SQLite (clients/codes/tokens/pending) sống sót restart.
   medinet_mcp_oauth_state:
   # Phase 8.3 — Caddy cert ACME + config (tránh xin lại cert mỗi lần restart).
