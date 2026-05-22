@@ -176,6 +176,195 @@ Reverse script (`hub-remove.sh`) defer v3.0-b (Phase 7 MIGRATE-03 sẽ ship tool
 
 ---
 
+## v3.0 Auth SSO deployment notes (Phase 3 ship 2026-05-22)
+
+Phase 3 ship SSO infrastructure mới (JWKS endpoint + cache + JWT claim refactor + Redis blacklist key rename + 307 redirect hub con login/refresh + E4 reinforced 3-layer). **Backward incompat — User cần re-login sau khi deploy.**
+
+### Backward incompat warning (TRIPLE cumulative)
+
+JWT M2 cũ KHÔNG có `kid` header + `aud` claim + `hub_ids` claim → reject 401 sau Phase 3 deploy. User re-login forced ~15-30s downtime.
+
+Plan 03-02 + 03-03 add 3 yêu cầu mới cho JWT:
+
+1. **Header `kid`** (Plan 03-02 D-V3-Phase3-B): JWT phát hành sau Plan 03-02 có header `kid` = SHA-256 8-byte PEM (base64url unpadded, 11 char). Hub con dùng kid để match public key trong JWKSCache. M2 cũ JWT KHÔNG có kid → hub con verify fail `401 INVALID_TOKEN` (`"Token thiếu kid header — JWT phát hành trước Phase 3 SSO, vui lòng đăng nhập lại"`).
+2. **Claim `aud=["medinet-wiki"]`** (Plan 03-03 D-V3-Phase3-E): PyJWT strict audience check ở `verify_token` + `verify_token_with_key`. M2 cũ JWT KHÔNG có aud → `401 InvalidAudienceError`.
+3. **Claim `hub_ids: list[str]`** REQUIRED (Plan 03-03 D-V3-Phase3-E): JWTClaims pydantic validate REQUIRED (KHÔNG default empty M2). M2 cũ JWT KHÔNG có hub_ids → `401 Claims không hợp lệ`.
+
+Ngoài ra, frontend M2 hiện tại hardcode `/api/auth/login` same-origin POST → ở hub con sẽ FAIL (Plan 03-04 đã refactor backend trả 307 nhưng frontend chưa wire `<form action="https://central/api/auth/login">`). Defer Phase 5 PROXY-02 sau D-V3-06 D6 expire chính thức.
+
+### Operator pre-deploy checklist (30 phút advance)
+
+1. **Broadcast user re-login** qua Slack/Email banner:
+
+   > "Hệ thống Medinet Wiki vừa nâng cấp SSO (Phase 3 v3.0 Multi-Hub Split). Vui lòng đăng xuất + đăng nhập lại để nhận token mới. Phiên hiện tại sẽ tự động hết hạn trong vài phút. Mọi tài liệu đã upload + lịch sử search KHÔNG ảnh hưởng. Dự kiến downtime: 15-30 giây."
+
+2. **Verify central RS256 keypair PKCS#8** còn tồn tại (Plan 03-01 reuse M2 baseline — KHÔNG sinh lại):
+
+   ```bash
+   ls -la api/keys/private.pem api/keys/public.pem
+   # Nếu mất: cd api && make keys  (CẢNH BÁO: rotation = mọi JWT cũ revoke ngay)
+   ```
+
+3. **Verify Redis instance** up (cross-process blacklist `auth:blacklist:{jti}` Plan 03-03):
+
+   ```bash
+   docker compose ps redis
+   docker compose exec redis redis-cli PING  # Expect PONG
+   ```
+
+4. **Verify central reachable** từ 3 hub con qua Docker network `medinet_net` (intra-network DNS resolve `python-api-central:8080`):
+
+   ```bash
+   docker compose exec python-api-yte ping -c 1 python-api-central
+   ```
+
+### Deploy steps (Phase 3 v3.0)
+
+1. **Backup database** (M2 baseline carry forward — KHÔNG schema migration Phase 3):
+
+   ```bash
+   docker exec medinet-postgres pg_dumpall -U medinet > backup-pre-phase3-$(date +%Y%m%d).sql
+   ```
+
+2. **Update env** `CENTRAL_JWKS_URL` + `CENTRAL_URL` cho 3 hub con (docker-compose.yml ship sẵn — operator override.yml override nếu cần):
+
+   ```bash
+   # docker-compose.yml đã có sẵn 3 hub con env:
+   # CENTRAL_JWKS_URL: http://python-api-central:8080/.well-known/jwks.json
+   # CENTRAL_URL: http://python-api-central:8080
+   ```
+
+3. **Restart central first** → verify `GET /.well-known/jwks.json` 200 trước khi restart hub con (R-V3-5 boot dependency):
+
+   ```bash
+   docker compose up -d --force-recreate python-api-central
+   sleep 10  # đợi lifespan startup (asyncpg pool + redis + cocoindex + JWT keypair load)
+   curl http://localhost:8180/.well-known/jwks.json | jq .
+   # Expect: {"keys":[{"kty":"RSA","kid":"<11-char>","use":"sig","alg":"RS256","n":"...","e":"AQAB"}]}
+   ```
+
+4. **Restart 3 hub con song song** → verify lifespan log "JWKSCache fetched N keys":
+
+   ```bash
+   docker compose up -d --force-recreate python-api-yte python-api-duoc python-api-hcns
+   sleep 15  # đợi lifespan blocking fetch_initial 5s timeout × 3 hub
+   docker logs medinet-api-yte 2>&1 | grep -E "lifespan_jwks_cache_ready|jwks_cache_updated"
+   # Expect:
+   #   lifespan_jwks_cache_ready: hub_name=yte url=http://python-api-central:8080/.well-known/jwks.json refresh_interval=3600s
+   #   jwks_cache_updated: kids=['<kid>'] last_refresh_ts=<ts>
+   ```
+
+5. **Verify hub con `GET /api/auth/me`** với Bearer JWT mới 200 (verify path JWKSCache + Redis blacklist):
+
+   ```bash
+   # Login central
+   TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
+     -d '{"email":"admin@medinet.vn","password":"<password>"}' \
+     http://localhost:8180/api/auth/login | jq -r '.data.access_token')
+
+   # Verify hub yte accept JWT mới qua JWKSCache verify path
+   curl -H "Authorization: Bearer $TOKEN" http://localhost:8181/api/auth/me | jq .
+   # Expect: 200 nếu user có hub_ids chứa "yte"
+   #         403 CROSS_HUB_ACCESS_DENIED nếu user chỉ có hub khác (E4 reinforced)
+   ```
+
+6. **Verify hub con strip JWKS** (FACTOR-02 enforce — Plan 03-01 mount conditional):
+
+   ```bash
+   curl -o /dev/null -w "%{http_code}\n" http://localhost:8181/.well-known/jwks.json
+   # Expect: 404
+   ```
+
+7. **Verify hub con 307 redirect login** (D-V3-Phase3-G):
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" \
+     -X POST -H "Content-Type: application/json" \
+     -d '{"email":"u@m.vn","password":"x"}' \
+     http://localhost:8181/api/auth/login
+   # Expect: 307 http://python-api-central:8080/api/auth/login
+   ```
+
+8. **Verify old session reject** 401 (expected behavior — confirm backward incompat working):
+
+   ```bash
+   OLD_TOKEN="<M2_jwt_token_pre_phase3>"
+   curl -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $OLD_TOKEN" http://localhost:8181/api/auth/me
+   # Expect: 401 (thiếu kid header HOẶC aud HOẶC hub_ids)
+   ```
+
+### Endpoint mapping mới (Phase 3 Plan 03-04 SSO-02)
+
+| Endpoint | Central (port 8180) | Hub yte/duoc/hcns (port 8181-8183) |
+|---|---|---|
+| `POST /api/auth/login` | Handle local (M2 path) | **307 Location: `{CENTRAL_URL}/api/auth/login`** |
+| `POST /api/auth/refresh` | Handle local (M2 path) | **307 Location: `{CENTRAL_URL}/api/auth/refresh`** |
+| `POST /api/auth/logout` | Handle local (blacklist Redis chung) | Handle local (blacklist Redis chung — central thấy ngay < 1s) |
+| `GET /api/auth/me` | Handle local | Handle local (verify JWT qua JWKSCache + Redis blacklist) |
+| `GET /.well-known/jwks.json` | **200 JWK Set RFC 7517** | 404 envelope (FACTOR-02 strip) |
+
+### Cross-hub isolation enforcement (SSO-04 E4 reinforced 3-layer)
+
+Plan 03-03 thêm dependency `get_current_user_for_hub_access` — Layer 3 defense-in-depth:
+
+- **Layer 1 (Phase 1 Plan 01-02):** DB-level `_enforce_hub_dsn_match` Settings validator — hub con KHÔNG kết nối DB hub khác.
+- **Layer 2 (M2 carry forward):** Repository layer `WHERE hub_id = settings.hub_name` query-time filter.
+- **Layer 3 (Plan 03-03 MỚI):** Dependency check `HUB_NAME in JWT.hub_ids` → reject `403 CROSS_HUB_ACCESS_DENIED` nếu mismatch.
+
+**Example:** Stale JWT compromised từ user duoc (`hub_ids=["duoc"]`) post tới hub yte API:
+
+```bash
+TOKEN="eyJ..."  # Stale JWT hub_ids=["duoc"]
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8181/api/profile
+# Expect: 403 {"success":false,"error":{"code":"CROSS_HUB_ACCESS_DENIED","message":"Token KHÔNG có quyền truy cập hub 'yte' (hub_ids JWT = ['duoc'])"}}
+```
+
+### Rollback procedure (nếu deploy fail)
+
+```bash
+# 1. Stop services
+docker compose down
+
+# 2. Revert commit Plan 03-01..05 (xem git log --grep "(03-0")
+git checkout <commit-pre-phase-3-sha>
+
+# 3. Re-build + restart 4 service
+docker compose build python-api-central python-api-yte python-api-duoc python-api-hcns
+docker compose up -d
+
+# 4. Clear Redis blacklist keys mới (auth:blacklist:* prefix Plan 03-03)
+docker compose exec redis redis-cli --scan --pattern 'auth:blacklist:*' | xargs -r docker compose exec -T redis redis-cli DEL
+
+# 5. (Optional) Restore database backup nếu cần — KHÔNG bắt buộc vì Phase 3 KHÔNG migration schema
+# psql -U medinet -d medinet_central < backup-pre-phase3-<date>.sql
+```
+
+Phase 3 KHÔNG Alembic migration schema — rollback chỉ revert source code + restart container + clear Redis prefix mới → JWT M2 cũ valid lại.
+
+### v3.0-a EXIT GATE preview (giữa Phase 3-4)
+
+🚦 **v3.0-a EXIT GATE TRIGGERED 2026-05-22** sau Plan 03-05 close. Demo deliverable list:
+
+1. 1 hub con (yte) + central + Redis + Postgres deploy được trên Docker compose.
+2. User login `https://central/api/auth/login` → JWT valid (có kid + aud + hub_ids).
+3. User truy cập `https://central/yte/api/...` (direct port test trước Caddy lên Phase 5) → hub con verify JWT qua JWKSCache → 200.
+4. Hub con CHỈ truy cập data hub yte (test cross-hub access → 403 CROSS_HUB_ACCESS_DENIED).
+5. Golden path: login → upload (local hub yte chỉ) → search local → PASS.
+
+**Smoke runtime defer Phase 7 MIGRATE-05 full E2E** (3 hub + central golden path + JWT SSO live). Evidence chain in-process: Plan 03-01..04 ship 65+ unit + 6 integration test PASS đã cover semantic SSO-01..04 + `docker compose config --quiet` base PASS.
+
+**User accept criteria → tiếp tục v3.0-b (Phase 4 trigger):** 1 hub con + tổng deploy được, JWT SSO PASS, hub isolation reinforce, golden path PASS. **User reject → re-discuss D-V3-01 topology choice** qua `/gsd-discuss-milestone v3.0`.
+
+### Reference
+
+- `.planning/phases/03-auth-sso-hub-ids-jwt/03-CONTEXT.md` — 8 decision LOCKED D-V3-Phase3-A..H.
+- `.planning/phases/03-auth-sso-hub-ids-jwt/03-{01..05}-PLAN.md` — Implementation detail per plan.
+- `.planning/phases/03-auth-sso-hub-ids-jwt/03-{01..05}-SUMMARY.md` — Deliverable + commit + test count per plan.
+- `.planning/REQUIREMENTS.md` § SSO-01..04 — REQ-ID spec + Phase 3 closeout note.
+- `Hub_All/CLAUDE.md` section 6 — v3.0 progress + Phase 3 SSO pattern subsection.
+
+---
+
 ## Milestone status
 
 - ✅ **M2 v2.0 — Full RAG Rewrite** đang đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS).
