@@ -25,7 +25,7 @@
 | ✅ **2** | Hub-con codebase factor | 1 codebase deploy nhiều lần với HUB_NAME; strip system settings ở hub con; expose 10 endpoint hub-scoped; dynamic hub registration (FACTOR-04 added 2026-05-22) | FACTOR-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 12 commits) |
 | ✅ **3** | Auth SSO + hub_ids trong JWT | JWKS endpoint central; cache hub con TTL 1h HA; Redis blacklist chung; E4 DB-level isolation | SSO-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 30 commits) |
 | 🚦 | **v3.0-a EXIT GATE** | Demo 1 hub con (yte) + tổng + JWT SSO + golden path PASS — user accept tiếp tục v3.0-b | — | — | Phase 1-3 done |
-| 🔄 **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central; idempotent retry; cross-hub search aggregated; checksum verify periodic; mechanism chốt | SYNC-01..05 (5) | 5 | **PLANNED 2026-05-22 (7 plans)** — depends Phase 1, 3 |
+| ✅ **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central qua outbox + worker; idempotent ON CONFLICT retry; cross-hub search 1 SQL aggregated; checksum scheduler daily/hourly verify; admin /api/sync/replay endpoint; 6 Prometheus metric infrastructure | SYNC-01..05 (5) | 5 | M2 shipped — **DONE 2026-05-22** (7 plans / ~21 commits / 113 unit + 21 integration test PASS in-process) |
 | **5** | Reverse proxy + frontend subpath | Caddy subpath route; frontend detect prefix 1 build; D6 expire formally; per-hub login branding | PROXY-01..04 (4) | 4 | Phase 2 |
 | **6** | System settings sync | rag-config HTTP pull + Redis cache 60s + pub/sub invalidate < 30s; api_keys verify proxy central; hub_registry read-only | SETTINGS-01..04 (4) | 4 | Phase 3 |
 | **7** | Migration + smoke E2E | pg_dump per hub_id; restore blue/green per-hub; truncate central skeleton; MCP re-point central; smoke E2E 3 hub + tổng PASS | MIGRATE-01..05 (5) | 5 | Phase 1-6 |
@@ -193,13 +193,13 @@ Demo deliverable:
 **Plans:** 7 plans (6 waves — Wave 1 BLOCKING, Wave 2 parallel × 2 file-disjoint, Wave 3 + 4 + 5 + 6 closeout)
 
 Plans:
-- [ ] 04-01-PLAN.md — Per-hub Alembic 0005 sync_outbox + Postgres trigger AFTER INSERT/DELETE chunks + documents.sync_status enum + skip-central runtime guard (SYNC-05, SYNC-01, SYNC-02 — D-V3-Phase4-A2/A4)
-- [ ] 04-02-PLAN.md — Settings 5 field mới (hub_id + central_sync_dsn + checksum_hub_dsns_json + sync_batch/poll/max_attempts/backoff) + 3 model_validator boot fail-fast + docker-compose env wire (SYNC-01, SYNC-03, SYNC-04 — D-V3-Phase4-A5/C3/D2)
-- [ ] 04-03-PLAN.md — api/app/sync/ module mới (keys + models + metrics + worker) — outbox poll batch 100/5s + SKIP LOCKED + exp backoff + dead path + 6 Prometheus collector (SYNC-01, SYNC-02, SYNC-05 — D-V3-Phase4-A1/A5/B1/B3)
-- [ ] 04-04-PLAN.md — Lifespan integration central_sync_pool + sync_worker_task + rag/flow.py hub_id guard + 4 integration mock test (SYNC-01, SYNC-02, SYNC-05)
-- [ ] 04-05-PLAN.md — SearchService._search_cross_hub_impl refactor 1 SQL aggregated + tách search_cross_hub_router central-only mount + integration test matrix update (SYNC-03 — D-V3-Phase4-D1/D3)
-- [ ] 04-06-PLAN.md — observability/checksum_scheduler.py central lifespan + POST /api/sync/replay admin endpoint (SYNC-04 — D-V3-Phase4-C1/C2/C3)
-- [ ] 04-07-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md + README.md + smoke checkpoint runtime
+- [x] 04-01-PLAN.md — Per-hub Alembic 0005 sync_outbox + Postgres trigger AFTER INSERT/DELETE chunks + documents.sync_status enum + skip-central runtime guard (SYNC-05, SYNC-01, SYNC-02 — D-V3-Phase4-A2/A4) — **DONE 2026-05-22** (17/17 unit + 293/293 + 10/10 Phase 1 regression PASS; BLOCKER 1 fix initial syncing UPDATE idempotent guard + BLOCKER 2 fix explicit jsonb_build_object + vector::float4[] cast + content_hash hex encode)
+- [x] 04-02-PLAN.md — Settings 7 field mới (hub_id + central_sync_dsn + checksum_hub_dsns_json + sync_batch/poll/max_attempts/backoff) + 3 model_validator boot fail-fast + 1 length validator backoff = max_attempts-1 + docker-compose env wire (SYNC-01, SYNC-03, SYNC-04 — D-V3-Phase4-A5/C3/D2) — **DONE 2026-05-22** (17/17 unit + 310/310 regression 8 file fixture Rule 3 PASS)
+- [x] 04-03-PLAN.md — api/app/sync/ module mới 5 file (keys + models + metrics + worker + __init__) ~816 LOC — sync_worker_loop SELECT FOR UPDATE SKIP LOCKED batch 100/5s + ChunkPayload Pydantic hex decode BLOCKER 2 + 6 Prometheus collector W7 label hub_name (SYNC-01, SYNC-02, SYNC-05 — D-V3-Phase4-A1/A5/B1/B3) — **DONE 2026-05-22** (43/43 unit + 353/353 regression PASS)
+- [x] 04-04-PLAN.md — Lifespan integration central_sync_pool + register_vector codec + sync_worker_task hub con + rag/flow.py hub_id guard + 6 mock integration test (SYNC-01, SYNC-02, SYNC-05) — **DONE 2026-05-22** (6/6 mock integration + 1 skipif live-DB PASS; W3 fix shared dsn.py helper + W9 fixture skipif INTEGRATION_DB_URL + SYNC_SKIP_CENTRAL_POOL=1 escape hatch)
+- [x] 04-05-PLAN.md — SearchService._search_cross_hub_impl refactor 1 SQL aggregated thay fan-out asyncio.gather + tách search_cross_hub_router central-only mount + integration test matrix update CENTRAL_ONLY 8→9 (SYNC-03 — D-V3-Phase4-D1/D3) — **DONE 2026-05-22** (8/8 unit + 15/15 integration + 361/361 regression PASS; public API signature unchanged backward compat M2)
+- [x] 04-06-PLAN.md — observability/checksum_scheduler.py central lifespan daily/hourly + POST /api/sync/replay admin endpoint + audit_logs non-repudiation (SYNC-04 — D-V3-Phase4-C1/C2/C3) — **DONE 2026-05-22** (22/22 unit 10 checksum + 12 replay + 383/383 regression + 21/21 integration PASS; W8 fix audit defensive inner try/except)
+- [x] 04-07-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md + ROADMAP.md + README.md + smoke checkpoint runtime SKIP pre-resolved (defer Phase 7 MIGRATE-05) — **DONE 2026-05-22** (docs grep acceptance PASS 5 file; Task 5 SKIP pre-resolved evidence chain 113 unit + 21 integration cover semantic SYNC-01..05)
 
 ---
 
@@ -293,7 +293,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **15/~32 (Phase 4 PLANNED 7 plans)** | **12/30** | 🔄 **Phase 1+2+3 DONE — Phase 4 PLANNED 2026-05-22** | — |
+| **v3.0 Multi-Hub Split** | **7** | **22/~32** | **17/30** | 🔄 **Phase 1+2+3+4 DONE 2026-05-22 (22/~32 ≈ 69%) — v3.0-b mở màn** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
@@ -381,4 +381,4 @@ Tham chiếu `.planning/BACKLOG.md` cho 999.x items. Highlights chuyển vào v4
 
 ---
 
-*Last updated: 2026-05-22 sau `/gsd-plan-phase 4` — Phase 4 Cross-hub Data Sync PLANNED 7 plans (6 wave outbox + worker + idempotent + cross-hub search refactor + checksum scheduler + admin replay + closeout). 9 D-V3-Phase4-A1..D3 LOCKED qua `/gsd-discuss-phase 4 --chain` 2026-05-22. SYNC-01..05 covered. Next: `/gsd-execute-phase 4` wave-based execution.*
+*Last updated: 2026-05-22 sau `/gsd-execute-phase 4` Plan 04-07 closeout — Phase 4 Cross-hub Data Sync DONE 7 plans (Wave 1 BLOCKING + Wave 2 parallel + Wave 3 + Wave 4 + Wave 5 + Wave 6 closeout). 9 D-V3-Phase4-A1..D3 consumed; outbox + worker mechanism + idempotent ON CONFLICT + cross-hub 1 SQL aggregated + checksum scheduler + admin replay + 6 Prometheus metric infrastructure. SYNC-01..05 fully shipped. 113 unit + 21 integration PASS in-process. v3.0-b mở màn (22/~32 plan ≈ 69%). Next: `/gsd-discuss-phase 5` Reverse Proxy + Frontend Subpath (PROXY-01..04 — GA-V3-C confirm + D-V3-06 D6 expire formally).*
