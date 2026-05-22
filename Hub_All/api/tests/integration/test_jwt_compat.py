@@ -46,17 +46,24 @@ async def test_login_token_decodable_with_public_key(
     token = r.json()["data"]["access_token"]
 
     # Decode RAW bằng PyJWT — KHÔNG qua JWTManager (verify cross-process).
+    # Plan 03-03 Rule 3 regression: JWT mới include aud claim → pyjwt strict
+    # decode yêu cầu audience param match.
     pub = Path("keys/public.pem").read_bytes()
     decoded: dict[str, Any] = pyjwt.decode(
-        token, pub, algorithms=["RS256"], issuer="medinet-wiki"
+        token,
+        pub,
+        algorithms=["RS256"],
+        issuer="medinet-wiki",
+        audience="medinet-wiki",  # Phase 3 Plan 03-03 SSO-02
     )
 
-    # Claims layout — match Plan 03-02 JWTClaims spec.
+    # Claims layout — match Plan 03-03 JWTClaims spec (aud + hub_ids REQUIRED).
     assert decoded["sub"] == admin_user["id"]
     assert decoded["email"] == admin_user["email"]
     assert decoded["role"] == "admin"
     assert decoded["token_type"] == "access"
     assert decoded["iss"] == "medinet-wiki"
+    assert decoded["aud"] == ["medinet-wiki"]  # Phase 3 Plan 03-03
     assert "jti" in decoded
     assert "exp" in decoded
     assert "iat" in decoded
