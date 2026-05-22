@@ -23,6 +23,8 @@
       FILE_STORE_DIR: /file_store
       APP_ENV: ${APP_ENV:-dev}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Phase 3 Plan 03-01 SSO-01 — Hub con consume JWKS tu central (intra-network)
+      CENTRAL_JWKS_URL: http://python-api-central:8080/.well-known/jwks.json
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
