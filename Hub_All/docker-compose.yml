@@ -95,6 +95,13 @@ services:
       FILE_STORE_DIR: /file_store
       APP_ENV: ${APP_ENV:-dev}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Phase 4 Plan 04-02 SYNC-04 (D-V3-Phase4-C3) — Central checksum scheduler
+      # connect read-only toi N hub con qua dict {hub_name: DSN}. Optional default
+      # empty string -> Settings.checksum_hub_dsns property = {} (scheduler tick
+      # no-op). Operator export sau khi register hub con voi UUID khop central.hubs.
+      # Vi du shell:
+      #   export CHECKSUM_HUB_DSNS_JSON='{"yte":"postgresql://medinet:dev@postgres:5432/medinet_hub_yte","duoc":"postgresql://medinet:dev@postgres:5432/medinet_hub_duoc","hcns":"postgresql://medinet:dev@postgres:5432/medinet_hub_hcns"}'
+      CHECKSUM_HUB_DSNS_JSON: ${CHECKSUM_HUB_DSNS_JSON:-}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -131,6 +138,17 @@ services:
       # toi central qua 307 Location. Settings._enforce_central_url_for_hub
       # validator enforce hub con required (boot fail-fast neu thieu).
       CENTRAL_URL: http://python-api-central:8080
+      # Phase 4 Plan 04-02 SYNC-01 (D-V3-Phase4-D2) — Hub con UUID identity tu
+      # medinet_central.hubs row. Operator export HUB_YTE_ID truoc `docker compose
+      # up` (vd `export HUB_YTE_ID=$(psql ... -tAc "SELECT id FROM hubs WHERE
+      # hub_name='yte'")`). Cu phap `${VAR:?msg}` fail-loud KHONG set
+      # (docker-compose interpolation error truoc boot Settings).
+      HUB_ID: ${HUB_YTE_ID:?HUB_YTE_ID env var phai set khop central.hubs.id UUID — Plan 04-02 SYNC-01}
+      # Phase 4 Plan 04-02 SYNC-01 (D-V3-Phase4-A1) — Hub con outbox worker push
+      # central qua dedicated asyncpg pool. Production deploy phai dung role
+      # `sync_user` GRANT INSERT/UPDATE/DELETE ON chunks (theo hub_id) + SELECT
+      # ON hubs (T-04-06 Elevation mitigation — defer doc Phase 7 MIGRATE).
+      CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -164,6 +182,10 @@ services:
       # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
       # toi central qua 307 (xem ghi chu python-api-yte).
       CENTRAL_URL: http://python-api-central:8080
+      # Phase 4 Plan 04-02 SYNC-01 — Hub con UUID identity + sync DSN (xem ghi
+      # chu python-api-yte). Operator export HUB_DUOC_ID truoc compose up.
+      HUB_ID: ${HUB_DUOC_ID:?HUB_DUOC_ID env var phai set khop central.hubs.id UUID — Plan 04-02 SYNC-01}
+      CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -197,6 +219,10 @@ services:
       # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
       # toi central qua 307 (xem ghi chu python-api-yte).
       CENTRAL_URL: http://python-api-central:8080
+      # Phase 4 Plan 04-02 SYNC-01 — Hub con UUID identity + sync DSN (xem ghi
+      # chu python-api-yte). Operator export HUB_HCNS_ID truoc compose up.
+      HUB_ID: ${HUB_HCNS_ID:?HUB_HCNS_ID env var phai set khop central.hubs.id UUID — Plan 04-02 SYNC-01}
+      CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:

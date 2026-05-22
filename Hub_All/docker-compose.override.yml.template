@@ -28,6 +28,15 @@
       # Phase 3 Plan 03-04 SSO-02 (D-V3-Phase3-G) — Hub con redirect login/refresh
       # toi central qua 307 Location header (preserve POST + body RFC 7231).
       CENTRAL_URL: http://python-api-central:8080
+      # Phase 4 Plan 04-02 SYNC-01 (D-V3-Phase4-D2 + A1) — Dynamic hub UUID
+      # identity + sync DSN. hub-add.sh sed substitute `{{HUB_UPPER}}` thanh
+      # uppercase hub_name (vi du HUB=phap_che -> HUB_PHAP_CHE_ID). Operator
+      # export HUB_{{HUB_UPPER}}_ID truoc `docker compose up` (UUID khop
+      # central.hubs.id row sau khi register hub moi).
+      HUB_ID: ${HUB_{{HUB_UPPER}}_ID:?HUB_{{HUB_UPPER}}_ID env var phai set khop central.hubs.id UUID — Plan 04-02 SYNC-01}
+      # Phase 4 Plan 04-02 SYNC-01 — Dedicated asyncpg pool toi medinet_central
+      # cho outbox worker push chunks ON CONFLICT.
+      CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
