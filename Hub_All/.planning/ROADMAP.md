@@ -25,7 +25,7 @@
 | ✅ **2** | Hub-con codebase factor | 1 codebase deploy nhiều lần với HUB_NAME; strip system settings ở hub con; expose 10 endpoint hub-scoped; dynamic hub registration (FACTOR-04 added 2026-05-22) | FACTOR-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 12 commits) |
 | ✅ **3** | Auth SSO + hub_ids trong JWT | JWKS endpoint central; cache hub con TTL 1h HA; Redis blacklist chung; E4 DB-level isolation | SSO-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-22** (5 plans / 30 commits) |
 | 🚦 | **v3.0-a EXIT GATE** | Demo 1 hub con (yte) + tổng + JWT SSO + golden path PASS — user accept tiếp tục v3.0-b | — | — | Phase 1-3 done |
-| **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central; idempotent retry; cross-hub search aggregated; checksum verify periodic; mechanism chốt | SYNC-01..05 (5) | 5 | Phase 1, 3 |
+| 🔄 **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central; idempotent retry; cross-hub search aggregated; checksum verify periodic; mechanism chốt | SYNC-01..05 (5) | 5 | **PLANNED 2026-05-22 (7 plans)** — depends Phase 1, 3 |
 | **5** | Reverse proxy + frontend subpath | Caddy subpath route; frontend detect prefix 1 build; D6 expire formally; per-hub login branding | PROXY-01..04 (4) | 4 | Phase 2 |
 | **6** | System settings sync | rag-config HTTP pull + Redis cache 60s + pub/sub invalidate < 30s; api_keys verify proxy central; hub_registry read-only | SETTINGS-01..04 (4) | 4 | Phase 3 |
 | **7** | Migration + smoke E2E | pg_dump per hub_id; restore blue/green per-hub; truncate central skeleton; MCP re-point central; smoke E2E 3 hub + tổng PASS | MIGRATE-01..05 (5) | 5 | Phase 1-6 |
@@ -159,7 +159,7 @@ Demo deliverable:
 
 ### Phase 4 — Cross-hub Data Sync (D-V3-02, GA-V3-D)
 
-**Goal:** Sau khi cocoindex flow hub con ingest xong → push chunks + vector (denormalized) lên `medinet_central.chunks`; hub tổng KHÔNG re-embed; idempotent on retry (ON CONFLICT); cross-hub search ở central dùng aggregated chunks (KHÔNG fan-out HTTP); checksum verify periodic chống drift; mechanism chốt ở discuss-phase 4.
+**Goal:** Sau khi cocoindex flow hub con ingest xong → push chunks + vector (denormalized) lên `medinet_central.chunks` qua **outbox + worker** pattern (D-V3-Phase4-A1 LOCKED — REJECT cocoindex target / Postgres logical replication); hub tổng KHÔNG re-embed; idempotent on retry (`ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT` — D-V3-Phase4-B1); cross-hub search ở central refactor 1 SQL aggregated (KHÔNG fan-out HTTP — D-V3-Phase4-D1); checksum verify periodic (daily count + hourly TABLESAMPLE hash — D-V3-Phase4-C1) chống drift; admin replay endpoint dead row recovery (D-V3-Phase4-C2).
 
 **Requirements:** SYNC-01, SYNC-02, SYNC-03, SYNC-04, SYNC-05
 
@@ -167,14 +167,39 @@ Demo deliverable:
 1. Upload file ở hub con yte → chunks sync sang central trong < 60s (Prometheus metric `sync_lag_seconds{hub_id}` đo).
 2. Cross-hub search ở central thấy chunks từ hub con yte + duoc + hcns aggregated; p95 < 1.5s (E-V3-2).
 3. Idempotent retry KHÔNG dup chunks (kill push mid-batch → re-run KHÔNG sai chunk_count tổng).
-4. Checksum verify daily metric `sync_drift_total{hub_id, drift_type}` < 1% rows (E-V3-5 threshold).
-5. SYNC-05 mechanism chốt — chọn 1 trong 3 option (a) cocoindex target thứ 2 / (b) Postgres logical replication / (c) outbox + worker.
+4. Checksum verify daily metric `sync_count_drift{hub_id}` < 1% rows + hourly `sync_hash_drift{hub_id, drift_type}` (E-V3-5 threshold).
+5. SYNC-05 mechanism = outbox + worker (LOCKED qua D-V3-Phase4-A1 `/gsd-discuss-phase 4 --chain` 2026-05-22).
 
-**Discuss-phase gray areas (chốt ở `/gsd-discuss-phase 4`):**
-- **GA-V3-D part 1 chốt:** sync mechanism. Cocoindex target thứ 2 = lock-in cocoindex; Postgres logical replication = native nhưng schema drift sensitive; outbox + worker = flexible self-maintain. Khuyến nghị seed: cocoindex target thứ 2 (đơn giản nhất, đã có cocoindex foundation v2.0).
-- Idempotent key: `chunk_id` UUID (stable qua re-index) vs `content_hash` (re-embed cùng content KHÔNG re-push).
-- Sync timing: post-ingest hook synchronous vs async worker queue.
-- Checksum cron schedule: daily 2AM vs hourly sample 1%.
+**Decisions (chốt 2026-05-22 qua `/gsd-discuss-phase 4 --chain` — 9 D-V3-Phase4-A1..D3 LOCKED):**
+- **A · Sync Mechanism (SYNC-05):**
+  - D-V3-Phase4-A1: Outbox + worker (REJECT cocoindex target / logical replication)
+  - D-V3-Phase4-A2: `sync_outbox` table per-DB hub con (11 cột + 2 CHECK + 2 index)
+  - D-V3-Phase4-A3: In-process asyncio worker hub con lifespan (KHÔNG separate container / central worker)
+  - D-V3-Phase4-A4: Postgres trigger AFTER INSERT/DELETE chunks → enqueue function atomic
+  - D-V3-Phase4-A5: batch_size=100, poll_interval=5s, backoff=[1,5,30,120]s, max_attempts=5, SKIP LOCKED
+- **B · Idempotent + Timing (SYNC-02):**
+  - D-V3-Phase4-B1: `ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT` 1 statement atomic
+  - D-V3-Phase4-B2: Async outbox decoupled — `document.sync_status` enum dashboard
+  - D-V3-Phase4-B3: `op_type` enum insert|delete — DELETE event HARD DELETE central (chunks immutable)
+- **C · Failure Mode + Checksum (SYNC-04):**
+  - D-V3-Phase4-C1: Daily 2AM COUNT(*) + Hourly TABLESAMPLE BERNOULLI(1) hash
+  - D-V3-Phase4-C2: Mark dead + Prometheus alert + Admin replay endpoint
+  - D-V3-Phase4-C3: Central FastAPI lifespan asyncio task (KHÔNG APScheduler dep)
+- **D · Cross-hub Search Refactor (SYNC-03):**
+  - D-V3-Phase4-D1: Refactor `_search_cross_hub_impl()` 1 SQL aggregated in-place (public API unchanged)
+  - D-V3-Phase4-D2: Settings.hub_id UUID env boot fail-loud (operator deploy responsibility)
+  - D-V3-Phase4-D3: Strip `/api/search/cross-hub` ở hub con (FACTOR-02 extend)
+
+**Plans:** 7 plans (6 waves — Wave 1 BLOCKING, Wave 2 parallel × 2 file-disjoint, Wave 3 + 4 + 5 + 6 closeout)
+
+Plans:
+- [ ] 04-01-PLAN.md — Per-hub Alembic 0005 sync_outbox + Postgres trigger AFTER INSERT/DELETE chunks + documents.sync_status enum + skip-central runtime guard (SYNC-05, SYNC-01, SYNC-02 — D-V3-Phase4-A2/A4)
+- [ ] 04-02-PLAN.md — Settings 5 field mới (hub_id + central_sync_dsn + checksum_hub_dsns_json + sync_batch/poll/max_attempts/backoff) + 3 model_validator boot fail-fast + docker-compose env wire (SYNC-01, SYNC-03, SYNC-04 — D-V3-Phase4-A5/C3/D2)
+- [ ] 04-03-PLAN.md — api/app/sync/ module mới (keys + models + metrics + worker) — outbox poll batch 100/5s + SKIP LOCKED + exp backoff + dead path + 6 Prometheus collector (SYNC-01, SYNC-02, SYNC-05 — D-V3-Phase4-A1/A5/B1/B3)
+- [ ] 04-04-PLAN.md — Lifespan integration central_sync_pool + sync_worker_task + rag/flow.py hub_id guard + 4 integration mock test (SYNC-01, SYNC-02, SYNC-05)
+- [ ] 04-05-PLAN.md — SearchService._search_cross_hub_impl refactor 1 SQL aggregated + tách search_cross_hub_router central-only mount + integration test matrix update (SYNC-03 — D-V3-Phase4-D1/D3)
+- [ ] 04-06-PLAN.md — observability/checksum_scheduler.py central lifespan + POST /api/sync/replay admin endpoint (SYNC-04 — D-V3-Phase4-C1/C2/C3)
+- [ ] 04-07-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md + README.md + smoke checkpoint runtime
 
 ---
 
@@ -268,7 +293,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **15/~32** | **12/30** | 🔄 **Phase 1+2+3 DONE (3/7 phase) — 🚦 v3.0-a EXIT GATE TRIGGERED** | — |
+| **v3.0 Multi-Hub Split** | **7** | **15/~32 (Phase 4 PLANNED 7 plans)** | **12/30** | 🔄 **Phase 1+2+3 DONE — Phase 4 PLANNED 2026-05-22** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
@@ -292,11 +317,11 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | SSO-02: Redis blacklist chung | 3 | Cross-process revoke |
 | SSO-03: JWT claim hub_ids | 3 | Cross-hub access control |
 | SSO-04: E4 reinforced DB-level | 3 | Hub con + repo-layer enforce |
-| SYNC-01: Push chunks+vector hub con → central | 4 | Denormalized, KHÔNG re-embed |
-| SYNC-02: ON CONFLICT idempotent | 4 | Multi-retry safe |
-| SYNC-03: Cross-hub search aggregated central | 4 | KHÔNG fan-out HTTP |
-| SYNC-04: Checksum verify periodic | 4 | Daily Prometheus metric, drift < 1% |
-| SYNC-05: Mechanism chốt (cocoindex/replication/outbox) | 4 | GA-V3-D part 1 |
+| SYNC-01: Push chunks+vector hub con → central | 4 | Denormalized, KHÔNG re-embed — outbox + worker |
+| SYNC-02: ON CONFLICT idempotent | 4 | `ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT` |
+| SYNC-03: Cross-hub search aggregated central | 4 | KHÔNG fan-out HTTP — 1 SQL `WHERE hub_id = ANY` |
+| SYNC-04: Checksum verify periodic | 4 | Daily COUNT + Hourly TABLESAMPLE hash + admin replay |
+| SYNC-05: Mechanism chốt (outbox + worker) | 4 | D-V3-Phase4-A1 LOCKED |
 | PROXY-01: Caddy subpath route + strip prefix | 5 | Caddy auto-TLS carry forward |
 | PROXY-02: Frontend detect prefix 1 build | 5 | `window.location.pathname.split('/')[1]` |
 | PROXY-03: D6 expire formally | 5 | CLAUDE.md update + smoke regression |
@@ -356,4 +381,4 @@ Tham chiếu `.planning/BACKLOG.md` cho 999.x items. Highlights chuyển vào v4
 
 ---
 
-*Last updated: 2026-05-21 sau `/gsd-new-milestone v3.0` — Multi-Hub Split STARTED. 7 phase reset numbering, 29 REQ-ID v1, v3.0-a / v3.0-b split. Next: `/gsd-discuss-phase 1` Multi-DB topology + per-hub Alembic.*
+*Last updated: 2026-05-22 sau `/gsd-plan-phase 4` — Phase 4 Cross-hub Data Sync PLANNED 7 plans (6 wave outbox + worker + idempotent + cross-hub search refactor + checksum scheduler + admin replay + closeout). 9 D-V3-Phase4-A1..D3 LOCKED qua `/gsd-discuss-phase 4 --chain` 2026-05-22. SYNC-01..05 covered. Next: `/gsd-execute-phase 4` wave-based execution.*
