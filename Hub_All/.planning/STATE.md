@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Multi-Hub Split
-status: Phase 2 DONE 2026-05-22 ✅ (5 plans total — Plan 02-05 ship 2026-05-22 FACTOR-04 dynamic hub registration; user direction B sau Plan 02-04 closeout). 5 plans / 9+ commits / 49+ unit tests + 12+ integration test PASS. create_app() factory conditional mount (7 universal + 9 central-only); docker-compose 4 service dedicated (central/yte/duoc/hcns) port 8180-8183 + cocoindex LMDB volume per-hub; endpoint matrix 12 hub-scoped mount + 8 central-only strip envelope shape; Settings.hub_name str + regex + reserved blacklist 6 name + scripts/hub-add.sh + docker-compose.override.yml.template + Makefile target hub-add (FACTOR-04). Phase 1+2 = 10/~32 plan ≈ 31%. Next phase 3 — Auth SSO + hub_ids JWT (GA-V3-A chốt).
-last_updated: "2026-05-22T15:30:00.000Z"
+status: Phase 3 DONE 2026-05-22 ✅ — Auth SSO + hub_ids JWT 5 plan ship SSO-01..04. JWKS endpoint central RFC 7517 (`/.well-known/jwks.json` single-key RS256 + Cache-Control 1h) + JWKSCache hub con (in-process LRU + asyncio refresh 1h fail-quiet + 24h hard limit fail-loud delayed) + JWT aud=["medinet-wiki"] REQUIRED + hub_ids list[str] REQUIRED + PyJWT strict audience check 2 path + Redis blacklist key rename `auth:blacklist:{jti}` (5 vị trí + `_blacklist.py` mini-module) + 307 redirect hub con login/refresh (D-V3-Phase3-G preserve POST + body RFC 7231) + SSO-04 E4 reinforced dependency `get_current_user_for_hub_access` Layer 3 enforce + Settings 2 field mới central_jwks_url + central_url + 2 model_validator hub con required + docker-compose 3 hub con + override.yml.template env CENTRAL_JWKS_URL + CENTRAL_URL + frontend wire defer Phase 5 PROXY-02. 5 plans / 30 commits (25 Phase 3 + 5 Plan 03-05 closeout) / 65+ unit test + 6 integration test PASS in-process. M2 cũ JWT thiếu kid/aud/hub_ids → 401 reject sau deploy; user re-login ~15-30s downtime (operator broadcast Slack/Email). 🚦 v3.0-a EXIT GATE TRIGGERED — Phase 1+2+3 DONE (3/3 phase v3.0-a — 15/~32 plan ≈ 47%) — demo deliverable defer Phase 7 MIGRATE-05 full E2E (evidence chain 65+ unit + 6 integration in-process cover semantic + docker compose config base PASS). Next: /gsd-discuss-phase 4 Cross-hub data sync (GA-V3-D chốt — cocoindex target / Postgres logical replication / outbox + worker) hoặc user accept v3.0-a tiếp tục v3.0-b.
+last_updated: "2026-05-22T08:38:36.000Z"
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 10
-  completed_plans: 10
-  percent: 31
+  completed_phases: 3
+  total_plans: 15
+  completed_plans: 15
+  percent: 47
 ---
 
 # State — MEDWIKI (v3.0)
@@ -21,10 +21,15 @@ progress:
 
 ## Current Position
 
-- **Phase:** 2 — Hub-con Codebase Factor ✅ **DONE 2026-05-22 — FACTOR-01..04 fully shipped (Wave 1 + Wave 2 + Wave 3 + Wave 4 ✅); Plan 02-05 FACTOR-04 dynamic hub registration ship 2026-05-22 (user direction B sau Plan 02-04 closeout)**
-- **Plan:** 5/5 plans complete (02-01..02-05) cho FACTOR-01..04 ở `.planning/phases/02-hub-con-codebase-factor/`.
-- **Status:** Phase 2 closed FACTOR-01..03 — `create_app()` factory conditional router mount (7 universal + 9 central-only). Docker-compose mở rộng 4 service dedicated với YAML anchor `x-api-template`. Integration test endpoint matrix verify 12 hub-scoped mount + 8 central-only strip với 404 envelope shape M2 ErrorHandlerMiddleware wrap (Starlette HTTPException handler Rule 2 auto-add ở Plan 02-03). Phase 1 `_enforce_hub_dsn_match` validator carry forward (E-V3-3 không regress). CLAUDE.md + STATE.md + REQUIREMENTS.md update FACTOR-03 note "10 collective endpoint group / 12 specific HTTP method endpoints" (WRN-05 fix). Plan 02-04 Task 1 smoke compose runtime SKIP — rationale: Plan 02-03 integration test in-process (10/10 PASS 6.49s) đã cover semantic FACTOR-02/03; Phase 1 DSN validator + routing verify Plan 01-02; `docker compose config --quiet` exit 0 Plan 02-02; smoke compose runtime defer Phase 7 migration smoke E2E (MIGRATE-05).
-- **Last activity:** 2026-05-22 — `/gsd-execute-phase 2` wave-based execution complete cho FACTOR-01..03:
+- **Phase:** 3 — Auth SSO + hub_ids trong JWT ✅ **DONE 2026-05-22 — SSO-01..04 fully shipped (Wave 1 + Wave 2 + Wave 3 + Wave 4 + Wave 5 ✅)**
+- **Plan:** 5/5 plans complete (03-01..03-05) cho SSO-01..04 ở `.planning/phases/03-auth-sso-hub-ids-jwt/`.
+- **Status:** Phase 3 closed SSO-01..04 — JWKS endpoint central (`/.well-known/jwks.json` RFC 7517 single-key RS256 + Cache-Control 1h + 503 envelope `JWKS_UNAVAILABLE` fallback) qua module `api/app/auth/jwks.py` mới với `publish_jwks() + load_public_key_as_jwk()` helpers cryptography stdlib (KHÔNG jwcrypto dep mới — D-V3-Phase3-A); hub con `JWKSCache` in-process LRU + asyncio refresh 1h fail-quiet + 24h hard limit fail-loud delayed (503 `JWKS_STALE` mọi JWT verify — D-V3-Phase3-B/D); JWT claim refactor `aud=["medinet-wiki"]` REQUIRED + `hub_ids: list[str]` REQUIRED + PyJWT strict audience check 2 verify path (verify_token + verify_token_with_key) + JWT header `kid` auto-add deterministic SHA-256 PEM (D-V3-Phase3-E); Redis blacklist key rename `auth:blacklist:{jti}` (5 vị trí touch — 4 service.py refresh/logout + 1 dependencies.py — D-V3-Phase3-H) qua mini-module `_blacklist.py` (REDIS_BLACKLIST_PREFIX + make_blacklist_key helper); 307 redirect hub con `POST /api/auth/login` + `POST /api/auth/refresh` Location: central (preserve POST + body RFC 7231 — D-V3-Phase3-G); SSO-04 E4 reinforced dependency `get_current_user_for_hub_access` Layer 3 enforce — hub con check `HUB_NAME in claims.hub_ids` → 403 CROSS_HUB_ACCESS_DENIED envelope (defense-in-depth bên cạnh Layer 1 Phase 1 DSN validator + Layer 2 M2 repo `WHERE hub_id`). Settings 2 field mới `central_jwks_url` + `central_url` + 2 model_validator hub con required (`_enforce_central_jwks_url_for_hub` + `_enforce_central_url_for_hub` fail-fast boot). Settings 2 field config-driven `jwks_refresh_interval=3600` + `jwks_max_stale_seconds=86400`. Docker-compose 3 hub con + `docker-compose.override.yml.template` thêm env `CENTRAL_JWKS_URL` + `CENTRAL_URL` (FACTOR-04 inherit qua `make hub-add`). Phase 2 integration test `test_factor_hub_scoped.py` split 2 list (10 LOCAL `!= 404` + 2 SSO_REDIRECT `== 307`) — KHÔNG regress 10/10. Test-mode escape hatch `JWKS_SKIP_FETCH=1` env var (pattern song song COCOINDEX_SKIP_SETUP=1 — production KHÔNG bao giờ set). M2 backward incompat TRIPLE cumulative (kid Plan 03-02 + aud/hub_ids Plan 03-03 + frontend redirect form action Plan 03-04 defer Phase 5) — user re-login ~15-30s downtime acceptable (Slack/Email broadcast). Plan 03-05 Task 5 smoke compose runtime SKIP pre-resolved — defer Phase 7 MIGRATE-05 full E2E golden path; evidence chain Plan 03-01 (9 unit) + Plan 03-02 (27 unit + 3 integration) + Plan 03-03 (19 unit + 3 integration) + Plan 03-04 (10 unit) = 65+ unit + 6 integration PASS in-process cover semantic SSO-01..04 + `docker compose config --quiet` base PASS.
+- **Last activity:** 2026-05-22 — `/gsd-execute-phase 3` wave-based execution complete cho SSO-01..04:
+  - **03-01 DONE ✅** (Wave 1 BLOCKING): JWKS endpoint publish layer + module `api/app/auth/jwks.py` mới (publish_jwks + load_public_key_as_jwk + 2 helper + JWK/JWKSet TypedDict + `_derive_kid` SHA-256 11-char base64url). Central mount `GET /.well-known/jwks.json` conditional + Cache-Control 1h + 503 fallback envelope D6. Settings.central_jwks_url default None + docker-compose CENTRAL_JWKS_URL env × 3 hub con + override.yml.template (FACTOR-04 inherit). 9/9 unit test PASS `test_jwks_publish.py` 5.24s + 49/49 Phase 1+2 regression PASS. Duration ~18 phút. SUMMARY: `.planning/phases/03-auth-sso-hub-ids-jwt/03-01-SUMMARY.md`.
+  - **03-02 DONE ✅** (Wave 2): JWKSCache class extend jwks.py + 2 exception JWKSStaleError/JWKSKidNotFoundError + 2 helper jwk_to_public_key/_base64url_to_int + lifespan hub con blocking fetch_initial (5s timeout — boot fail-loud D-V3-Phase3-B) + asyncio refresh task + escape hatch `JWKS_SKIP_FETCH=1` (pattern DEF-05-01). JWTManager.verify_token_with_key wrapper + JWT header `kid` auto-add ở issue_token_pair (deterministic SHA-256 match Plan 03-01). get_current_user dependency branch (central=verify_token local pem / hub con=JWKSCache.get_public_key(kid) → verify_token_with_key). Settings 2 field jwks_refresh_interval + jwks_max_stale_seconds + 1 model_validator hub con required. 4 Rule 1/3 deviation auto-fix (5 file test cũ regression CENTRAL_JWKS_URL setup + escape hatch + mypy union conflict + ruff C901). 27/27 unit mới (11 config + 9 cache TDD + 4 dependency + 3 publish regression) + 3 integration `test_jwks_cache_lifecycle.py` rotate keypair PASS + 237/237 unit regression PASS + 10/10 Phase 2 integration regression PASS. Duration ~90 phút. SUMMARY: `.planning/phases/03-auth-sso-hub-ids-jwt/03-02-SUMMARY.md`.
+  - **03-03 DONE ✅** (Wave 3): JWT_AUDIENCE constant + JWTClaims aud REQUIRED + hub_ids REQUIRED (xoá default empty M2) + PyJWT strict audience check `verify_token` + `verify_token_with_key` (InvalidAudienceError + MissingRequiredClaimError mapped JWTError tiếng Việt). Redis blacklist key rename `blacklist:` → `auth:blacklist:` qua mini-module `api/app/auth/_blacklist.py` mới (REDIS_BLACKLIST_PREFIX + make_blacklist_key helper) — 5 vị trí touch (4 service.py + 1 dependencies.py). Dependency mới `get_current_user_for_hub_access` SSO-04 Layer 3 enforce + central bypass cross-hub by design + hub con strict check + defensive 500 AUTH_STATE_MISSING guard. request.state.jwt_claims wire ở get_current_user SAU 2 branch converge. iss giữ `"medinet-wiki"` RE-CONFIRM (URL-based defer Phase 7 MCP split aud). 3 Rule 1/3 deviation (test_jwt audience param + override pattern middleware inject state + mypy untyped-decorator). 19/19 unit mới (9 jwt + 7 redis + 4 dependency append) + 3 integration `test_sso_blacklist_cross_process.py` E4 cross-hub PASS + 257/257 unit regression PASS + 16/16 integration critical+integration regression PASS. Duration ~26 phút. SUMMARY: `.planning/phases/03-auth-sso-hub-ids-jwt/03-03-SUMMARY.md`.
+  - **03-04 DONE ✅** (Wave 4): auth router login + refresh refactor 307 RedirectResponse Location: central (preserve POST + body RFC 7231) + `_sso_redirect(target_path, hub_name)` helper extract + X-SSO-Redirect-Reason + X-SSO-Original-Hub headers + `response_model=None` decorator opt-out (Rule 1 FastAPI union type fail). Settings.central_url field mới + `_enforce_central_url_for_hub` model_validator hub con required. Docker-compose 3 hub con + override.yml.template env CENTRAL_URL. Phase 2 integration test split HUB_SCOPED_ENDPOINTS → HUB_SCOPED_SSO_REDIRECT_ENDPOINTS (2: login + refresh) + HUB_SCOPED_LOCAL_ENDPOINTS (10) + refactor `test_hub_mounts_hub_scoped` 2 sub-loop + TestClient(follow_redirects=False) + sso_valid_bodies dict Pydantic-valid body. REQUIREMENTS.md FACTOR-03 note extend Plan 03-04 SSO-02 (10 LOCAL + 2 SSO REDIRECT clarify). 3 Rule 1/3 deviation (validator regression 7 file test cũ + FastAPI union return type + integration test body Pydantic-valid). 10/10 unit mới `test_auth_router_hub_redirect.py` + 276/276 unit regression PASS + 16/16 integration critical+integration regression PASS. Duration ~17 phút. SUMMARY: `.planning/phases/03-auth-sso-hub-ids-jwt/03-04-SUMMARY.md`.
+  - **03-05 DONE ✅** (Wave 5 closeout 2026-05-22): CLAUDE.md section 6 Phase 3 DONE + 🚦 v3.0-a EXIT GATE TRIGGERED row + Phase 3 pattern subsection 5 plan detail (SSO-01..04 + E4 reinforced 3-layer breakdown) + footer changelog. STATE.md frontmatter Phase 3 DONE + completed_phases 2→3 + total_plans/completed_plans 10→15 + percent 31→47 + Current Position + Phase 3 Planning + Results Summary table + Next Action v3.0-a EXIT GATE preview. REQUIREMENTS.md SSO-01..04 mark `[x]` + note Phase 3 closeout 5 plan + E4 reinforced 3-layer + backward incompat triple + v3.0-a EXIT GATE TRIGGERED. README.md section mới "SSO Backward Incompat (Phase 3 v3.0)" 7 deploy step + endpoint mapping 5 entry + cross-hub isolation example + rollback procedure + reference. Task 5 smoke compose runtime SKIP pre-resolved per user decision — evidence chain rationale rõ ràng trong SUMMARY.md. v3.0-a EXIT GATE TRIGGERED. SUMMARY: `.planning/phases/03-auth-sso-hub-ids-jwt/03-05-SUMMARY.md`.
   - **02-01 DONE ✅** (Wave 1 BLOCKING): `create_app()` factory refactor mount conditional 9 central-only router theo `settings.hub_name`; unit test 9/9 PASS boot 4 hub mode (central/yte/duoc/hcns); Phase 1 DSN validator regression KHÔNG break (30/30 PASS). FACTOR-01 + FACTOR-02 đóng unit-level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-01-SUMMARY.md`.
   - **02-02 DONE ✅** (Wave 2, first half): Docker compose refactor 4 service FastAPI dedicated với YAML anchor `x-api-template: &api-template` + cocoindex LMDB volume per-hub (medinet_cocoindex_{central,yte,duoc,hcns}) + port 8180-8183 + mcp_service re-point `python-api-central` (D-V3-02 LOCKED). `docker compose config --quiet` exit 0, 8 service render đúng. FACTOR-01 đóng Docker layer. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-02-SUMMARY.md`.
   - **02-03 DONE ✅** (Wave 2, second half): Integration test endpoint matrix 12 hub-scoped MOUNT + 8 central-only STRIP (sync_router dùng `/api/sync/stats` BLK-01 fix) + envelope shape 404 D6 + autouse cleanup CỤC BỘ (WRN-03 fix). 10/10 test PASS qua TestClient in-process (6.49s). 175/175 unit test regression PASS (KHÔNG break Phase 1 + Plan 02-01). Rule 2 auto-add Starlette HTTPException handler ở `app/main.py` (M2 chỉ register `fastapi.HTTPException` — NOT match Starlette routing 404). Rule 3 auto-fix `reset_queue()` + SQLAlchemy engine sentinel-None reset trong `hub_app_factory` (audit queue cross-loop hang). FACTOR-02 + FACTOR-03 đóng integration level. SUMMARY: `.planning/phases/02-hub-con-codebase-factor/02-03-SUMMARY.md`.
@@ -120,6 +125,114 @@ progress:
 
 ---
 
+## Phase 3 Planning Summary
+
+| Plan | Wave | Objective | Tasks | Files modified | REQ | Status |
+|------|------|-----------|-------|----------------|-----|--------|
+| 03-01 | 1 | JWKS endpoint publish layer (publish_jwks + RFC 7517 helper + central mount conditional + Settings.central_jwks_url + docker-compose CENTRAL_JWKS_URL env) | 2 (tdd + auto) | `api/app/auth/jwks.py` (new), `api/app/main.py`, `api/app/config.py`, `tests/unit/test_jwks_publish.py` (new), `docker-compose.yml`, `docker-compose.override.yml.template` | SSO-01 | ✅ **DONE 2026-05-22** (9/9 unit test PASS 5.24s) |
+| 03-02 | 2 | JWKSCache class hub con + lifespan branch + dependency branch + Settings 2 field + validator + verify_token_with_key + JWT kid header | 5 (1 settings + 1 tdd cache + 1 lifespan+jwt + 1 dependency + 1 integration) | `api/app/auth/jwks.py` (extend), `api/app/main.py`, `api/app/auth/jwt.py`, `api/app/auth/dependencies.py`, `api/app/config.py`, 4 test file + 5 file test cũ Rule 3 regression | SSO-01 | ✅ **DONE 2026-05-22** (27+ unit + 3 integration PASS) |
+| 03-03 | 3 | JWT claim refactor (aud + hub_ids REQUIRED) + Redis blacklist key rename `auth:blacklist:` + dependency SSO-04 E4 reinforced Layer 3 | 4 (1 tdd jwt + 1 tdd blacklist + 1 dependency + 1 integration) | `api/app/auth/jwt.py`, `api/app/auth/_blacklist.py` (new), `api/app/auth/service.py`, `api/app/auth/dependencies.py`, `api/app/auth/__init__.py`, 3 test file mới + 2 test file Rule 3 regression | SSO-02, SSO-03, SSO-04 | ✅ **DONE 2026-05-22** (19+ unit + 3 integration PASS) |
+| 03-04 | 4 | auth router 307 redirect login/refresh hub con + Settings central_url + Phase 2 integration test split (10 LOCAL + 2 SSO_REDIRECT) + REQUIREMENTS.md FACTOR-03 note extend | 4 (1 settings + 1 router + 1 integration test split + 1 docs) | `api/app/auth/router.py`, `api/app/config.py`, `docker-compose.yml`, `docker-compose.override.yml.template`, `tests/unit/test_auth_router_hub_redirect.py` (new), `tests/integration/test_factor_hub_scoped.py`, `.planning/REQUIREMENTS.md` + 7 file test cũ Rule 3 regression | SSO-02 | ✅ **DONE 2026-05-22** (10/10 unit + 10/10 Phase 2 integration regression maintain) |
+| 03-05 | 5 | Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md + README.md + smoke checkpoint runtime | 5 (4 docs + 1 checkpoint) | `Hub_All/CLAUDE.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md`, `Hub_All/README.md` | SSO-01..04 closeout | ✅ **DONE 2026-05-22** (Task 5 smoke SKIP pre-resolved — evidence chain rõ) |
+
+**Coverage:** 4/4 REQ (SSO-01..04) covered ≥ 1 plan/REQ.
+
+**Critical path:** 03-01 ✅ (Wave 1 BLOCKING) → 03-02 (Wave 2 depend 03-01) → 03-03 (Wave 3 depend 03-02) → 03-04 (Wave 4 depend 03-03) → 03-05 (Wave 5 closeout depend 03-04).
+
+**Auto-chain pause expected:** Plan 03-05 Task 5 (`checkpoint:human-action gate=blocking`) — smoke compose runtime central + yte. User resume signal: `skip smoke` (pre-resolved 2026-05-22 — defer Phase 7 MIGRATE-05 full E2E).
+
+### Plan 03-01 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~18 phút |
+| Tasks completed | 2/2 (Task 1 TDD RED+GREEN + Task 2 docker-compose env) |
+| Files modified | 6 (3 mới: jwks.py + test_jwks_publish.py + SUMMARY.md + 3 sửa: main.py + config.py + docker-compose.yml + override.yml.template) |
+| Tests added | 9 (7 publish layer + 2 mount conditional Settings) |
+| Test pass rate | 9/9 (100%) 5.24s + 49/49 Phase 1+2 regression PASS |
+| Lint | ruff + mypy --strict PASS (3 source file + 1 test) |
+| Commits | `7a963c2` test RED + `d8cc3e5` feat GREEN + `e3b72be` feat docker-compose + `258c6b9` docs SUMMARY |
+| Deviations | None (plan executed exactly as written) |
+
+### Plan 03-02 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~90 phút (5 task tuần tự + 4 Rule 1/3 deviation auto-fix) |
+| Tasks completed | 5/5 (1 Settings + 1 TDD JWKSCache + 1 lifespan+jwt + 1 dependency branch + 1 integration test + escape hatch) |
+| Files modified | 14 (5 mới + 9 sửa — bao gồm 5 file test cũ Plan 01-02/02-01/02-05 update Rule 3 regression CENTRAL_JWKS_URL setup) |
+| Tests added | 27 mới PASS (11 config validator + 9 cache TDD + 4 dependency branch + 3 integration `test_jwks_cache_lifecycle.py`) |
+| Test pass rate | 27/27 mới + 237/237 unit regression PASS + 10/10 Phase 2 integration regression PASS |
+| Lint | ruff + mypy --strict PASS |
+| Commits | `abe2e37` Task 1 + `f705569` RED + `895551b` GREEN + `c3388aa` Task 3 + `cfd7412` Task 4 + `239d0cb` Task 5 + `155626f` docs SUMMARY |
+| Deviations | 4 (3 Rule 3 blocking — 22 test cũ + 7 integration test regression + escape hatch JWKS_SKIP_FETCH; 1 Rule 1 mypy union conflict + ruff C901 noqa) |
+
+### Plan 03-03 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~26 phút (4 task tuần tự + 3 Rule 1/3 deviation auto-fix) |
+| Tasks completed | 4/4 (Task 1 TDD JWT 9min + Task 2 TDD Redis key 4min + Task 3 E4 dependency 5min + Task 4 integration 8min) |
+| Files modified | 8 (5 mới: _blacklist.py + 3 test file + SUMMARY + 5 sửa: jwt.py + dependencies.py + service.py + __init__.py + 2 test regression) |
+| Tests added | 19 mới (9 jwt iss/aud/hub_ids + 7 redis blacklist key + 4 dependency E4 append) + 3 integration `test_sso_blacklist_cross_process.py` |
+| Test pass rate | 19/19 unit + 3/3 integration + 257/257 unit regression PASS + 16/16 integration critical+integration regression PASS |
+| Lint | ruff + mypy --strict PASS (10 source file app/auth/ + 4 test file) |
+| Commits | `e49aa3e` RED + `705baa0` GREEN + `bae5f17` Rule 3 + `08f5523` RED + `2d913ac` GREEN + `a8b347e` Task 3 + `0f96bf2` Task 4 + `ff3013e` docs SUMMARY |
+| Deviations | 3 (2 Rule 3 blocking — test_jwt audience param + override pattern middleware inject state; 1 Rule 1 mypy untyped-decorator) |
+
+### Plan 03-04 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~17 phút (4 task tuần tự + 1 Rule 3 regression follow-up) |
+| Tasks completed | 4/4 (Task 1 Settings 4min + Task 2 router refactor 6min + Task 3 integration split 4min + Task 4 REQUIREMENTS note 3min) |
+| Files modified | 14 (2 mới: test_auth_router_hub_redirect + SUMMARY + 12 sửa: router.py + config.py + docker-compose × 2 + 8 file test Rule 3 regression + REQUIREMENTS.md) |
+| Tests added | 10 mới `test_auth_router_hub_redirect.py` (6 parametrize 3 hub × 2 endpoint + 2 LOCAL + 2 central) |
+| Test pass rate | 10/10 unit + 276/276 unit regression PASS + 16/16 integration critical+integration regression PASS |
+| Lint | ruff + mypy --strict PASS |
+| Commits | `86d58c6` Task 1 + `e3ea667` Task 2 + `c862148` Task 3 + `48549ee` Task 4 + `2372747` Rule 3 follow-up + `eab5e67` docs SUMMARY |
+| Deviations | 3 (1 Rule 3 blocking — 21 test cũ CENTRAL_URL regression; 2 Rule 1 bug — FastAPI union return type + integration test body Pydantic-valid) |
+
+### Plan 03-05 ship 2026-05-22 — Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Duration | ~30 phút (4 docs + 1 checkpoint pre-resolved) |
+| Tasks completed | 4/5 (Task 5 smoke compose runtime SKIP pre-resolved per user decision — defer Phase 7 MIGRATE-05) |
+| Files modified | 4 (`Hub_All/CLAUDE.md` section 6 v3.0 progress + Phase 3 pattern subsection + footer; `.planning/STATE.md` frontmatter + Current Position + Phase 3 Planning + Results Summary + Next Action; `.planning/REQUIREMENTS.md` SSO-01..04 mark [x] + note Phase 3 closeout; `Hub_All/README.md` section mới SSO Backward Incompat Phase 3 v3.0) |
+| Verify | grep acceptance criteria 4 file PASS; markdown structure preserve (6 section CLAUDE.md unchanged; YAML frontmatter STATE.md parse OK; REQUIREMENTS Traceability table preserve; README sections "Add a new hub" + "Milestone status" preserve) |
+| Commits | (Plan 03-05 này — 5 commit: 4 task + 1 SUMMARY) |
+| Deviations | 1 (Task 5 SKIP smoke compose runtime — pre-resolved user decision 2026-05-22; rationale: 65+ unit + 6 integration in-process PASS đã cover semantic SSO-01..04 + `docker compose config --quiet` base PASS; smoke runtime + v3.0-a EXIT GATE demo defer Phase 7 MIGRATE-05 full E2E 3 hub + central + JWT SSO live golden path) |
+
+## Phase 3 Results Summary
+
+| Plan | Wave | Objective | Commits | Tests |
+|------|------|-----------|---------|-------|
+| 03-01 | 1 | JWKS endpoint publish layer (publish_jwks + RFC 7517 helper + central mount conditional) | 4 (`7a963c2` test RED + `d8cc3e5` feat GREEN + `e3b72be` feat docker-compose + `258c6b9` docs SUMMARY) | unit 9/9 PASS test_jwks_publish.py 5.24s + 49/49 Phase 1+2 regression PASS |
+| 03-02 | 2 | JWKSCache hub con + lifespan + dependency branch + verify_token_with_key + JWT kid + Settings 2 field + escape hatch | 7 (`abe2e37` + `f705569` + `895551b` + `c3388aa` + `cfd7412` + `239d0cb` + `155626f`) | unit 27/27 PASS (11 config + 9 cache + 4 dependency + 3 publish regression) + integration 3/3 PASS test_jwks_cache_lifecycle.py + 237/237 unit regression PASS + 10/10 Phase 2 integration regression PASS |
+| 03-03 | 3 | JWT aud/hub_ids REQUIRED + Redis blacklist key rename `auth:blacklist:` + SSO-04 E4 reinforced dependency Layer 3 | 8 (`e49aa3e` + `705baa0` + `bae5f17` + `08f5523` + `2d913ac` + `a8b347e` + `0f96bf2` + `ff3013e`) | unit 19/19 mới PASS (9 jwt + 7 redis + 4 dependency append) + integration 3/3 PASS test_sso_blacklist_cross_process.py + 257/257 unit regression PASS + 16/16 integration critical+integration regression PASS |
+| 03-04 | 4 | auth router 307 redirect hub con login/refresh + Settings central_url + Phase 2 integration test split (10 LOCAL + 2 SSO_REDIRECT) + REQUIREMENTS.md note | 6 (`86d58c6` + `e3ea667` + `c862148` + `48549ee` + `2372747` + `eab5e67`) | unit 10/10 PASS test_auth_router_hub_redirect.py + 276/276 unit regression PASS + 16/16 integration critical+integration regression PASS |
+| 03-05 | 5 | Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md + README.md + smoke checkpoint runtime | 5 (4 task + 1 SUMMARY) | Docs update grep acceptance PASS 4 file; Task 5 smoke SKIP pre-resolved (rationale rõ) |
+
+**Phase 3 deliverable summary:**
+- JWKS endpoint central (`/.well-known/jwks.json` RFC 7517 single-key RS256 + Cache-Control 1h + 503 fallback envelope D6 `JWKS_UNAVAILABLE`) + hub con strip 404 envelope (FACTOR-02 carry forward).
+- JWKSCache hub con in-process LRU + asyncio refresh 1h fail-quiet + 24h hard limit fail-loud delayed (503 `JWKS_STALE` mọi JWT verify).
+- JWT claim refactor: `aud=["medinet-wiki"]` REQUIRED + `hub_ids: list[str]` REQUIRED + PyJWT strict audience check 2 verify path + JWT header `kid` auto-add deterministic SHA-256.
+- Redis blacklist key rename `auth:blacklist:{jti}` qua mini-module `_blacklist.py` (5 vị trí service.py + dependencies.py) + TTL = max(1, exp-now) auto-cleanup.
+- 307 redirect hub con login/refresh tới central (D-V3-Phase3-G) — preserve POST + body RFC 7231 + `_sso_redirect` helper + X-SSO-Redirect-Reason/X-SSO-Original-Hub headers debug.
+- SSO-04 E4 reinforced: dependency `get_current_user_for_hub_access` Layer 3 enforcement defense-in-depth (Layer 1 DSN validator Phase 1 + Layer 2 repo M2 + Layer 3 JWT claim).
+- Settings 4 field mới: `central_jwks_url` + `central_url` + `jwks_refresh_interval=3600` + `jwks_max_stale_seconds=86400` + 2 model_validator hub con required (`_enforce_central_jwks_url_for_hub` + `_enforce_central_url_for_hub`).
+- Docker-compose 3 hub con + override.yml.template thêm CENTRAL_JWKS_URL + CENTRAL_URL env (FACTOR-04 inherit qua `make hub-add`).
+- Phase 2 integration test split assertion 2 list (10 LOCAL `!= 404` + 2 SSO_REDIRECT `== 307` + verify Location header trỏ central).
+- Backward incompat TRIPLE cumulative: M2 cũ JWT thiếu kid (Plan 03-02) + aud (Plan 03-03) + hub_ids (Plan 03-03) → 401 reject; frontend hardcode same-origin FAIL ở hub con cho tới Phase 5; user re-login ~15-30s downtime.
+- Frontend wire defer Phase 5 PROXY-02 (D-V3-Phase3-F honored + D-V3-06 D6 expire formally Phase 5).
+- 8 decision LOCKED D-V3-Phase3-A..H consumed (JWKS endpoint pattern + cache fallback + refresh token rotation + cache storage + iss/aud claim + frontend redirect defer + hub con 307 redirect + Redis blacklist key schema).
+- 33 STRIDE threat mitigation breakdown: Plan 03-01 (6: 3 accept + 3 mitigate) + Plan 03-02 (8: 3 accept + 5 mitigate) + Plan 03-03 (8: 4 accept + 4 mitigate) + Plan 03-04 (6: 3 accept + 3 mitigate) + Plan 03-05 (5: 2 accept + 3 mitigate) = **33 threat addressed**.
+
+**v3.0-a progress: Phase 1+2+3 DONE (3/3 phase v3.0-a — 15/~32 plan ≈ 47%). 🚦 v3.0-a EXIT GATE TRIGGERED giữa Phase 3-4 — demo deliverable (1 hub con yte + central + Redis + Postgres + JWT SSO + golden path) defer Phase 7 MIGRATE-05 full E2E runtime; evidence chain in-process semantic PASS (65+ unit + 6 integration + docker compose config base) → user accept tiếp tục v3.0-b (Phase 4-7 sync + proxy + settings + migration).**
+
+---
+
 ## Phase 1 Results Summary (carry forward)
 
 - **Phase:** 1 — Multi-DB Topology + Per-hub Alembic ✅ **DONE 2026-05-21**
@@ -149,9 +262,10 @@ progress:
 
 ## Next Action
 
-1. **(Recommended) `/gsd-discuss-phase 3`** — Auth SSO + hub_ids trong JWT (GA-V3-A chốt). Gray areas: JWKS endpoint vs shared keypair vs cookie domain `.medinet.vn`; JWKS cache fallback fail-loud vs static keypair embedded; refresh token rotation contract.
-2. (Optional) `/gsd-code-review 2` — advisory code review trên 9+ commits Phase 2 (workflow.code_review gate), nay phủ cả Plan 02-05 FACTOR-04 dynamic hub registration.
-3. (Optional) `/gsd-verify-work 2` — manual UAT 3 SC nếu user muốn extra verify ngoài automated test (compose-level smoke checkpoint Plan 02-04 + Plan 02-05 Task 3 đều SKIP runtime, sẽ verify ở Phase 7 MIGRATE-05 runtime smoke E2E).
+1. **(BLOCKING — 🚦 v3.0-a EXIT GATE TRIGGERED)** Demo deliverable: 1 hub con (yte) + central + Redis + Postgres deploy được trên Docker compose; user login `https://central/api/auth/login` → JWT valid; user truy cập `https://central/yte/api/...` (direct port test trước Caddy lên Phase 5) → hub con verify JWT qua JWKSCache → 200; hub con CHỈ truy cập data hub yte (test cross-hub access → 403 CROSS_HUB_ACCESS_DENIED); golden path login → upload (local hub yte chỉ) → search local → PASS. **Smoke runtime deliverable defer Phase 7 MIGRATE-05 full E2E** (3 hub + central golden path + JWT SSO live). Evidence chain in-process: Plan 03-01 (9 unit) + Plan 03-02 (27 unit + 3 integration) + Plan 03-03 (19 unit + 3 integration) + Plan 03-04 (10 unit) = 65+ unit + 6 integration PASS + `docker compose config --quiet` base PASS — cover end-to-end semantic SSO-01..04. **User accept → tiếp tục v3.0-b. User reject → re-discuss D-V3-01 topology choice qua `/gsd-discuss-milestone v3.0`.**
+2. **(Recommended sau accept v3.0-a) `/gsd-discuss-phase 4`** — Cross-hub Data Sync (GA-V3-D chốt: cocoindex target thứ 2 vs Postgres logical replication vs outbox + worker; idempotent key chunk_id vs content_hash; sync timing post-ingest hook vs async worker; checksum cron schedule daily vs hourly sample).
+3. (Optional) `/gsd-code-review 3` — advisory code review trên 30 commits Phase 3 (workflow.code_review gate), phủ 5 plan ship SSO-01..04 + 8 decision LOCKED D-V3-Phase3-A..H + 33 STRIDE threat mitigation.
+4. (Optional) `/gsd-verify-work 3` — manual UAT 4 SC nếu user muốn extra verify ngoài automated test (Plan 03-05 Task 5 smoke compose runtime SKIP pre-resolved, sẽ verify ở Phase 7 MIGRATE-05 runtime smoke E2E).
 
 ## Accumulated Context (carry forward từ v2.0)
 
