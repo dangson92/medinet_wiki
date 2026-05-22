@@ -70,7 +70,7 @@
 - **APP_NAMESPACE:** Cố định `medinet_prod` mọi env (R5 mitigation). Env separation qua database (`medinet_central` vs `medinet_cocoindex`) + container instance khác.
 - **CocoIndex db_schema:** `cocoindex` (separate khỏi `public` — P7 mitigation).
 - **Middleware order FastAPI:** REVERSED từ Go Gin (P11). Recovery/error_handler add CUỐI (outermost).
-- **Frontend D6:** KHÔNG sửa React 19. URL `/api/*` giữ qua FastAPI mount port 8080.
+- **Frontend D6 (EXPIRED ở Phase 5 v3.0-05 — PROXY-03):** ~~KHÔNG sửa React 19. URL `/api/*` giữ qua FastAPI mount port 8080.~~ → **D6 EXPIRED 2026-05-23** (PROXY-03 satisfied). Phase 5 cho phép FE rewrite cho prefix detect (PROXY-02 + D-V3-Phase5-B1/B3) + per-hub login branding (PROXY-04 + D-V3-Phase5-D1/D2). Smoke regression M2 COMPAT-01 11 trang carry forward (R-V3-2 mitigation — Plan 05-06 manual checklist 4 hub × 11 trang). M2 contract response envelope `{success, data, error, meta}` shape KHÔNG đổi (LOCKED carry forward).
 - **Format hỗ trợ:** DOCX/TXT/MD/PDF text-only (D4 — gỡ Docling; scanned PDF → `failed_unsupported`, R4 mitigation). OCR Vietnamese defer v4.0.
 - **EXIT criteria E1-E5:** Bake trong `.planning/PROJECT.md`. M2a EXIT GATE giữa Phase 4-5: demo upload DOCX → chunks pgvector → user accept? Reject → STOP, KHÔNG pivot lần 3.
 
@@ -152,7 +152,7 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 | 3 — Auth SSO + hub_ids trong JWT | ✅ DONE | 5 plan | 2026-05-22 | SSO-01..04 (4) |
 | 🚦 v3.0-a EXIT GATE | ✅ TRIGGERED | — | 2026-05-22 | Demo 1 hub con yte + central + JWT SSO + golden path → user accept tiếp tục v3.0-b (demo runtime defer Phase 7 MIGRATE-05 — evidence chain 65+ unit + 6 integration test in-process cover semantic) |
 | 4 — Cross-hub Data Sync | ✅ **DONE** | **7 plan** | **2026-05-22** | **SYNC-01..05 (5)** |
-| 5 — Reverse Proxy + Frontend Subpath | 📋 Next | — | — | PROXY-01..04 |
+| 5 — Reverse Proxy + Frontend Subpath | ✅ **DONE** | **6 plan** | **2026-05-23** | **PROXY-01..04 (4)** |
 | 6 — System Settings Sync | 📋 Backlog | — | — | SETTINGS-01..04 |
 | 7 — Migration + Smoke E2E | 📋 Backlog | — | — | MIGRATE-01..05 |
 
@@ -266,6 +266,56 @@ Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 - `.planning/phases/04-cross-hub-data-sync/04-{01..07}-PLAN.md` — implementation chi tiết 7 plan.
 - `.planning/phases/04-cross-hub-data-sync/04-{01..07}-SUMMARY.md` — deliverable + commit + test count per plan.
 
+### Phase 5 Reverse Proxy + Frontend Subpath pattern (PROXY-01..04 — 2026-05-23)
+
+6 plan đóng 4 REQ-ID PROXY (Caddy reverse proxy + frontend 1-build prefix detect + D6 expire formally + per-hub login branding) + 16 D-V3-Phase5-A1..D4 LOCKED + FACTOR-04 extend (hub-add.sh step 8+9):
+
+- **Plan 05-01 PROXY-01 — Caddy + docker-compose scaffolding (D-V3-Phase5-A1/A2/A4):** `Hub_All/Caddyfile` ADD `{$WIKI_PUBLIC_DOMAIN}` server block parallel MCP block (Phase 8.3 carry forward) — `path_regexp hub_api ^/({$HUBS_ALLOWLIST_REGEX:yte|duoc|hcns})/api/(.*)$` + `route { uri strip_prefix /{re.hub_api.1}; reverse_proxy http://python-api-{re.hub_api.1}:8080 }` (T-5-01 anchor mitigation) + central `/api/*` handle no-strip + `/.well-known/*` JWKS pass-through (Phase 3 Plan 03-01 carry forward) + static SPA `file_server` `try_files {path} /index.html`. `docker-compose.yml` caddy service ADD `WIKI_PUBLIC_DOMAIN` + `HUBS_ALLOWLIST_REGEX` env + `./frontend/dist:/srv/wiki/dist:ro` mount + `depends_on: python-api-central`. `.env.example` document 3 env vars dev vs prod.
+
+- **Plan 05-02 PROXY-02 — Frontend prefix detect runtime + vitest Wave 0 (D-V3-Phase5-B1/B3 + GA-V3-C):** Wave 0 install `vitest@^2 + @testing-library/react@^16 + @testing-library/jest-dom@^6 + jsdom@^25` + `frontend/vitest.config.ts` jsdom env + `frontend/src/test-setup.ts` jest-dom matchers + `"test": "vitest run"` npm script. Refactor `frontend/src/services/api.ts` module-level compute `PREFIX/API_BASE/APP_BASE/CURRENT_HUB` từ `window.location.pathname.split('/').filter(Boolean)[0]` + `KNOWN_HUBS` từ `window.__HUB_CONFIG__.allowlist` runtime fallback hardcode `['yte','duoc','hcns']` (T-5-02 backend Caddy regex authoritative — FE allowlist UX-only). `App.tsx` wrap `<BrowserRouter basename={APP_BASE}>` auto-prepend basename cho 13 route hiện tại — KHÔNG đụng path absolute.
+
+- **Plan 05-03 PROXY-04 — Per-hub branding registry + 4 SVG asset (D-V3-Phase5-D1/D3):** `frontend/src/branding/index.ts` Vite `import.meta.glob('./*/index.ts', { eager: true })` + `BrandingConfig` type + `getBranding(hub)` fallback central + `getContrastTextColor(themeColor)` WCAG 1.4.11 mitigation (hcns amber `#f59e0b` luminance > 0.6 → 'slate-900', 3 hub khác → 'white'). 4 hub config `branding/<hub>/index.ts`: central indigo `#6366f1` (Medinet brand) + yte emerald `#10b981` (Hub Y tế) + duoc sky `#0ea5e9` (Hub Dược) + hcns amber `#f59e0b` (Hub HCNS). 4 SVG placeholder text-only initial letter (M/Y/D/H) `frontend/public/branding/<hub>/logo.svg` (Vite copy public → dist → Caddy file_server). T-5-03 path traversal mitigation qua regex constrain `^\.\/([a-z][a-z0-9_]{0,15})\/index\.ts$`.
+
+- **Plan 05-04 PROXY-02 + PROXY-04 — Login + Layout + crossHubSearch wire (D-V3-Phase5-B4/C1/D2 + D-V3-Phase4-D3 carry forward):** `Login.tsx` 4 state machine (A central no-return, B central with valid return + chip, C hub direct visit + skeleton redirect, D invalid return silent fallback) + branding logo + title + tagline + themeColor inline CSS var `--hub-theme` + submit button gradient `color-mix(in srgb, ...)` + T-5-04 strict return validation 4-layer (strip `/` + reject `//` + reject `://` + regex hub format + KNOWN_HUBS allowlist). `Layout.tsx` sidebar header logo bg + title swap qua module-level `getBranding(CURRENT_HUB)` + hover ring themeColor (UI-SPEC §3 LOCKED scope — chỉ sidebar header touch, KHÔNG cascade tất cả component R-V3-2 mitigation). `api.ts::crossHubSearch` REPLACE → ABSOLUTE path `/api/search/cross-hub` qua `requestAbsolute<T>` helper (bypass `${API_BASE}` prefix — D-V3-Phase4-D3 LOCKED hub con strip endpoint, Caddy `/api/*` route central). `tryRefresh()` audit B-02 fix explicit `redirect: 'follow'` (D-V3-Phase5-C4).
+
+- **Plan 05-05 PROXY-01 + FACTOR-04 extend — hub-add.sh step 8+9 (D-V3-Phase5-A3):** Append `api/scripts/hub-add.sh` Plan 02-05 7-step pipeline → 9-step. Step 8: atomic sed-edit `.env` HUBS_ALLOWLIST + HUBS_ALLOWLIST_REGEX (tmp file + mv preserve other env, duplicate skip idempotent). Step 9: PRE-validate `caddy validate --config /etc/caddy/Caddyfile` TRƯỚC reload (Pitfall 7 silent rollback mitigation) + `caddy reload` zero-downtime + smoke `curl -k https://${WIKI_PUBLIC_DOMAIN}/${HUB}/api/health` post-reload warn-only + dev pre-up tolerance (caddy chưa running → skip + hint). T-5-05 strict guard Plan 02-05 carry forward (regex + RESERVED blacklist KHÔNG relax).
+
+- **Plan 05-06 closeout — docs + smoke checkpoint 4 hub × 11 trang (file này, 2026-05-23):** CLAUDE.md §3 D6 EXPIRED note + §6 Phase 5 progress row + pattern subsection (file này) + STATE.md frontmatter + REQUIREMENTS.md PROXY-01..04 mark [x] + ROADMAP.md Phase 5 DONE + README.md section mới "Reverse Proxy Subpath Deploy Notes". Task 5b `checkpoint:human-action gate=blocking` smoke 4 hub × 11 trang React M2 COMPAT-01 (UI-SPEC §7 — 44 checkpoint). User resume signal auto-fallback `skip smoke` per v3.0-b precedent (Plan 03-05 + 04-07 pre-resolved skip pattern + --auto chain mode active).
+
+**Architecture insights (Phase 5):**
+
+1. **Single source-of-truth env-driven multi-hub:** `.env HUBS_ALLOWLIST=yte,duoc,hcns` → Caddy `HUBS_ALLOWLIST_REGEX=yte|duoc|hcns` qua docker-compose env wire + frontend `window.__HUB_CONFIG__.allowlist` (Phase 6 SETTINGS-04 sẽ sync DB-driven). `make hub-add` cập nhật cả Caddy regex + hub-init DB + override.yml + .env atomic chain.
+2. **1 build dùng chung 4 deploy:** Vite `base='/'` + asset absolute `/assets/*` + react-router `BrowserRouter basename={APP_BASE}` auto-prepend → KHÔNG cần build matrix `VITE_HUB_NAME=yte` × 4 (GA-V3-C khuyến nghị seed CONFIRMED).
+3. **Per-hub branding scope minimal:** Chỉ Login.tsx + Layout.tsx sidebar header touch — Dashboard/Documents/Search/11 trang nội dung giữ NGUYÊN M2 (R-V3-2 mitigation). Full Tailwind cascade defer v4.0.
+4. **Theme color delivery inline CSS variable `--hub-theme`:** Runtime swap per-hub qua React `style={{ '--hub-theme': themeColor }}` outermost wrapper + child `color-mix(in srgb, var(--hub-theme) ...)` — KHÔNG cần Tailwind plugin (build overhead). Browser support Chrome 111+/Safari 16.4+/Firefox 113+ ≥ 95% user 2026.
+5. **localStorage same-origin SSO:** `wiki.medinet.vn` root domain → token share xuyên `/yte/`, `/duoc/`, `/` subpath cùng origin (Web Storage API scope by origin). XSS concern M2 carry forward — defer v4.0 HARD-V4-05 httpOnly cookie.
+6. **307 redirect failsafe (Plan 03-04 carry forward):** Backend hub con `/api/auth/login` + `/api/auth/refresh` 307 → central — Phase 5 FE Login.tsx mount redirect là PRIMARY UX (D-V3-Phase5-B4); 307 backend là LAYER 2 safety cho `api.ts::tryRefresh()` POST same-origin redirect: 'follow' (RFC 7231 preserve POST body).
+7. **Cross-hub endpoint absolute path override:** `api.crossHubSearch()` dùng `/api/search/cross-hub` absolute (KHÔNG `${API_BASE}` prefix) — D-V3-Phase4-D3 LOCKED hub con strip endpoint, Caddy `/api/*` handle central route. Pattern reusable cho future central-only endpoint (vd Phase 6 admin).
+
+**T-5-01..07 STRIDE coverage:**
+- T-5-01 Caddy open redirect: Plan 05-01 path_regexp anchor `^/(...)/api/(.*)$` — unknown hub fall through file_server (no arbitrary upstream).
+- T-5-02 KNOWN_HUBS tampering: Plan 05-02 + 05-04 — backend Caddy regex authoritative, FE UX-only.
+- T-5-03 Logo asset path traversal: Plan 05-03 — regex constrain `^\.\/([a-z][a-z0-9_]{0,15})\/index\.ts$` + path schema locked.
+- T-5-04 Login ?return open redirect: Plan 05-04 — 4-layer validation (strip + reject absolute + regex + allowlist) + W-05 origin-not-host check audit.
+- T-5-05 hub-add.sh shell injection: Plan 05-05 — Plan 02-05 strict guard carry forward (regex + RESERVED blacklist), `$HUB` quoted.
+- T-5-06 XSS via theme color: Plan 05-03 + 05-04 — themeColor hardcoded TS const, React style escape.
+- T-5-07 localStorage XSS exfil: ACCEPTED M2 carry forward — defer v4.0 HARD-V4-05.
+
+**Backward compat (Phase 5 KHÔNG break M2):**
+- API endpoint URL/envelope shape `{success, data, error, meta}` LOCKED — Phase 5 chỉ đổi FE base URL compute (relative path qua Caddy).
+- M2 11 trang React component shell preserve (R-V3-2) — chỉ touch Login.tsx + Layout.tsx sidebar header.
+- M2 localStorage same-origin pattern preserve (D-V3-Phase5-C2).
+- M2 authentication flow preserve — Login form same-origin POST + JWT Bearer token header.
+
+**v3.0-b progress:** Phase 5 hoàn tất 4/4 REQ-ID PROXY. v3.0-b 2/4 phase DONE (Phase 4 + 5 — 28/~32 plan ≈ 88%). Next: Phase 6 SETTINGS sync (SETTINGS-01..04 — rag_config HTTP pull + Redis pub/sub invalidate + api_keys proxy + hub_registry read-only).
+
+**Reference:**
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-CONTEXT.md` — 16 D-V3-Phase5-A1..D4 LOCKED 2026-05-22.
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md` — Visual design contract (4 hub branding + Login state machine + Layout sidebar + theme delivery).
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-VALIDATION.md` — Per-task verification map (Wave 0 vitest infra + 5 test file).
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-{01..06}-PLAN.md` — implementation chi tiết 6 plan.
+- `.planning/phases/05-reverse-proxy-frontend-subpath/05-{01..06}-SUMMARY.md` — deliverable + commit + test count per plan.
+
 ---
 
-*Cập nhật: 2026-05-22 (Phase 4 DONE — SYNC-01..05 ship 7 plan; outbox + worker mechanism + Postgres trigger AFTER INSERT/DELETE chunks atomic + ON CONFLICT (id) DO UPDATE idempotent + exp backoff [1,5,30,120]s max 5 attempts → dead + checksum scheduler central daily 2AM + hourly 1% TABLESAMPLE + admin /api/sync/replay endpoint + cross-hub search refactor 1 SQL aggregated thay fan-out + 6 Prometheus metric). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2+3+4 DONE (22/~32 plan ≈ 69%), v3.0-a EXIT GATE TRIGGERED + v3.0-b mở màn. Next: `/gsd-discuss-phase 5` Reverse Proxy + Frontend Subpath (PROXY-01..04 — Caddy subpath routing + frontend prefix detect 1 build + D-V3-06 D6 expire formally + per-hub login branding).*
+*Cập nhật: 2026-05-23 (Phase 5 DONE — PROXY-01..04 ship 6 plan; Caddy wiki block + path_regexp + handle_path strip + reverse_proxy hub upstream + central /api + frontend prefix detect 1 build + KNOWN_HUBS allowlist + BrowserRouter basename + Branding registry import.meta.glob 4 hub + WCAG contrast helper hcns + Login 4-state machine + Layout sidebar swap + crossHubSearch absolute path + tryRefresh redirect:'follow' + hub-add.sh 9-step pipeline. Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2+3+4+5 DONE (28/~32 plan ≈ 88%), v3.0-a EXIT GATE TRIGGERED + v3.0-b mid-flight (2/4 phase). Next: `/gsd-discuss-phase 6` System Settings Sync (SETTINGS-01..04 — rag_config HTTP pull + Redis pub/sub invalidate + api_keys proxy + hub_registry read-only).*
