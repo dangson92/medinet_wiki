@@ -35,6 +35,18 @@ def _common_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
     monkeypatch.delenv("CENTRAL_URL", raising=False)
     monkeypatch.delenv("JWKS_REFRESH_INTERVAL", raising=False)
     monkeypatch.delenv("JWKS_MAX_STALE_SECONDS", raising=False)
+    # Plan 04-02 Task 1 — validator `_enforce_hub_id_for_hub_con` +
+    # `_enforce_central_sync_dsn_for_hub` yêu cầu hub con set HUB_ID +
+    # CENTRAL_SYNC_DSN. Auto-set cho hub con; clear cho central.
+    if hub_name == "central":
+        monkeypatch.delenv("HUB_ID", raising=False)
+        monkeypatch.delenv("CENTRAL_SYNC_DSN", raising=False)
+    else:
+        monkeypatch.setenv("HUB_ID", "12345678-1234-1234-1234-123456789012")
+        monkeypatch.setenv(
+            "CENTRAL_SYNC_DSN",
+            "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+        )
 
 
 def test_jwks_defaults_match_d_v3_phase3_b(monkeypatch: pytest.MonkeyPatch) -> None:

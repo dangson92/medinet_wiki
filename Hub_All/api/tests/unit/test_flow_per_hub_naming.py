@@ -162,6 +162,9 @@ def test_module_app_name_per_hub_yte_subprocess() -> None:
             "CENTRAL_JWKS_URL": "http://python-api-central:8080/.well-known/jwks.json",
             # Plan 03-04 Task 1 — validator hub con required CENTRAL_URL.
             "CENTRAL_URL": "http://python-api-central:8080",
+            # Plan 04-02 Task 1 — validator hub con required HUB_ID + CENTRAL_SYNC_DSN.
+            "HUB_ID": "12345678-1234-1234-1234-123456789012",
+            "CENTRAL_SYNC_DSN": "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
         },
         script,
     )

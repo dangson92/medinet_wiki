@@ -40,12 +40,21 @@ def _set_env(
     # CENTRAL_JWKS_URL không ảnh hưởng đó.
     # Plan 03-04 Task 1 — validator `_enforce_central_url_for_hub` cũng yêu cầu
     # hub con set CENTRAL_URL. Auto-set cùng pattern.
+    # Plan 04-02 Task 1 — validator `_enforce_hub_id_for_hub_con` +
+    # `_enforce_central_sync_dsn_for_hub` cũng yêu cầu hub con set HUB_ID +
+    # CENTRAL_SYNC_DSN. Auto-set cùng pattern (test pattern reject regex/blacklist
+    # vẫn raise sớm KHÔNG ảnh hưởng).
     if hub_name is not None and hub_name != "central":
         monkeypatch.setenv(
             "CENTRAL_JWKS_URL",
             "http://python-api-central:8080/.well-known/jwks.json",
         )
         monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
+        monkeypatch.setenv("HUB_ID", "12345678-1234-1234-1234-123456789012")
+        monkeypatch.setenv(
+            "CENTRAL_SYNC_DSN",
+            "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+        )
     get_settings.cache_clear()
 
 

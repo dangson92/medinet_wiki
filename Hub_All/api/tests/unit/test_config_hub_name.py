@@ -68,12 +68,19 @@ def test_yte_matches_yte_dsn_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     Plan 03-04 SSO-02 (Task 1) thêm validator `_enforce_central_url_for_hub`
     → hub con phải có CENTRAL_URL. Set cả 2 env để pass validator (regression
     update — KHÔNG đụng semantic test DSN match).
+    Plan 04-02 SYNC-01 (Task 1) thêm validator `_enforce_hub_id_for_hub_con` +
+    `_enforce_central_sync_dsn_for_hub` → hub con phải set HUB_ID + CENTRAL_SYNC_DSN.
     """
     monkeypatch.setenv(
         "CENTRAL_JWKS_URL",
         "http://python-api-central:8080/.well-known/jwks.json",
     )
     monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
+    monkeypatch.setenv("HUB_ID", "12345678-1234-1234-1234-123456789012")
+    monkeypatch.setenv(
+        "CENTRAL_SYNC_DSN",
+        "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+    )
     _set_env(
         monkeypatch,
         hub_name="yte",
@@ -182,12 +189,18 @@ def test_dsn_with_query_string_validates(
 
     Plan 03-02 Task 1 thêm CENTRAL_JWKS_URL required cho hub con.
     Plan 03-04 Task 1 thêm CENTRAL_URL required cho hub con.
+    Plan 04-02 Task 1 thêm HUB_ID + CENTRAL_SYNC_DSN required cho hub con.
     """
     monkeypatch.setenv(
         "CENTRAL_JWKS_URL",
         "http://python-api-central:8080/.well-known/jwks.json",
     )
     monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
+    monkeypatch.setenv("HUB_ID", "12345678-1234-1234-1234-123456789012")
+    monkeypatch.setenv(
+        "CENTRAL_SYNC_DSN",
+        "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+    )
     _set_env(
         monkeypatch,
         hub_name="yte",

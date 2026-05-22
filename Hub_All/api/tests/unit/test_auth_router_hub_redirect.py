@@ -47,6 +47,12 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
         )
         monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
         monkeypatch.setenv("JWKS_SKIP_FETCH", "1")
+        # Plan 04-02 Task 1 — validator hub con required HUB_ID + CENTRAL_SYNC_DSN
+        monkeypatch.setenv("HUB_ID", "12345678-1234-1234-1234-123456789012")
+        monkeypatch.setenv(
+            "CENTRAL_SYNC_DSN",
+            "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+        )
     from app.config import get_settings
 
     get_settings.cache_clear()

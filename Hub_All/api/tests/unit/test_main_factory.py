@@ -67,12 +67,19 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
     # Plan 03-02 Task 1 — validator hub con required CENTRAL_JWKS_URL.
     # Auto-set cho hub con để boot Settings PASS (regression update).
     # Plan 03-04 Task 1 — validator hub con required CENTRAL_URL. Cùng pattern.
+    # Plan 04-02 Task 1 — validator hub con required HUB_ID + CENTRAL_SYNC_DSN.
+    # Cùng pattern auto-set Phase 4 sync field.
     if hub_name != "central":
         monkeypatch.setenv(
             "CENTRAL_JWKS_URL",
             "http://python-api-central:8080/.well-known/jwks.json",
         )
         monkeypatch.setenv("CENTRAL_URL", "http://python-api-central:8080")
+        monkeypatch.setenv("HUB_ID", "12345678-1234-1234-1234-123456789012")
+        monkeypatch.setenv(
+            "CENTRAL_SYNC_DSN",
+            "postgresql+asyncpg://sync_user:pwd@postgres:5432/medinet_central",
+        )
     # Force re-parse env mỗi test (lru_cache singleton)
     from app.config import get_settings
 

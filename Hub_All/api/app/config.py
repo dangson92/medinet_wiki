@@ -125,6 +125,45 @@ class Settings(BaseSettings):
     #   CENTRAL_URL=http://python-api-central:8080
     central_url: str | None = None
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 4 Plan 04-02 — Cross-hub Data Sync config (SYNC-01/03/04)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # D-V3-Phase4-D2 — Hub con UUID identity từ medinet_central.hubs.id row.
+    # Operator deploy responsibility: set HUB_ID khớp central.hubs UUID.
+    # docker-compose 3 hub con env HUB_ID=<uuid migrate-data step Phase 7>.
+    # Central KHÔNG cần hub_id (aggregator, KHÔNG own data row chunks). Validator
+    # `_validate_hub_id_uuid` field-level format check + `_enforce_hub_id_for_hub_con`
+    # model-level enforce hub con required.
+    hub_id: str | None = None
+
+    # D-V3-Phase4-A1 — Hub con outbox worker push central qua dedicated pool.
+    # DSN trỏ medinet_central (CHỈ hub con cần; central KHÔNG self-push).
+    # Credential-based auth — operator deploy với role hạn chế INSERT chunks
+    # ON CONFLICT (T-04-06 mitigation — hub con KHÔNG DROP central tables).
+    # docker-compose 3 hub con env:
+    #   CENTRAL_SYNC_DSN=postgresql+asyncpg://sync_user:...@postgres:5432/medinet_central
+    central_sync_dsn: str | None = None
+
+    # D-V3-Phase4-C3 — Central checksum scheduler connect read-only tới N hub con.
+    # JSON dict {"hub_name": "asyncpg DSN read-only"} qua env CHECKSUM_HUB_DSNS_JSON.
+    # Property `checksum_hub_dsns` parse JSON → dict (cache miss-by-design — read
+    # 1 lần boot). Hub con KHÔNG dùng (validator skip). Default None ở central cho
+    # phép deploy lần đầu CHƯA register hub con (scheduler tick no-op khi empty).
+    checksum_hub_dsns_json: str | None = None
+
+    # D-V3-Phase4-A5 — Worker loop config (Recommended option 1 default LOCKED).
+    # Operator tune sau observe Prometheus metrics (Plan 04-03 + 04-06).
+    sync_batch_size: int = 100
+    sync_poll_interval: float = 5.0  # seconds — float cho sub-second precision
+    sync_max_attempts: int = 5
+    # Backoff array length PHẢI = max_attempts - 1 (validator
+    # `_validate_backoff_length` enforce). attempt 1 KHÔNG backoff (immediate),
+    # attempts 2..N dùng backoff[0..N-2].
+    sync_backoff_seconds: Annotated[list[int], NoDecode] = Field(
+        default_factory=lambda: [1, 5, 30, 120]
+    )
+
     # File storage
     file_store_dir: Path = Path("./file_store")
 
@@ -334,6 +373,170 @@ class Settings(BaseSettings):
                 f"(xem docker-compose.yml 3 hub con block — Plan 03-04 SSO-02)."
             )
         return self
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 4 Plan 04-02 — Validators + helper property (SYNC-01/03/04)
+    # ──────────────────────────────────────────────────────────────────────
+
+    @field_validator("sync_backoff_seconds", mode="before")
+    @classmethod
+    def _parse_backoff_csv(cls, v: str | list[int]) -> list[int]:
+        """Parse CSV "1,5,30,120" → [1, 5, 30, 120]; pass-through nếu là list.
+
+        D-V3-Phase4-A5 — env SYNC_BACKOFF_SECONDS chấp nhận format CSV string.
+        NoDecode skip JSON decode mặc định pydantic-settings (pattern song song
+        cors_allowed_origins).
+        """
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        return v
+
+    @field_validator("hub_id", mode="after")
+    @classmethod
+    def _validate_hub_id_uuid(cls, v: str | None) -> str | None:
+        """Validate hub_id format UUID4 string (D-V3-Phase4-D2).
+
+        None OK (central case skip; hub con missing case caught bởi
+        `_enforce_hub_id_for_hub_con` model_validator sau).
+
+        Threat model:
+        - T-04-02-03 Tampering — operator paste HUB_ID="yte" (string thay vì
+          UUID4) → ValidationError fail-fast thay vì runtime PG cast error.
+        """
+        if v is None:
+            return v
+        import uuid as _uuid
+        try:
+            _uuid.UUID(v)
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"hub_id invalid UUID format: {v!r} — must be UUID4 string "
+                f"khớp medinet_central.hubs.id row (xem docker-compose env HUB_ID)."
+            ) from e
+        return v
+
+    @model_validator(mode="after")
+    def _enforce_hub_id_for_hub_con(self) -> Settings:
+        """Phase 4 Plan 04-02 SYNC-01/D-V3-Phase4-D2 — Hub con required HUB_ID.
+
+        Central (hub_name="central") aggregator KHÔNG own data → hub_id None OK.
+        Hub con (yte/duoc/hcns/dynamic) PHẢI set HUB_ID UUID khớp central.hubs
+        row cho chunks.hub_id INSERT (rag/flow.py ChunkRow.hub_id) + sync_outbox
+        payload (Plan 04-03 worker push central).
+
+        Threat model:
+        - T-04-02-01 Tampering — env thiếu HUB_ID → hub con boot OK nhưng cocoindex
+          flow INSERT chunks với hub_id=NULL → constraint violation runtime.
+          Fail-fast validator chống production silent bug.
+        """
+        if self.hub_name != "central" and not self.hub_id:
+            raise ValueError(
+                f"hub_name={self.hub_name!r} (hub con) yêu cầu HUB_ID env var "
+                f"(UUID khớp medinet_central.hubs.id row). "
+                f"Xem docker-compose.yml 3 hub con block — Plan 04-02 SYNC-01."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_central_sync_dsn_for_hub(self) -> Settings:
+        """Phase 4 Plan 04-02 SYNC-01/D-V3-Phase4-A1 — Hub con required CENTRAL_SYNC_DSN.
+
+        Worker (Plan 04-03) dùng dedicated asyncpg pool tới central để push chunks
+        ON CONFLICT (chunk_id) DO UPDATE. Operator deploy với role limited INSERT
+        chunks (KHÔNG DELETE other hub_id — T-04-06 Elevation mitigation).
+
+        Threat model:
+        - T-04-02-02 DoS — env thiếu CENTRAL_SYNC_DSN → worker spawn lifespan FAIL
+          runtime + outbox accumulate indefinitely. Fail-fast validator chống
+          deploy bug câm lặng.
+        """
+        if self.hub_name != "central" and not self.central_sync_dsn:
+            raise ValueError(
+                f"hub_name={self.hub_name!r} (hub con) yêu cầu CENTRAL_SYNC_DSN "
+                f"env var (postgresql+asyncpg://... trỏ medinet_central). "
+                f"Xem docker-compose.yml 3 hub con block — Plan 04-02 SYNC-01."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_checksum_hub_dsns_for_central(self) -> Settings:
+        """Phase 4 Plan 04-02 SYNC-04/D-V3-Phase4-C3 — CHECKSUM_HUB_DSNS_JSON validate.
+
+        Optional ở central deploy lần đầu (CHƯA register hub con) — default None
+        cho phép Settings(...) construct success. Validator CHỈ enforce format JSON
+        nếu set, KHÔNG enforce required. Scheduler loop (Plan 04-06) no-op khi
+        dict empty.
+
+        Threat model:
+        - T-04-02-03 Tampering — operator paste malformed JSON → boot fail thay vì
+          silent scheduler crash mid-tick. Fail-fast validator JSON parse + dict
+          [str,str] type check.
+        """
+        if self.checksum_hub_dsns_json is None:
+            return self
+        import json
+        try:
+            parsed = json.loads(self.checksum_hub_dsns_json)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"CHECKSUM_HUB_DSNS_JSON invalid JSON: {e!s}. Expected dict "
+                f'{{"hub_name": "asyncpg DSN"}} — Plan 04-02 SYNC-04.'
+            ) from e
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"CHECKSUM_HUB_DSNS_JSON phải là dict[str, str], got "
+                f"{type(parsed).__name__!r} — Plan 04-02 SYNC-04 D-V3-Phase4-C3."
+            )
+        for k, val in parsed.items():
+            if not isinstance(k, str) or not isinstance(val, str):
+                raise ValueError(
+                    f"CHECKSUM_HUB_DSNS_JSON entry {k!r}: {val!r} — keys + values "
+                    f"phải là str (hub_name + asyncpg DSN). Plan 04-02 SYNC-04."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_backoff_length(self) -> Settings:
+        """Backoff array length phải = max_attempts - 1 (D-V3-Phase4-A5).
+
+        attempt 1 KHÔNG backoff (immediate first try), attempts 2..N dùng
+        backoff[0..N-2]. max_attempts=5 → backoff_seconds length=4.
+
+        Operator override env SYNC_MAX_ATTEMPTS=3 phải tương ứng
+        SYNC_BACKOFF_SECONDS="1,5" (length 2). Mismatch → boot fail-loud thay
+        vì IndexError runtime.
+
+        Threat model:
+        - T-04-02-05 DoS — length mismatch → IndexError worker runtime mid-batch
+          → outbox stuck. Validator fail-fast với expected/actual diff message.
+        """
+        expected = self.sync_max_attempts - 1
+        actual = len(self.sync_backoff_seconds)
+        if actual != expected:
+            raise ValueError(
+                f"sync_backoff_seconds length mismatch: max_attempts="
+                f"{self.sync_max_attempts} yêu cầu length={expected} (attempts "
+                f"2..N), got {actual} ({self.sync_backoff_seconds!r}). "
+                f"Plan 04-02 D-V3-Phase4-A5."
+            )
+        return self
+
+    @property
+    def checksum_hub_dsns(self) -> dict[str, str]:
+        """Parse checksum_hub_dsns_json → dict (D-V3-Phase4-C3).
+
+        Empty dict nếu None (central deploy lần đầu CHƯA register hub con —
+        Plan 04-06 scheduler tick no-op).
+
+        Validator `_enforce_checksum_hub_dsns_for_central` đã enforce JSON
+        parseable + dict[str,str] type — property này safe parse lại không
+        raise (chỉ central instance gọi).
+        """
+        if self.checksum_hub_dsns_json is None:
+            return {}
+        import json
+        result = json.loads(self.checksum_hub_dsns_json)
+        return {str(k): str(v) for k, v in result.items()}
 
 
 @lru_cache
