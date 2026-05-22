@@ -40,6 +40,20 @@
   > 12. `GET  /api/usage`
   >
   > Xem `.planning/phases/02-hub-con-codebase-factor/02-CONTEXT.md` D-V3-Phase2-D matrix để hiểu chi tiết breakdown collective vs specific. Integration test `tests/integration/test_factor_hub_scoped.py` (Plan 02-03) verify đúng 12 specific endpoint × 3 hub con = 36 assertion non-404 PASS. CLAUDE.md section 6 cũng có note traceability tương tự.
+
+  > **NOTE update (Phase 3 Plan 03-04 SSO-02 — 2026-05-22):** Hub con auth endpoint behavior refinement (D-V3-Phase3-G LOCKED):
+  >
+  > - `POST /api/auth/login` — Phase 2 mount universal handle local. **Phase 3 Plan 03-04: hub con trả 307 Location: central** (browser auto-follow, preserve POST + body RFC 7231). Central giữ M2 path handle local.
+  > - `POST /api/auth/refresh` — tương tự, hub con trả 307 Location: central (D-V3-Phase3-C — hub con KHÔNG sinh refresh token, 100% refresh ở central).
+  > - `POST /api/auth/logout` — giữ handle LOCAL ở hub con (verify JWT qua JWKSCache Plan 03-02 + Redis blacklist chung Plan 03-03 — central thấy ngay). KHÔNG redirect (giảm latency logout).
+  > - `GET /api/auth/me` — giữ handle LOCAL ở hub con (verify JWT + return user).
+  >
+  > **"12 specific HTTP method endpoints" giữ NGUYÊN số** — login + refresh vẫn mount route (KHÔNG strip — Plan 03-04 thay behavior 200/401/422 → 307). Hub con endpoint summary:
+  >
+  > - **10 endpoint handle LOCAL:** `/api/auth/logout`, `/api/auth/me`, `/api/profile` (GET/PATCH), `/api/documents` (POST/GET/DELETE), `/api/search`, `/api/ask`, `/api/usage`.
+  > - **2 endpoint SSO REDIRECT 307:** `/api/auth/login`, `/api/auth/refresh`.
+  >
+  > Integration test `tests/integration/test_factor_hub_scoped.py` Phase 3 Plan 03-04 Task 3 update assertion: 2 endpoint redirect assert `== 307` (+ verify Location header trỏ central), 10 endpoint local assert `!= 404`. Frontend redirect wire defer Phase 5 PROXY-02 (D-V3-Phase3-F + D-V3-06 D6 expire). Unit test `tests/unit/test_auth_router_hub_redirect.py` (10 test) verify behavior router-level.
 - [ ] **FACTOR-04** (added 2026-05-22 sau Phase 2 closeout discussion — user direction B "generalize 100% dynamic"): **Dynamic hub registration** — operator thêm hub mới (vd `medinet_hub_phap_che`) bằng 1 lệnh `make hub-add HUB=<name> [PORT=<port>]` mà **KHÔNG sửa code Python / docker-compose.yml**. (1) `Settings.hub_name` đổi từ `Literal["central","yte","duoc","hcns"]` → `str` với `@field_validator` regex `^[a-z][a-z0-9_]{1,15}$` + reserved-name blacklist (`postgres`, `cocoindex`, `template0`, `template1`, `public`, `medinet` — collision với Postgres system DB / role medinet). "central" + 4 hub gốc accept regression KHÔNG break. (2) `scripts/hub-add.sh` wrap quanh `hub-init.sh` (DB-level Phase 1 Plan 01-05 carry forward) + auto-append service block từ template vào `docker-compose.override.yml` (docker compose auto-merge với base) + auto-detect port `8180 + N` nếu user không truyền explicit. (3) `docker-compose.override.yml.template` snippet với placeholder `{{HUB}}` + `{{PORT}}` + inherit từ `x-api-template` anchor base. (4) Phase 1 `_enforce_hub_dsn_match` validator dùng `self.hub_name` dynamic — KHÔNG sửa. (5) Smoke checkpoint: `make hub-add HUB=tmp_test PORT=8189` → `docker compose up -d python-api-tmp_test` → `curl http://localhost:8189/api/health` 200 → cleanup. Test: `tests/unit/test_config_hub_name_dynamic.py` accept 4 hub gốc + 3 hub mới + reject invalid pattern (uppercase/hyphen/starting-digit/too-long/reserved name).
 
 ### SSO — Auth SSO + hub_ids trong JWT (4 REQ — GA-V3-A chốt ở `/gsd-discuss-phase 3`)
