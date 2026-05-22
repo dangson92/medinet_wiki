@@ -249,6 +249,21 @@ Plans:
 - Cache TTL: 60s (default) vs 5min (low-change settings) vs adaptive (dựa trên change frequency).
 - Pub/sub fallback nếu Redis xuống: hub con phải re-fetch sau TTL hay alert immediate?
 
+**Decisions (chốt 2026-05-23 theo planner seed defaults Auto Mode `--auto --chain`, KHÔNG `/gsd-discuss-phase 6` interactive — 4 D-V3-Phase6-A..D LOCKED):**
+- D-V3-Phase6-A: HTTP pull on-demand + Redis pub/sub invalidate hybrid (REJECT push webhook / env var local).
+- D-V3-Phase6-B: TTL strategy per category — rag_config 60s + hub_registry 300s + apikey 60s.
+- D-V3-Phase6-C: 1 channel `settings:invalidate` cho cả 3 category + Pydantic Literal enum payload validate.
+- D-V3-Phase6-D: Shared secret header `X-Internal-Auth: <SETTINGS_PROXY_SECRET>` 32-char min + hmac.compare_digest constant-time.
+
+**Plans:** 5 plans (5 waves — Wave 1 BLOCKING + Wave 2 + Wave 3 + Wave 4 BLOCKING + Wave 5 closeout)
+
+Plans:
+- [ ] 06-01-PLAN.md — Wave 1 BLOCKING settings_sync/ scaffold + Settings 5 field + docker-compose env wire (SETTINGS-01..04 — D-V3-Phase6-A/B/D)
+- [ ] 06-02-PLAN.md — Wave 2 client (RagConfigClient + HubRegistryClient + ApiKeyVerifyClient) + subscriber + Pydantic schema (SETTINGS-01/02/04 — D-V3-Phase6-A/C)
+- [ ] 06-03-PLAN.md — Wave 3 require_api_key branch + require_internal_auth + update_rag_config publish + /api/api-keys/verify endpoint (SETTINGS-02/03 — D-V3-Phase6-A/C/D)
+- [ ] 06-04-PLAN.md — Wave 4 lifespan integration BLOCKING + ASGI integration test + SETTINGS_SKIP_FETCH escape hatch (SETTINGS-01..04)
+- [ ] 06-05-PLAN.md — Wave 5 closeout CLAUDE.md + STATE.md + REQUIREMENTS.md + ROADMAP.md + README.md + smoke checkpoint (skip auto-fallback)
+
 ---
 
 ### Phase 7 — Migration + Smoke E2E (GA-V3-D, R-V3-4)
