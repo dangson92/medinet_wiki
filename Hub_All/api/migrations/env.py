@@ -41,6 +41,39 @@ from app.models import *  # noqa: F401, F403 — register tất cả model vào 
 # cả 2 nơi (Plan 05 hub-init.sh dynamic add sẽ centralize source of truth).
 _VALID_HUBS = {"central", "yte", "duoc", "hcns"}
 
+# Plan 04-01 SYNC-05 — Per-hub-only migration registry (D-V3-Phase4-A2).
+# Revision được xác định "per-hub-only" → SKIP no-op khi apply trên DB central.
+# Runtime guard concret nằm trong từng migration upgrade() qua current_database()
+# check (vd 0005_sync_outbox_per_hub.py). Helper pure này phục vụ unit test +
+# tài liệu hóa intent (KHÔNG được dùng bởi alembic runtime trực tiếp — runtime
+# check nằm trong migration module để chống bug "operator forget set -x hub").
+_HUB_ONLY_REVS: frozenset[str] = frozenset({"0005"})
+
+
+def is_sync_outbox_rev_applicable(rev_id: str, hub_name: str) -> bool:
+    """Skip guard pure helper cho per-hub-only revision (Plan 04-01 D-V3-Phase4-A2).
+
+    Args:
+        rev_id: Alembic revision identifier (vd "0005").
+        hub_name: Target hub name (central / yte / duoc / hcns / dynamic FACTOR-04).
+
+    Returns:
+        True nếu migration nên apply, False nếu skip no-op.
+
+    Semantics:
+        - rev KHÔNG nằm trong ``_HUB_ONLY_REVS`` → True (mọi rev khác apply mọi DB).
+        - rev nằm trong ``_HUB_ONLY_REVS`` + ``hub_name == "central"`` → False (skip).
+        - rev nằm trong ``_HUB_ONLY_REVS`` + ``hub_name != "central"`` → True
+          (apply mọi hub con, kể cả dynamic FACTOR-04 vd `phap_che`).
+
+    NOTE: Helper này pure-function unit testable; runtime enforcement nằm trong
+    từng migration module qua `op.get_bind().execute("SELECT current_database()")`
+    check để chống bug "operator quên `-x hub=<name>`" → apply nhầm trên central.
+    """
+    if rev_id not in _HUB_ONLY_REVS:
+        return True
+    return hub_name != "central"
+
 
 def parse_hub_x_arg(x_args: list[str]) -> str | None:
     """Parse `-x hub=<name>` từ list x_arguments — trả hub name hoặc None.
