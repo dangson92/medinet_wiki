@@ -143,6 +143,46 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 - **GA-V3-C** Reverse proxy + frontend prefix detect — Caddy strip `/<hub>` prefix? Frontend 1 build dùng chung detect prefix qua `window.location.pathname.split('/')[1]` vs build per-hub `VITE_HUB_NAME=yte`? D6 ("KHÔNG sửa frontend") expire chính thức ở v3.0-05.
 - **GA-V3-D** Migration data từ `medinet_central` cũ split sang DB hub con — `pg_dump` per `WHERE hub_id` HOẶC snapshot + replay cocoindex flow rebuild từ `file_store`?
 
+### v3.0 progress (cập nhật khi mỗi Phase ship)
+
+| Phase | Status | Plan count | Date | REQ-ID |
+|-------|--------|------------|------|--------|
+| 1 — Multi-DB Topology + Per-hub Alembic | ✅ DONE | 5 plan | 2026-05-21 | TOPO-01..04 (4) |
+| 2 — Hub-con Codebase Factor | ✅ DONE | 4 plan | 2026-05-22 | FACTOR-01..03 (3) |
+| 3 — Auth SSO + hub_ids trong JWT | 📋 Next | — | — | SSO-01..04 |
+| 4 — Cross-hub Data Sync | 📋 | — | — | SYNC-01..05 |
+| 5 — Reverse Proxy + Frontend Subpath | 📋 | — | — | PROXY-01..04 |
+| 6 — System Settings Sync | 📋 | — | — | SETTINGS-01..04 |
+| 7 — Migration + Smoke E2E | 📋 | — | — | MIGRATE-01..05 |
+
+**🚦 v3.0-a EXIT GATE** giữa Phase 3 và Phase 4 — demo 1 hub con (yte) + central + JWT SSO + golden path PASS → user accept là điều kiện tiếp tục v3.0-b (Phase 4-7).
+
+### Phase 2 pattern (FACTOR-01..03 — 2026-05-22)
+
+1 codebase deploy được nhiều lần với env `HUB_NAME=<central|yte|duoc|hcns>`:
+
+- **`api/app/main.py::create_app()`** — factory no-arg đọc `settings.hub_name`, conditional mount:
+  - **7 router universal** (mount mọi process): `auth_router`, `documents_router`, `profile_router`, `search_router`, `ask_router`, `usage_router`, `ai_chat_router`.
+  - **9 router central-only** (chỉ mount khi `settings.hub_name == "central"`): `hubs_router`, `users_router`, `api_keys_router`, `audit_logs_router`, `rag_config_router`, `system_settings_router`, `sync_router`, `mcp_oauth_router`, `mcp_oauth_internal_router`.
+- **`docker-compose.yml`** — 4 service dedicated FastAPI:
+  - `python-api-central` (HUB_NAME=central, DB `medinet_central`, port host 8180 — M2 backward-compat).
+  - `python-api-yte` (HUB_NAME=yte, DB `medinet_hub_yte`, port host 8181).
+  - `python-api-duoc` (HUB_NAME=duoc, DB `medinet_hub_duoc`, port host 8182).
+  - `python-api-hcns` (HUB_NAME=hcns, DB `medinet_hub_hcns`, port host 8183).
+  - YAML anchor `x-api-template: &api-template` dedupe shared config (build / env_file / volumes keys ro / depends_on / network). Mỗi service inherit qua `<<: *api-template`.
+  - Cocoindex LMDB volume per-hub (`medinet_cocoindex_<hub>`) — 1.0.3 Environment singleton isolation.
+  - `mcp_service.MCP_API_BASE_URL` re-point `http://python-api-central:8080` (KHÔNG fan-out — LOCKED D-V3-02).
+- **Endpoint contract:**
+  - Hub con expose **12 endpoint hub-scoped specific** (FACTOR-03 — implementation count; ROADMAP/REQUIREMENTS label "10 collective endpoint group" gộp `/api/auth/*` + `/api/profile` + `/api/documents` thành nhóm): `/api/auth/{login,refresh,logout,me}`, `/api/profile` (GET/PATCH), `/api/documents` (POST/GET/DELETE), `/api/search`, `/api/ask`, `/api/usage`.
+  - Hub con STRIP **8 endpoint central-only** (FACTOR-02) → 404 envelope `{success:false, data:null, error:{code, message}, meta:null}` (KHÔNG 403 — endpoint không exist mới đúng strip semantic).
+- **Cross-hub alias defer:** `/api/ask/cross-hub` + `/api/search/answer` vẫn mount universal ở Phase 2 (router universal mount nguyên). Phase 4 SYNC-03 sẽ tách hoặc dùng dependency reject. Hub con runtime endpoint cross-hub trả 500/empty (DB không có data hub khác — KHÔNG leak vì E-V3-3 isolation Phase 1).
+- **Phase 1 Settings._enforce_hub_dsn_match validator** carry forward — boot-time fail-fast nếu HUB_NAME ↔ DSN suffix mismatch (E-V3-3 enforce).
+
+**Reference:**
+- `.planning/phases/02-hub-con-codebase-factor/02-CONTEXT.md` — 9 D-V3-Phase2 decision LOCKED 2026-05-22.
+- `.planning/phases/02-hub-con-codebase-factor/02-{01..04}-PLAN.md` — implementation chi tiết 4 plan.
+- `.planning/phases/02-hub-con-codebase-factor/02-{01..04}-SUMMARY.md` — deliverable + commit + test count per plan.
+
 ---
 
-*Cập nhật: 2026-05-21 (Phase 10 Plan 10-05 — HARD-04 docs closeout). Project: MEDWIKI. M2 v2.0 done — pivot v3.0 Multi-Hub Split (seed `.planning/seeds/v3.0-multi-hub-split.md`).*
+*Cập nhật: 2026-05-22 (Phase 2 DONE — FACTOR-01..03 ship). Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2 DONE (9/~30 plan ≈ 28%), Next: `/gsd-discuss-phase 3` Auth SSO.*
