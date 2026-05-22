@@ -37,6 +37,7 @@ from fastapi.requests import Request as FastAPIRequest
 from starlette.responses import JSONResponse as StarletteJSONResponse
 
 from app.config import get_settings
+from app.db.dsn import _to_asyncpg_dsn  # Phase 4 Plan 04-04 W3 fix — shared module
 from app.middleware import (
     ErrorHandlerMiddleware,
     RequestIdMiddleware,
@@ -45,14 +46,6 @@ from app.middleware import (
 from app.pkg import response as resp
 
 logger = logging.getLogger(__name__)
-
-
-def _to_asyncpg_dsn(sqlalchemy_dsn: str) -> str:
-    """SQLAlchemy DSN `postgresql+asyncpg://...` → asyncpg DSN `postgresql://...`.
-
-    asyncpg client KHÔNG nhận driver prefix `+asyncpg` — chỉ SQLAlchemy hiểu.
-    """
-    return sqlalchemy_dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
 
 
 @asynccontextmanager
