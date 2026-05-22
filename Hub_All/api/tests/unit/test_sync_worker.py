@@ -29,10 +29,9 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ────────────────────────────────────────────────────────────────────
 # Fixtures — Mock asyncpg.Pool + Connection + Settings
