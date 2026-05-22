@@ -1,6 +1,48 @@
-// Auto-detect backend URL: same hostname as frontend, port 8180
-// (8080 is in Windows Hyper-V excluded port range 8038-8137 — use 8180 instead)
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
+// Phase 5 D-V3-Phase5-B1 LOCKED — 1-build prefix detect (replaces M2 absolute origin hardcode)
+// Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-CONTEXT.md §"Implementation Decisions B1"
+//         .planning/phases/05-reverse-proxy-frontend-subpath/05-RESEARCH.md Pattern 2 + Pitfall 4
+//
+// T-5-02 (Tampering hub allowlist client-side): Frontend allowlist chỉ làm UX routing.
+// Backend Caddy `path_regexp ^/(yte|duoc|hcns)/api/(.*)$` (Plan 05-01) là real authority —
+// tamper window.__HUB_CONFIG__.allowlist từ DevTools KHÔNG bypass backend strip; only thay
+// đổi client-side route handling. KHÔNG dùng FE allowlist làm trust boundary.
+
+// Runtime hub config — Caddy/backend inject via <script>window.__HUB_CONFIG__=...</script>
+// HOẶC fallback hardcode 3 hub initial Phase 5 (Phase 6 SETTINGS-04 sync DB-driven hub_registry).
+interface HubConfigRuntime {
+  allowlist: readonly string[];
+  current?: string; // optional — chỉ set nếu backend render dynamic
+}
+
+declare global {
+  interface Window {
+    __HUB_CONFIG__?: HubConfigRuntime;
+  }
+}
+
+const HUB_CONFIG: HubConfigRuntime = (typeof window !== 'undefined' && window.__HUB_CONFIG__) ?? {
+  // Fallback hardcode initial 3 hub gốc Phase 5 — synced with Plan 05-01 .env.example HUBS_ALLOWLIST_REGEX
+  allowlist: ['yte', 'duoc', 'hcns'] as const,
+};
+
+const KNOWN_HUBS: readonly string[] = HUB_CONFIG.allowlist;
+
+const firstSegment: string | undefined =
+  typeof window !== 'undefined'
+    ? window.location.pathname.split('/').filter(Boolean)[0]
+    : undefined;
+
+// PREFIX null nếu segment KHÔNG match KNOWN_HUBS (T-5-02: backend Caddy regex authoritative,
+// FE allowlist chỉ UX routing — unknown prefix fall through to central context)
+export const PREFIX: string | null =
+  firstSegment && KNOWN_HUBS.includes(firstSegment) ? firstSegment : null;
+
+export const API_BASE: string = PREFIX ? `/${PREFIX}/api` : '/api';
+export const APP_BASE: string = PREFIX ? `/${PREFIX}` : '';
+export const CURRENT_HUB: string = PREFIX ?? 'central';
+
+// API_URL relative — Caddy same-origin gateway (KHÔNG cần absolute hostname:port nữa)
+const API_URL = API_BASE;
 
 interface APIResponse<T> {
   success: boolean;
