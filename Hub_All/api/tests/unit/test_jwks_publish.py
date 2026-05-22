@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from app.auth.jwks import (
-    JWK,
     JWKSet,
     _derive_kid,
     _int_to_base64url,

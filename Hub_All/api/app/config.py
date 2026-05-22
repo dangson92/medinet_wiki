@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     jwt_public_key_path: Path = Path("./keys/public.pem")
     jwt_access_token_ttl: int = 900
     jwt_refresh_token_ttl: int = 604800
+    # Phase 3 Plan 03-01 SSO-01 (D-V3-Phase3-A) — Hub con consume JWKS endpoint
+    # từ central qua intra-network HTTP. Default None ở central (KHÔNG cần fetch
+    # — central có local private.pem). Plan 03-02 sẽ thêm @model_validator
+    # enforce hub con phải set field này KHÔNG None (fail-loud boot nếu thiếu).
+    # docker-compose 3 hub con set env
+    #   CENTRAL_JWKS_URL=http://python-api-central:8080/.well-known/jwks.json
+    central_jwks_url: str | None = None
 
     # File storage
     file_store_dir: Path = Path("./file_store")

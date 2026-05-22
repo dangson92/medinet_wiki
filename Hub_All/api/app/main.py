@@ -435,6 +435,61 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         app.include_router(sync_router)
         app.include_router(mcp_oauth_router)
         app.include_router(mcp_oauth_internal_router)
+
+        # ──────────────────────────────────────────────────────────────────
+        # Phase 3 Plan 03-01 (SSO-01, D-V3-Phase3-A) — JWKS endpoint RFC 7517
+        # Central publish public RS256 key cho hub con + frontend Phase 5 + MCP
+        # Phase 7 verify JWT. Endpoint PUBLIC (KHÔNG auth) + Cache-Control 1h
+        # match Plan 03-02 hub con TTL. Single-key strategy v3.0-a; multi-key
+        # rotation defer Phase 7.
+        #
+        # 503 fallback envelope khi PEM read fail (`make keys` missing) — shape
+        # D6 chuẩn `{success:false, data:null, error:{code, message}, meta:null}`.
+        # Mount TRONG block central-only (FACTOR-02 enforce) — hub con KHÔNG
+        # mount -> 404 envelope D6 qua Starlette HTTPException handler (Plan
+        # 02-03 Rule 2 fix carry forward).
+        # ──────────────────────────────────────────────────────────────────
+        from app.auth.jwks import publish_jwks
+
+        @app.get(
+            "/.well-known/jwks.json",
+            tags=["jwks"],
+            summary="JWK Set RFC 7517 — public key RS256 verify JWT",
+        )
+        async def jwks_endpoint() -> StarletteJSONResponse:
+            """Trả JWK Set cho hub con/frontend/MCP verify JWT RS256.
+
+            Plan 03-01 / SSO-01 / D-V3-Phase3-A. Public endpoint — KHÔNG auth.
+            Cache 1h (matching hub con TTL Plan 03-02). Key rotation: `make keys`
+            overwrite -> kid đổi tự nhiên qua _derive_kid SHA-256 PEM.
+            """
+            try:
+                jwks = publish_jwks(settings.jwt_public_key_path)
+            except (OSError, ValueError) as e:
+                logger.error(
+                    "jwks_publish_failed: path=%s error=%s",
+                    settings.jwt_public_key_path,
+                    e,
+                )
+                return StarletteJSONResponse(
+                    status_code=503,
+                    content={
+                        "success": False,
+                        "data": None,
+                        "error": {
+                            "code": "JWKS_UNAVAILABLE",
+                            "message": (
+                                "Không đọc được JWT public key. "
+                                "Chạy 'make keys' để sinh lại."
+                            ),
+                        },
+                        "meta": None,
+                    },
+                )
+            return StarletteJSONResponse(
+                content=jwks,
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
     else:
         logger.info(
             "central_only_routers_skipped: hub_name=%s — 9 routers stripped "
