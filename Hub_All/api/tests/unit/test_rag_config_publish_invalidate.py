@@ -19,7 +19,6 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi.responses import JSONResponse
 
 from app.routers.rag_config import update_rag_config

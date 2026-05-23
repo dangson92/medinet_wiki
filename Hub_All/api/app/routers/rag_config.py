@@ -18,11 +18,13 @@ DEVIATION /test: Go trả 200 cho mọi case (kể cả key sai) — frontend ch
 """
 from __future__ import annotations
 
+import json
 import logging
+import time
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,16 +49,42 @@ async def get_rag_config(
 
 @router.put("", response_model=None)
 async def update_rag_config(
+    request: Request,
     req: UpdateRagConfigRequest,
     user: User = Depends(require_role("admin")),  # noqa: B008
     db: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> JSONResponse | dict[str, Any]:
-    """PUT /api/rag-config — update + hot-swap provider/key, admin-only."""
+    """PUT /api/rag-config — update + hot-swap provider/key, admin-only.
+
+    Phase 6 Plan 06-03 SETTINGS-02 (D-V3-Phase6-C): publish best-effort
+    fail-open sau service.update_config() success. Channel "settings:invalidate"
+    1 channel duy nhất với payload JSON {config_key:"rag_config", hub:"*",
+    timestamp:<unix>}. Redis None / down → log warning KHÔNG block PUT (TTL
+    natural fallback E-V3-4 < 30s threshold + best-effort fail-open pattern
+    carry forward search_cache.py M2).
+    """
     result = await RagConfigService(db=db).update_config(
         req=req, updated_by=user.id
     )
     if isinstance(result, str):
         return JSONResponse(status_code=400, content={"error": result})
+
+    # Phase 6 Plan 06-03 SETTINGS-02 — publish best-effort fail-open
+    redis = getattr(request.app.state, "redis", None)
+    if redis is not None:
+        try:
+            payload = json.dumps({
+                "config_key": "rag_config",
+                "hub": "*",  # broadcast all hub con
+                "timestamp": int(time.time()),
+            })
+            await redis.publish("settings:invalidate", payload)
+            logger.info(
+                "settings_invalidate_published: config_key=rag_config hub=*"
+            )
+        except Exception as e:  # noqa: BLE001 — best-effort fail-open
+            logger.warning("settings_invalidate_publish_failed: %s", e)
+
     return result
 
 

@@ -17,17 +17,22 @@ Contract verb/path lấy từ `frontend/src/services/api.ts` (D-07).
 from __future__ import annotations
 
 import logging
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import require_role
+from app.auth.dependencies import require_internal_auth, require_role
 from app.db.session import get_session
 from app.models.auth import User
 from app.pkg import response as resp
-from app.schemas.api_keys import CreateApiKeyRequest, UpdateApiKeyRequest
+from app.schemas.api_keys import (
+    CreateApiKeyRequest,
+    UpdateApiKeyRequest,
+    VerifyApiKeyRequest,
+)
 from app.services.api_key_service import ApiKeyService
 
 logger = logging.getLogger(__name__)
@@ -152,3 +157,36 @@ async def revoke_api_key(
             message=f"API key {key_id} không tồn tại", code="NOT_FOUND"
         )
     return resp.ok(data={"message": "API key đã thu hồi"})
+
+
+@router.post("/verify", response_model=None)
+async def verify_api_key(
+    req: VerifyApiKeyRequest,
+    _internal: None = Depends(require_internal_auth),  # noqa: B008
+    service: ApiKeyService = Depends(get_api_key_service),  # noqa: B008
+) -> dict[str, Any]:
+    """POST /api/api-keys/verify — Internal proxy cho hub con verify X-API-Key.
+
+    Phase 6 Plan 06-03 SETTINGS-03 (D-V3-Phase6-D). Endpoint MỚI central-only
+    mount (FACTOR-02 carry forward — api_keys_router central-only ở main.py).
+
+    Body: `{"api_key": "mdk_..."}` (Pydantic VerifyApiKeyRequest min_length=1).
+    Header: `X-Internal-Auth: <settings_proxy_secret>` (require_internal_auth dep).
+    Response: `{valid: bool, principal: dict | null}` raw dict (KHÔNG envelope
+    — hub con ApiKeyVerifyClient parse raw, pattern song song /api/rag-config
+    M2 raw dict).
+
+    Central giữ AES-GCM at-rest M2 AUX-02 (KHÔNG đụng verify_key private logic).
+
+    Threat model:
+    - T-06-03-03 Information Disclosure plaintext api_key body — accept M2 baseline
+      + intra-network medinet_net Docker isolation (mTLS defer v4.0).
+    - T-06-03-05 Spoofing endpoint expose public internet — FACTOR-02 central-only
+      mount + require_internal_auth dep enforce.
+    - T-06-03-07 Repudiation verify audit log — accept Phase 6 (high-frequency log
+      volume defer Phase 7); Prometheus APIKEY_VERIFY_TOTAL counter Plan 06-01 đủ debug.
+    """
+    principal = await service.verify_key(req.api_key)
+    if principal is None:
+        return {"valid": False, "principal": None}
+    return {"valid": True, "principal": principal}

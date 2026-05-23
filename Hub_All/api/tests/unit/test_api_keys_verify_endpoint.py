@@ -29,7 +29,6 @@ from app.auth.dependencies import require_internal_auth
 from app.routers.api_keys import get_api_key_service, verify_api_key
 from app.schemas.api_keys import VerifyApiKeyRequest
 
-
 SECRET = "x" * 32
 
 

@@ -75,3 +75,15 @@ class ApiKeyWithPlaintext(ApiKeyResponse):
     """
 
     plain_key: str
+
+
+class VerifyApiKeyRequest(BaseModel):
+    """POST /api/api-keys/verify body — Phase 6 Plan 06-03 (D-V3-Phase6-D).
+
+    Internal proxy endpoint dùng cho hub con call central verify X-API-Key
+    qua ApiKeyVerifyClient (Plan 06-02). Body chứa plaintext api_key — bảo
+    vệ qua header X-Internal-Auth shared secret + intra-network medinet_net
+    Docker isolation (T-06-03-03 accepted defer v4.0 mTLS).
+    """
+
+    api_key: str = Field(..., min_length=1, max_length=256)
