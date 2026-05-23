@@ -192,7 +192,14 @@ smoke_one_hub() {
     fi
     local LATENCY_MS
     LATENCY_MS=$(echo "$CROSS_RESP" | jq -r '.meta.latency_ms // 9999')
-    if [ "$LATENCY_MS" -gt 1500 ] 2>/dev/null; then
+    # WR-01 strict integer validation — `[ -gt ]` raise error nếu LATENCY_MS không
+    # phải integer (vd "unknown" string / float 123.45) + `2>/dev/null` nuốt error
+    # → branch skip FAIL check → Step 5 PASS silent dù envelope malformed.
+    if ! [[ "$LATENCY_MS" =~ ^[0-9]+$ ]]; then
+        echo "  [smoke-e2e] FAIL cross-hub: latency '$LATENCY_MS' KHÔNG phải integer (envelope meta.latency_ms malformed)"
+        return 1
+    fi
+    if [ "$LATENCY_MS" -gt 1500 ]; then
         echo "  [smoke-e2e] FAIL cross-hub: latency ${LATENCY_MS}ms > 1500 (E-V3-2)"
         return 1
     fi
