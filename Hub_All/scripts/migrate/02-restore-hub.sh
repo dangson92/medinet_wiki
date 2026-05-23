@@ -186,15 +186,25 @@ fi
 
 echo "[restore-hub] (3/4) psql -f restore $(basename "$SNAPSHOT_FILE") → $TARGET_DB..."
 
+# WR-05 fix — KHÔNG dùng \`psql ... 2>&1 | tail -20\` trong \`if !\` (mask exit
+# code khi pipefail slip in / tail luôn return 0). Capture full output ra log
+# file riêng — print tail -20 trên FAIL branch để operator debug.
+RESTORE_LOG="$REPO_ROOT/migrate-snapshots/.restore-${HUB}-$(date +%Y%m%d-%H%M%S).log"
+
 if ! psql -v ON_ERROR_STOP=1 \
     -h "$PGHOST" -p "$PGPORT" -U "$PGUSER_EFFECTIVE" \
     -d "$TARGET_DB" \
-    -f "$SNAPSHOT_FILE" 2>&1 | tail -20; then
+    -f "$SNAPSHOT_FILE" > "$RESTORE_LOG" 2>&1; then
     echo "[restore-hub] ERROR: psql restore FAIL cho hub '$HUB'."
+    echo "  Last 20 lines log:"
+    tail -20 "$RESTORE_LOG" | sed 's/^/    /'
+    echo "  Full log: $RESTORE_LOG"
     echo "  Snapshot file giữ lại debug: $SNAPSHOT_FILE"
     echo "  Retry sau khi fix schema mismatch: bash $0 $HUB"
     exit 4
 fi
+
+echo "[restore-hub] (3/4) psql restore OK — log: $RESTORE_LOG"
 
 # ──────────────────────────────────────────────────────────────────────
 # (4/4) Post-restore row count sanity check
