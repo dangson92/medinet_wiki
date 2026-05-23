@@ -698,11 +698,142 @@ Chi tiết implementation:
 
 ---
 
-## Milestone status
+## Migration + Smoke E2E Runbook (Phase 7 v3.0)
 
-- ✅ **M2 v2.0 — Full RAG Rewrite** đã đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS, ship 2026-05-21).
-- 🔄 **v3.0 Multi-Hub Split mid-flight 2026-05-23:** Phase 1+2+3+4+5+6 DONE (33/~37 plan ≈ 89%, 25/29 REQ-ID closed); v3.0-a EXIT GATE TRIGGERED (Phase 3 close); v3.0-b 3/4 phase complete (Phase 4+5+6 DONE). Còn Phase 7 MIGRATE-01..05 (pg_dump per hub_id + blue/green restore + MCP re-point + smoke E2E full v3.0).
+Phase 7 ship 5 bash script migration + 1 runbook MCP + 1 fixture DOCX + automated smoke 3 hub × 7-step golden path. **🎉 v3.0 milestone CLOSED 2026-05-23 — 38/38 plan**.
+
+### Per D-V3-Phase7-B blue/green per-hub procedure
+
+```bash
+# 1. Pre-deploy verify
+docker compose ps  # central + 3 hub + Redis + Postgres + Caddy + mcp_service all running
+cd Hub_All/mcp_service && uv run pytest -q  # 143/135 mcp_service regression PASS (Phase 8.3 v2.0 baseline + Plan 10-04 CORS split 8)
+
+# 2. Snapshot 3 hub
+bash scripts/migrate/01-snapshot-hubs.sh
+# Output: migrate-snapshots/migrate-{yte,duoc,hcns}-2026-05-23.sql
+
+# 3. Restore + verify Caddy auto-route per hub (loop)
+for HUB in yte duoc hcns; do
+    bash scripts/migrate/02-restore-hub.sh "$HUB"
+    bash scripts/migrate/03-switch-caddy.sh "$HUB"
+    bash scripts/migrate/05-smoke-e2e.sh "$HUB"
+    # Nếu smoke FAIL → bash scripts/migrate/03-switch-caddy.sh "$HUB" --rollback
+done
+
+# 4. Truncate central skeleton (dry-run TRƯỚC, --apply sau verify)
+bash scripts/migrate/04-truncate-central.sh             # dry-run default
+bash scripts/migrate/04-truncate-central.sh --apply     # confirm prompt
+bash scripts/migrate/04-truncate-central.sh --apply --yes  # auto-confirm CI
+
+# 5. MCP smoke (manual runbook)
+cat Hub_All/scripts/migrate/06-mcp-smoke.md  # 5-step Inspector OAuth checklist
+
+# 6. Full automated smoke 3 hub
+bash scripts/migrate/05-smoke-e2e.sh  # exit 0 = PASS, 1 = FAIL
+
+# 7. Manual visual smoke (advisory KHÔNG blocking per D-V3-Phase7-D)
+# - Browser tới wiki.medinet.vn/<hub>/ — verify per-hub branding (logo + theme color + title VN)
+# - Per-hub login state machine A/B/C/D
+# - 11 trang React M2 COMPAT-01 (UI-SPEC §7 — 44 checkpoint)
+# - Hub isolation: copy doc_id từ duoc → paste vào yte URL → expect 403 CROSS_HUB_ACCESS_DENIED
+```
+
+### Rollback procedure per-hub
+
+```bash
+# Stop hub container — Caddy regex fall-through file_server 404 user-visible
+bash scripts/migrate/03-switch-caddy.sh yte --rollback
+
+# Drop + re-create từ snapshot
+psql -U medinet -d postgres -c "DROP DATABASE medinet_hub_yte;"
+bash api/scripts/hub-init.sh yte
+bash scripts/migrate/02-restore-hub.sh yte
+
+# Re-start container + smoke
+docker compose start python-api-yte
+bash scripts/migrate/05-smoke-e2e.sh yte
+```
+
+### 30-day retention policy
+
+```bash
+# Liệt kê + cleanup snapshot > 30 ngày
+find migrate-snapshots/ -name "*.sql" -mtime +30 -print
+find migrate-snapshots/ -name "*.sql" -mtime +30 -delete
+```
+
+Cron daily 4AM tự cleanup (optional):
+```cron
+0 4 * * * find /path/to/Hub_All/migrate-snapshots/ -name "*.sql" -mtime +30 -delete
+```
+
+### MCP env wire (D-V3-Phase7-C MIGRATE-04)
+
+```bash
+docker compose exec mcp_service env | grep MCP_API_BASE_URL
+# Expected: MCP_API_BASE_URL=http://python-api-central:8080 (CONFIRMED Phase 7)
+```
+
+### Audit trail
+
+```bash
+# Verify migrate.truncate_hub audit rows
+psql -d medinet_central -c "SELECT action, target_id, payload FROM audit_logs WHERE action='migrate.truncate_hub' ORDER BY created_at DESC LIMIT 10;"
+```
+
+### Smoke E2E test fixture (Phase 7 Plan 07-05)
+
+```bash
+# Regenerate fixture nếu cần (1 lần — đã commit binary):
+cd Hub_All/scripts/migrate/fixtures
+pip install python-docx
+python generate-sample.py
+# Output: sample-document.docx (~37KB Vietnamese y tế domain — vaccin + dược keyword)
+```
+
+### Smoke E2E env vars
+
+```bash
+# Mặc định smoke chạy với credential dev (env override cho production):
+BASE=https://wiki.medinet.vn \
+TEST_USER=admin@medinet.vn \
+TEST_PASS='<secure>' \
+PROMETHEUS_BASE=http://localhost:8180 \
+bash scripts/migrate/05-smoke-e2e.sh
+```
+
+### Prometheus assertion thresholds
+
+| Metric | Threshold | Source |
+|--------|-----------|--------|
+| `cross_hub_search_latency_seconds` p95 | < 1.5s | E-V3-2 |
+| `sync_lag_seconds{hub_name}` | < 30s | E-V3-4 |
+| `apikey_verify_total{result=cached}` | > 0 | Phase 6 SETTINGS-03 |
+| `sync_count_drift{hub_name}` | < 0.01 (1%) | R-V3-1 |
+| `sync_hash_drift{hub_name, drift_type=mismatch}` rate | < 0.001/s post-quiesce | R-V3-1 |
+
+### 🎉 v3.0 milestone CLOSED 2026-05-23
+
+38/38 plan ship · 30/30 REQ-ID consumed (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5) · 7/7 phase complete. v3.0-a (Phase 1-3) + v3.0-b (Phase 4-7) anti-pivot pattern hoàn tất. Next: `/gsd-complete-milestone v3.0` separate command — archive `.planning/milestones/v3.0-archive/` + reset ROADMAP.md cho v4.0 backlog.
+
+### Phase 7 Architecture Reference
+
+Chi tiết implementation:
+- `Hub_All/CLAUDE.md` §6 "Phase 7 Migration + Smoke E2E pattern" — 5 architecture insight + STRIDE T-07-01..05 + backward compat M2/v2.0 + R-V3-4 mitigation chain + v3.0 milestone CLOSED banner.
+- `.planning/phases/07-migration-smoke-e2e/07-CONTEXT.md` — 4 D-V3-Phase7-A..D LOCKED 2026-05-23.
+- `.planning/phases/07-migration-smoke-e2e/07-PATTERNS.md` — Pattern map 14 file analog 100%.
+- `.planning/phases/07-migration-smoke-e2e/07-{01..05}-PLAN.md` — 5 plan implementation chi tiết.
+- `.planning/phases/07-migration-smoke-e2e/07-{01..05}-SUMMARY.md` — deliverable + commit + test count per plan.
+- `.planning/REQUIREMENTS.md` § MIGRATE-01..05 — REQ-ID spec + Phase 7 closeout NOTE.
 
 ---
 
-*README cập nhật: 2026-05-23 (Plan 06-05 — Phase 6 System Settings Sync closeout: 5 plan ship SETTINGS-01..04 + 4 D-V3-Phase6 LOCKED + 6 Prometheus metric mới + System Settings Sync Deploy Notes section thêm). Trước đó: 2026-05-23 Plan 05-06 (Reverse Proxy Subpath Deploy Notes); 2026-05-22 Plan 04-07 (Cross-hub Sync Deploy Notes); 2026-05-22 Plan 03-05 (SSO Backward Incompat); 2026-05-21 Plan 10-05 (HARD-04 docs closeout M2).*
+## Milestone status
+
+- ✅ **M2 v2.0 — Full RAG Rewrite** đã đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS, ship 2026-05-21).
+- ✅ **v3.0 Multi-Hub Split SHIPPED 🎉 2026-05-23:** All 7/7 phases complete (38/38 plan · 30/30 REQ-ID consumed); v3.0-a EXIT GATE TRIGGERED (Phase 3 close); v3.0-b 4/4 phase complete (Phase 4+5+6+7 DONE). 🎉 v3.0 MILESTONE CLOSED 2026-05-23. Next: `/gsd-complete-milestone v3.0` archive milestone + reset ROADMAP cho v4.0 backlog (sub-hub split + HA Redis cluster + OCR Vietnamese + streaming /api/ask + comprehensive coverage >80%).
+
+---
+
+*README cập nhật: 2026-05-23 (Plan 07-05 — Phase 7 Migration + Smoke E2E closeout: 5 plan ship MIGRATE-01..05 + 4 D-V3-Phase7-A/B/C/D LOCKED + 5 bash script scripts/migrate/ ~1091 LOC + 1 runbook + 1 fixture DOCX 37KB python-docx reproducible + automated 3 hub × 7-step golden path + Prometheus assertion + Migration + Smoke E2E Runbook section thêm + 🎉 v3.0 MILESTONE CLOSED 38/38 plan). Trước đó: 2026-05-23 Plan 06-05 (System Settings Sync Deploy Notes); 2026-05-23 Plan 05-06 (Reverse Proxy Subpath Deploy Notes); 2026-05-22 Plan 04-07 (Cross-hub Sync Deploy Notes); 2026-05-22 Plan 03-05 (SSO Backward Incompat); 2026-05-21 Plan 10-05 (HARD-04 docs closeout M2).*
