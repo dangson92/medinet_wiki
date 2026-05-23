@@ -10,11 +10,19 @@ Module roadmap:
 - Wave 4 ship (Plan 06-04): lifespan integration (3 client init + subscriber task spawn).
 - Wave 5 ship (Plan 06-05): closeout docs + smoke checkpoint.
 
-Public API re-export (Wave 1 scope — keys constants + helper + 6 metrics).
-Wave 2+ extend này.
+Public API re-export:
+- Wave 1 scope (Plan 06-01): keys constants + helper + 6 metrics.
+- Wave 2 scope (Plan 06-02): client.py 3 HTTP client + SettingsUnavailableError.
+  Subscriber + InvalidateMessage thêm ở Task 2 cùng plan.
 """
 from __future__ import annotations
 
+from app.settings_sync.client import (
+    ApiKeyVerifyClient,
+    HubRegistryClient,
+    RagConfigClient,
+    SettingsUnavailableError,
+)
 from app.settings_sync.keys import (
     APIKEY_VERIFY_KEY_PREFIX,
     HUB_REGISTRY_KEY,
@@ -34,13 +42,17 @@ from app.settings_sync.metrics import (
 __all__ = [
     "APIKEY_VERIFY_KEY_PREFIX",
     "APIKEY_VERIFY_TOTAL",
+    "ApiKeyVerifyClient",
     "HUB_REGISTRY_KEY",
+    "HubRegistryClient",
     "RAG_CONFIG_KEY_PREFIX",
+    "RagConfigClient",
     "SETTINGS_CACHE_HIT_TOTAL",
     "SETTINGS_CACHE_MISS_TOTAL",
     "SETTINGS_INVALIDATE_CHANNEL",
     "SETTINGS_INVALIDATE_RECEIVED_TOTAL",
     "SETTINGS_PULL_LATENCY_SECONDS",
     "SETTINGS_STALE_SECONDS",
+    "SettingsUnavailableError",
     "make_apikey_cache_key",
 ]
