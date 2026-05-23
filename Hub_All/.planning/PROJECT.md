@@ -1,8 +1,8 @@
 # Medinet Wiki — Hub_All
 
 **Mã dự án:** MEDWIKI
-**Giai đoạn:** **v3.0 Multi-Hub Split SHIPPED ✅ 2026-05-23** — milestone closed, archive `.planning/milestones/v3.0-multi-hub-split/`
-**Current Milestone:** **(none — between milestones)** — Next: `/gsd-new-milestone v3.1` RBAC hub_admin (user request 2026-05-23)
+**Giai đoạn:** **v3.1 RBAC hub_admin STARTED** 2026-05-23 — defining requirements + roadmap
+**Current Milestone:** **v3.1 — RBAC hub_admin** (started 2026-05-23, phase numbering reset về 1, granularity small ~4 phase)
 **Shipped:**
 - **v2.0 — Full RAG Rewrite** ✅ 2026-05-21 (13 phase / ~75 plan / 38 REQ-ID — archive `.planning/milestones/v2.0-full-rag-rewrite/`)
 - **v3.0 — Multi-Hub Split** ✅ 2026-05-23 (7 phase / 38 plan / 30 REQ-ID — archive `.planning/milestones/v3.0-multi-hub-split/`)
@@ -25,14 +25,32 @@ Medinet Wiki là hệ thống quản lý tri thức nội bộ đa-Hub (3 Hub: y
 
 Core value không đổi qua các milestone — chỉ cách triển khai thay đổi (Go-native → Docling sidecar → CocoIndex + FastAPI). Khi RAG chất lượng ổn định, các milestone sau (Multi-subdomain SPA, MCP Server, AI Post) mới có giá trị thực tế.
 
-## Current State (post v3.0 shipped 2026-05-23)
+## Current Milestone: v3.1 RBAC hub_admin
 
-**Status:** v3.0 Multi-Hub Split shipped ✅ 2026-05-23 — 7 phase, 38 plan, 30 REQ-ID closed. Stack production-ready cho deploy multi-hub physical (1 Postgres instance + N+1 logical DB + N+1 FastAPI process + Caddy reverse proxy subpath).
+**Goal:** Đóng gap thiết kế role-per-hub được defer v4.0 trong M2 — thêm role `hub_admin` để user "quản lý hub" CHỈ vào và quản lý 1 hub được gán, KHÔNG bypass hub isolation (đối lập với role `admin` hiện tại = super-admin toàn hệ thống). Backend enforce hub_id ∈ JWT.hub_ids + frontend tách rõ "Admin toàn hệ thống" vs "Quản lý hub này".
 
-**Gap phát hiện sau v3.0 close (2026-05-23):**
-- **RBAC role-per-hub** (v3.1 NEXT) — `users.role` GLOBAL super-admin bypass hub isolation; user assign hub `dmd` vẫn vào được central. User yêu cầu proper fix thêm role `hub_admin`. Phase đề xuất ~4 phase.
+**Target features (4 phase, ~15 REQ-ID đề xuất, reset numbering về 1):**
+
+- **Phase 1 — DB schema migration (ROLE):** Mở rộng CHECK constraint `role_enum` thêm `hub_admin`; thêm column `user_hubs.role` per-hub (carry forward schema v4.0 sẵn); migration script seed existing admins giữ super-admin global.
+- **Phase 2 — Backend RBAC enforcement (DEP):** Dependency `require_hub_admin_for(hub_id)` verify hub_id ∈ JWT.hub_ids; refactor `GET /api/hubs` filter cả admin theo user_hubs (super admin exempt); CRUD endpoint users filter theo hub scope; audit log tag actor.scope.
+- **Phase 3 — Frontend form refactor (FE):** UserManagement form tách "Admin toàn hệ thống" vs "Quản lý hub này"; hub switcher hide central nếu non-super-admin; edit warning gán super_admin.
+- **Phase 4 — Migration + smoke E2E (MIGRATE):** Migration script idempotent; smoke 4 scenario (super_admin / hub_admin dmd / hub_admin tdt / viewer); audit trail verify; closeout docs.
+
+**Key context (LOCKED 2026-05-23):**
+
+- **D-V3.1-01:** GIỮ tên enum `admin` = super-admin toàn hệ thống (KHÔNG rename `super_admin` để tránh break v3.0 JWT/user_hubs/audit chain). Thêm `hub_admin` mới + frontend label phân biệt rõ ràng.
+- **D-V3.1-02:** `user_hubs` thêm column `role` per-hub (defer v4.0 carry forward) — `users.role` giữ làm global default; nếu `user_hubs.role` non-null thì override per-hub.
+- **D-V3.1-03:** Carry forward v3.0 SSO Layer 3 — JWT `hub_ids` claim đủ check membership; thêm dependency mới verify role trong hub đó.
+- **D-V3.1-04:** Reset phase numbering về 1 (precedent D9 v2.0 + D-V3-05 v3.0).
+
+**Open question (chốt ở `/gsd-discuss-phase`):**
+- **GA-V3.1-A** (Phase 1): Migration backward compat — existing `users.role='admin'` map về `super_admin` (semantic) hay giữ nguyên + thêm flag `is_super_admin`? Trade-off: rename DB-wide vs flag column.
+- **GA-V3.1-B** (Phase 2): Endpoint filter cho hub_admin xem `/api/hubs` — chỉ trả hub được gán (giống non-admin path hiện tại) vs trả tất cả + UI hide central?
+- **GA-V3.1-C** (Phase 4): Migration idempotent strategy — re-run safety (CHECK constraint ADD nếu chưa có) + rollback procedure.
 
 ## Previous Milestone: v3.0 Multi-Hub Split (SHIPPED 2026-05-23)
+
+## Previous Milestone: v3.0 Multi-Hub Split (SHIPPED 2026-05-23) — Carry-over context
 
 **Goal (shipped):** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL (1 DB `medinet_central` + `WHERE hub_id`) sang **multi-tenancy PHYSICAL** — mỗi hub con có **process + Postgres database riêng cùng 1 instance**, hub tổng đóng vai trò aggregator nhận chunks + vector từ hub con (sync 1 chiều) để search cross-hub tập trung. URL subpath `wiki.domain.com/<ten_hub>`.
 
