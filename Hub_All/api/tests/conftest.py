@@ -29,6 +29,13 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("APP_ENV", "dev")
+    # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D) — Validator
+    # `_enforce_settings_proxy_secret` enforce length >= 32 char BOTH central
+    # + hub con. Default test value 32 char dummy ("x" * 32) — cho phép mọi
+    # unit test Phase 1..5 instantiate Settings KHÔNG break. Test riêng
+    # `test_config_settings_proxy_secret.py` override env per scenario qua
+    # `monkeypatch.setenv("SETTINGS_PROXY_SECRET", ...)` HOẶC `monkeypatch.delenv`.
+    monkeypatch.setenv("SETTINGS_PROXY_SECRET", "x" * 32)
 
     # Reset lru_cache để mỗi test thấy env vars vừa set (không stale từ test trước).
     from app.config import get_settings
