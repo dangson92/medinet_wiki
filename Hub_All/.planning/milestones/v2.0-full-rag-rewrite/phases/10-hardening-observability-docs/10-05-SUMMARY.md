@@ -54,6 +54,8 @@ metrics:
 
 # Phase 10 Plan 05: README + DEPLOY + .env.example + CLAUDE.md M2 closeout + v3.0 transition — Summary
 
+> ⚠️ **Note 2026-05-23 (superseded):** Decision D-10-05-E (issuer URL default `https://mcp.medinet.vn/mcp`) đã bị superseded — MCP gộp về `wiki.medinet.vn/mcp` path-prefix mode. Xem `.planning/quick/2026-05-23-mcp-subdomain-consolidate/`.
+
 **2 commit atomic ship HARD-04 docs đầy đủ M2 production-ready + ghi nhận M2 closeout + transition tới v3.0 Multi-Hub Split. README.md mới (140 dòng) + DEPLOY.md mới (314 dòng — 7 section) + api/.env.example mở rộng 4 key thiếu + mcp_service/.env.example bổ sung Plan 10-04 CRIT-01 origins + CLAUDE.md section 6 M2 closeout với 4 D-V3 LOCKED + 4 GA-V3 open question + CONVENTIONS.md section 5 ghi nhận HARD-01 ship details. 4 verify script automated PASS (file tồn tại + DEPLOY content + .env.example required keys + no secret thật commit).**
 
 ## Tasks Completed

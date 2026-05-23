@@ -158,7 +158,12 @@ uv run uvicorn mcp_app.server:build_asgi_app --factory --host 0.0.0.0 --port 819
 
 Mặc định dùng **Caddy** auto-TLS (Let's Encrypt) — service `caddy` trong
 `docker-compose.yml`, cấu hình `Hub_All/Caddyfile`. Caddy tự xin + gia hạn cert,
-cần port 80 + 443 mở ra Internet. Domain truyền qua biến `MCP_PUBLIC_DOMAIN`.
+cần port 80 + 443 mở ra Internet. Domain truyền qua biến `WIKI_PUBLIC_DOMAIN`.
+
+> 2026-05-23: MCP service gộp về `wiki.medinet.vn/mcp` (path-prefix mode qua
+> `MCP_PATH_PREFIX=mcp`). Bỏ subdomain riêng `mcp.medinet.vn` — Caddy serve
+> `/mcp/*` + `/.well-known/oauth-*` cùng domain với wiki. Xem
+> `.planning/quick/2026-05-23-mcp-subdomain-consolidate/PLAN.md`.
 
 **Fallback Cloudflare Tunnel** — nếu không mở được port 80/443: thay service
 `caddy` bằng `cloudflared` (tunnel zero-port, tự cấp HTTPS). Đổi reverse proxy chỉ

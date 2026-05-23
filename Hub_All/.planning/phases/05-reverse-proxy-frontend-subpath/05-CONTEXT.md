@@ -10,6 +10,8 @@ status: Ready for planning
 
 # Phase 5: Reverse Proxy + Frontend Subpath — Context
 
+> ⚠️ **Note 2026-05-23:** Reference `mcp.medinet.vn` subdomain trong file này là **lịch sử**. Đã gộp về `wiki.medinet.vn/mcp` path-prefix mode (xem `.planning/quick/2026-05-23-mcp-subdomain-consolidate/`).
+
 **Gathered:** 2026-05-22
 **Status:** Ready for planning
 **Source:** `/gsd-discuss-phase 5 --chain` — interactive discussion 4 gray area do user chọn (A Caddy layout + dynamic hub, B Frontend prefix detect 1 build, C Login flow hub con → central, D Per-hub branding architecture). 16 sub-question đều LOCKED theo Recommended option. Phase 5 mở v3.0-b sau Phase 4 DONE 2026-05-22, parallel-able với Phase 6 SETTINGS (cùng depend Phase 3).

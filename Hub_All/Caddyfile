@@ -1,28 +1,18 @@
-# Caddyfile — MCP Service public HTTPS (Phase 8.3).
+# Caddyfile — Medinet Wiki + MCP unified routing (Phase 5 + Quick task 2026-05-23)
 #
-# Caddy đóng vai reverse proxy terminate TLS cho MCP Service. Caddy tự xin +
-# gia hạn cert Let's Encrypt (auto-TLS) — cần port 80 + 443 mở ra Internet.
+# 2026-05-23: MCP service gộp về `wiki.medinet.vn/mcp` (path-prefix mode).
+# Bỏ subdomain riêng `mcp.medinet.vn` — chỉ cần 1 DNS A record cho cả stack.
 #
-# Domain truyền qua biến môi trường MCP_PUBLIC_DOMAIN (đọc từ .env của compose):
-#   - Prod: MCP_PUBLIC_DOMAIN=mcp.medinet.vn  → Caddy xin cert ACME thật.
-#   - Dev local không cert thật: dùng MCP_PUBLIC_DOMAIN=localhost (Caddy cấp cert
-#     nội bộ tự ký) hoặc MCP_PUBLIC_DOMAIN=:80 (HTTP thuần, chỉ để thử nội bộ).
+# Caddy reverse proxy + auto-TLS Let's Encrypt — cần port 80 + 443 + DNS trỏ
+# về IP host. Domain truyền qua env `WIKI_PUBLIC_DOMAIN` (đọc từ .env compose):
+#   - Prod: WIKI_PUBLIC_DOMAIN=wiki.medinet.vn → ACME Let's Encrypt thật
+#   - Dev local: WIKI_PUBLIC_DOMAIN=localhost  → Caddy self-signed nội bộ
 #
-# Đổi reverse proxy (Caddy <-> Cloudflare Tunnel) chỉ cần đổi service compose +
-# biến MCP_OAUTH_ISSUER_URL — KHÔNG đụng code mcp_app.
-
-{$MCP_PUBLIC_DOMAIN} {
-	# Forward NGUYÊN host + path tới MCP Service — KHÔNG strip prefix.
-	# Route OAuth discovery /.well-known/... phải ở root domain (Pitfall 7);
-	# SDK mcp đã mount sẵn well-known ở root của ASGI app. KHÔNG dùng
-	# handle_path / uri strip_prefix — sẽ làm discovery 404.
-	reverse_proxy medinet-mcp:8190
-}
-
-# ─── Wiki block (NEW Phase 5 — v3.0-05) ──────────────────────────────────────
-# Caddy auto-TLS:
-#   - WIKI_PUBLIC_DOMAIN=localhost → self-signed cert (Caddy nội bộ)
-#   - WIKI_PUBLIC_DOMAIN=wiki.medinet.vn → ACME Let's Encrypt
+# MCP service self-mount dưới `/mcp` khi `MCP_PATH_PREFIX=mcp` (Phase 8.3 +
+# Quick 2026-05-23 consolidation). Caddy KHÔNG strip prefix — SDK mcp tự xử
+# lý `/mcp/*` Streamable HTTP transport + `/.well-known/oauth-*/mcp` suffix
+# theo RFC 8414/9728 (Pitfall 7 carry forward Phase 8.3).
+#
 # Source: caddyserver.com/docs/caddyfile/* (path_regexp + handle_path + uri strip_prefix + try_files)
 # Reference: .planning/phases/05-reverse-proxy-frontend-subpath/05-RESEARCH.md Pattern 1
 {$WIKI_PUBLIC_DOMAIN:localhost} {
@@ -61,15 +51,43 @@
 		}
 	}
 
-	# ─── Match 3: .well-known (Phase 3 JWKS central) ────────────────────────
+	# ─── Match 3: MCP OAuth metadata (NEW 2026-05-23 — RFC 8414/9728 + OIDC) ─
+	# Caddy auto-sort handle by path specificity — prefix dài
+	# `/.well-known/oauth-authorization-server*` (40+ char) thắng catch-all
+	# `/.well-known/*` JWKS Match 4 bên dưới (14 char). KHÔNG strip prefix —
+	# SDK mcp serve metadata với suffix `/mcp` theo issuer path (Pitfall 7).
+	handle /.well-known/oauth-authorization-server* {
+		reverse_proxy medinet-mcp:8190
+	}
+	handle /.well-known/oauth-protected-resource* {
+		reverse_proxy medinet-mcp:8190
+	}
+	handle /.well-known/openid-configuration* {
+		reverse_proxy medinet-mcp:8190
+	}
+
+	# ─── Match 4: .well-known catch-all (Phase 3 JWKS central) ──────────────
 	# /.well-known/jwks.json mount ở root central (KHÔNG /api/...) — explicit
 	# handle TRƯỚC static SPA catch-all, otherwise file_server lookup 404
-	# → JWKSCache fetch fail boot (Edge case Phase 3 Plan 03-01)
+	# → JWKSCache fetch fail boot (Edge case Phase 3 Plan 03-01).
+	# Match 3 trên thắng cho oauth-*; mọi `/.well-known/*` khác → central.
 	handle /.well-known/* {
 		reverse_proxy http://python-api-central:8080
 	}
 
-	# ─── Match 4: static SPA (catch-all fallback) ───────────────────────────
+	# ─── Match 5: MCP path-prefix mount (NEW 2026-05-23 — consolidate) ──────
+	# `MCP_PATH_PREFIX=mcp` ở mcp_service → SDK self-mount /mcp + Streamable
+	# HTTP transport endpoint. KHÔNG strip prefix — upstream nhận đúng /mcp/...
+	# Match `/mcp` exact + `/mcp/*` children (KHÔNG dùng /mcp* glob để tránh
+	# match nhầm /mcp.html / /mcp-debug etc).
+	handle /mcp {
+		reverse_proxy medinet-mcp:8190
+	}
+	handle /mcp/* {
+		reverse_proxy medinet-mcp:8190
+	}
+
+	# ─── Match 6: static SPA (catch-all fallback) ───────────────────────────
 	# try_files {path} /index.html — SPA fallback cho /yte/dashboard, /login, etc
 	# (Pitfall 2 — thiếu try_files → refresh F5 trên nested route 404 blank page)
 	handle {

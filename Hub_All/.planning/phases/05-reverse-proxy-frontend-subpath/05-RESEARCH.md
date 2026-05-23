@@ -1,5 +1,7 @@
 # Phase 5: Reverse Proxy + Frontend Subpath — Research
 
+> ⚠️ **Note 2026-05-23:** Reference `mcp.medinet.vn` subdomain trong file này là **lịch sử**. Đã gộp về `wiki.medinet.vn/mcp` path-prefix mode (xem `.planning/quick/2026-05-23-mcp-subdomain-consolidate/`).
+
 **Researched:** 2026-05-22
 **Domain:** Reverse proxy (Caddy 2.x) + Frontend prefix detection (Vite 6 + React Router v7) + SSO login chain + per-hub branding architecture
 **Confidence:** HIGH (Caddy + Vite + React Router đều có doc chính thức verify; phần per-hub branding architecture là decision rõ ràng từ CONTEXT.md)

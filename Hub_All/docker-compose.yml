@@ -279,18 +279,19 @@ services:
         condition: service_healthy
     networks: [medinet_net]
 
-  # Reverse proxy auto-TLS — Phase 8.3. Caddy terminate TLS + forward nguyên
-  # host tới mcp_service:8190 (well-known route ở root KHÔNG bị strip).
-  # Operator set MCP_PUBLIC_DOMAIN ở .env gốc compose (vd mcp.medinet.vn).
+  # Reverse proxy auto-TLS — Phase 5 + Quick 2026-05-23 consolidation.
+  # Caddy terminate TLS + forward tới central API + hub API + MCP service
+  # (mcp_service mount path-prefix /mcp; well-known oauth-* route riêng).
+  # Subdomain riêng mcp.medinet.vn ĐÃ BỎ 2026-05-23 — chỉ 1 DNS A record.
   # Fallback nếu không mở được port 80/443: thay service này bằng cloudflared.
   caddy:
     image: caddy:2-alpine
     container_name: medinet-caddy
     restart: unless-stopped
     environment:
-      MCP_PUBLIC_DOMAIN: ${MCP_PUBLIC_DOMAIN:-localhost}
-      # NEW Phase 5 — Wiki reverse proxy env (D-V3-Phase5-A1/A4 LOCKED)
+      # Wiki reverse proxy env (Phase 5 D-V3-Phase5-A1/A4 LOCKED + Quick 2026-05-23)
       # WIKI_PUBLIC_DOMAIN: dev → localhost (self-signed); prod → wiki.medinet.vn (ACME)
+      # MCP service serve qua subpath /mcp + /.well-known/oauth-* trên cùng domain
       WIKI_PUBLIC_DOMAIN: ${WIKI_PUBLIC_DOMAIN:-localhost}
       # HUBS_ALLOWLIST_REGEX: pipe-separated hub names for Caddy path_regexp
       # Auto-derived from HUBS_ALLOWLIST=yte,duoc,hcns (operator runs `make hub-add` to update both)
