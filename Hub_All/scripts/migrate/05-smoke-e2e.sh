@@ -51,13 +51,19 @@ else
     HUBS=("$HUB_ARG")
 fi
 
-# Determine repo root
+# Determine repo root — WR-06 fix sync pattern 3-tier với 01/02/03/04 script
+# (else branch exit 2 với explicit error message thay vì silent fall-through
+# \`$(pwd)\` → fixture lookup line dưới fail với message confusing).
 if [ -f "docker-compose.yml" ]; then
     REPO_ROOT="$(pwd)"
 elif [ -f "Hub_All/docker-compose.yml" ]; then
     REPO_ROOT="$(pwd)/Hub_All"
+elif [ -f "../docker-compose.yml" ]; then
+    REPO_ROOT="$(cd .. && pwd)"
 else
-    REPO_ROOT="$(pwd)"
+    echo "[smoke-e2e] ERROR: KHÔNG tìm thấy docker-compose.yml."
+    echo "  Chạy từ repo root hoặc Hub_All/ directory."
+    exit 2
 fi
 
 FIXTURE="$REPO_ROOT/scripts/migrate/fixtures/sample-document.docx"
