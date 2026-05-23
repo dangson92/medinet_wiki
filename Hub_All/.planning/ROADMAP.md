@@ -258,7 +258,7 @@ Plans:
 **Plans:** 5 plans (5 waves — Wave 1 BLOCKING + Wave 2 + Wave 3 + Wave 4 BLOCKING + Wave 5 closeout)
 
 Plans:
-- [ ] 06-01-PLAN.md — Wave 1 BLOCKING settings_sync/ scaffold + Settings 5 field + docker-compose env wire (SETTINGS-01..04 — D-V3-Phase6-A/B/D)
+- [x] 06-01-PLAN.md — Wave 1 BLOCKING settings_sync/ scaffold + Settings 5 field + docker-compose env wire (SETTINGS-01..04 — D-V3-Phase6-A/B/D) — **DONE 2026-05-23** (25 unit test + 408/408 regression + ruff/mypy clean + docker compose config exit 0; 1 Rule 3 deviation auto-fix test infra)
 - [ ] 06-02-PLAN.md — Wave 2 client (RagConfigClient + HubRegistryClient + ApiKeyVerifyClient) + subscriber + Pydantic schema (SETTINGS-01/02/04 — D-V3-Phase6-A/C)
 - [ ] 06-03-PLAN.md — Wave 3 require_api_key branch + require_internal_auth + update_rag_config publish + /api/api-keys/verify endpoint (SETTINGS-02/03 — D-V3-Phase6-A/C/D)
 - [ ] 06-04-PLAN.md — Wave 4 lifespan integration BLOCKING + ASGI integration test + SETTINGS_SKIP_FETCH escape hatch (SETTINGS-01..04)
@@ -318,7 +318,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **22/~32** | **17/30** | 🔄 **Phase 1+2+3+4 DONE 2026-05-22 (22/~32 ≈ 69%) — v3.0-b mở màn** | — |
+| **v3.0 Multi-Hub Split** | **7** | **29/~33** | **21/29** | 🔄 **Phase 1+2+3+4+5 DONE + Phase 6 Plan 06-01 DONE 2026-05-23 (29/~33 ≈ 88%) — v3.0-b mid-flight** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
