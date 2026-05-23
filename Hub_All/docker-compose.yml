@@ -262,8 +262,9 @@ services:
         required: false
     environment:
       # Phase 2 v3.0 (D-V3-Phase2-C): re-point từ python-api (M2) → python-api-central.
+      # Phase 7 v3.0 MIGRATE-04 (D-V3-Phase7-C LOCKED 2026-05-23): CONFIRMED contract.
       # MCP service gọi central cho cross-hub aggregate (LOCKED D-V3-02 — KHÔNG fan-out
-      # N hub con). Phase 7 MIGRATE-04 re-confirm contract.
+      # N hub con). Cross-hub search 1 SQL aggregated Phase 4 Plan 04-05 carry forward.
       MCP_API_BASE_URL: http://python-api-central:8080
       # Issuer = domain public HTTPS. Operator set ở .env gốc compose:
       #   MCP_OAUTH_ISSUER_URL=https://${MCP_PUBLIC_DOMAIN}  (prod).

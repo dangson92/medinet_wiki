@@ -30,8 +30,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Base URL của API Service (KHÔNG kèm /api).
-    api_base_url: str = "http://localhost:8180"
+    # Base URL của API Service v3.0 — central aggregator (D-V3-02 LOCKED, KHÔNG fan-out N hub).
+    # D-V3-Phase7-C LOCKED 2026-05-23 — MCP re-point central (carry forward Phase 2 docker-compose env wire).
+    # MCP tools search_wiki + ask_wiki forward tới central; cross-hub search 1 SQL aggregated
+    # (Phase 4 Plan 04-05 D-V3-Phase4-D1). Validator _validate_base_url enforce scheme http/https
+    # + host required (T-08.2-01-T SSRF mitigation carry forward Phase 8.3 v2.0).
+    api_base_url: str = "http://python-api-central:8080"
     # Host và port MCP Service lắng nghe.
     service_host: str = "0.0.0.0"
     service_port: int = 8190
