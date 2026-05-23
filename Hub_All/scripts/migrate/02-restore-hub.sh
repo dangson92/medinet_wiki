@@ -123,7 +123,11 @@ fi
 echo "[restore-hub] (1/4) Latest snapshot: $SNAPSHOT_FILE"
 
 # Count expected INSERT row trong snapshot
-EXPECTED_INSERTS=$(grep -c '^INSERT' "$SNAPSHOT_FILE" 2>/dev/null || echo "0")
+# WR-03 fix — fail-loud nếu SNAPSHOT_FILE miss (đã check line 103-107). Anchor
+# regex chặt hơn `^INSERT INTO ` (có space) để KHÔNG match warning text. `|| true`
+# thay `|| echo "0"` để KHÔNG nhầm warning thành 0-row (giữ var unset → fallback).
+EXPECTED_INSERTS=$(grep -c '^INSERT INTO ' "$SNAPSHOT_FILE" 2>/dev/null || true)
+EXPECTED_INSERTS=${EXPECTED_INSERTS:-0}
 echo "[restore-hub] (1/4) Expected INSERT rows: $EXPECTED_INSERTS"
 
 if [ "$EXPECTED_INSERTS" = "0" ]; then

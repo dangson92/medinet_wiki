@@ -179,8 +179,16 @@ snapshot_one_hub() {
 
     # Sanity check
     echo "[snapshot-hubs] (3/3) Sanity check row count..."
+    # WR-03 fix — fail-loud nếu OUT_FILE miss post pg_dump (grep -c stderr "No such
+    # file" + fallback "0" cũ ẩn lỗi thật). Anchor regex chặt hơn `^INSERT INTO `
+    # (có space) để KHÔNG match string trong COMMENT/WARNING.
+    if [ ! -f "$OUT_FILE" ]; then
+        echo "[snapshot-hubs] ERROR: $OUT_FILE missing post pg_dump — abort."
+        return 4
+    fi
     local ROW_COUNT
-    ROW_COUNT=$(grep -c '^INSERT' "$OUT_FILE" || echo "0")
+    ROW_COUNT=$(grep -c '^INSERT INTO ' "$OUT_FILE" 2>/dev/null || true)
+    ROW_COUNT=${ROW_COUNT:-0}
     local FILE_SIZE
     FILE_SIZE=$(wc -c < "$OUT_FILE" | tr -d ' ')
 
