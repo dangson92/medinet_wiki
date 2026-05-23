@@ -576,12 +576,133 @@ docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
 
 ---
 
-## Milestone status
+## System Settings Sync Deploy Notes (Phase 6 v3.0)
 
-- ✅ **M2 v2.0 — Full RAG Rewrite** đang đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS).
-- 🟢 **Phase 10 (Hardening + Observability + Docs)** ship 4/6 plan: HARD-01 structlog · HARD-02 Prometheus · HARD-03 critical path + coverage ≥50% · CRIT-01 CORS split. Còn HARD-04 (plan này) + CI workflow (10-06).
-- 🔜 **Next milestone:** v3.0 — Multi-Hub Split (subpath routing, multi-DB, cocoindex flow per-hub đẩy chunks+vector lên hub tổng). Seed `.planning/seeds/v3.0-multi-hub-split.md` (4 architectural decision LOCKED 2026-05-21).
+**Phase 6 ship 2026-05-23 — SETTINGS-01..04.** Hub con HTTP pull `rag_config` + `hub_registry` từ central qua Redis cache TTL 60s/300s + pub/sub invalidate channel `settings:invalidate` < 1s propagate. API key verify proxy hub con → central `POST /api/api-keys/verify` với shared secret `X-Internal-Auth: <SETTINGS_PROXY_SECRET>` 32-char min entropy 128-bit.
+
+### Backward Incompat Warning (TRIPLE cumulative — Phase 3 + Phase 5 + Phase 6)
+
+Trước khi deploy Phase 6, operator phải xử lý:
+
+1. **SETTINGS_PROXY_SECRET env (NEW Phase 6):** Hub con M2 cũ thiếu env → Settings validator `_enforce_settings_proxy_secret` raise `ValidationError` (length < 32 char) → uvicorn FAIL boot. Operator phải `openssl rand -hex 32` + paste vào `.env` TRƯỚC khi `docker compose up -d`.
+2. **CENTRAL_URL env (carry forward Phase 3 Plan 03-04):** Hub con cần `CENTRAL_URL` → lifespan settings_sync init dùng để fetch_initial RagConfigClient + HubRegistryClient.
+3. **CENTRAL_JWKS_URL env (carry forward Phase 3 Plan 03-02):** Hub con cần để verify JWT qua JWKSCache.
+
+Nếu thiếu bất kỳ env nào → docker compose interpolation `${VAR:?msg}` fail TRƯỚC khi container start (fail-loud expected).
+
+### Deploy Procedure (5 step)
+
+**Step 1 — Generate shared secret:**
+
+```bash
+# Generate 32-byte hex secret (64 char) — entropy 128-bit
+openssl rand -hex 32
+# Example output: a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1
+```
+
+**Step 2 — Update `.env`:**
+
+```bash
+# Append vào .env (production) hoặc .env.local (dev)
+cat >> .env <<EOF
+
+# Phase 6 System Settings Sync (SETTINGS-01..04 — 2026-05-23)
+SETTINGS_PROXY_SECRET=<paste-secret-from-step-1>
+SETTINGS_CACHE_TTL_RAG_CONFIG=60
+SETTINGS_CACHE_TTL_HUB_REGISTRY=300
+SETTINGS_CACHE_TTL_APIKEY=60
+SETTINGS_SUBSCRIBER_RECONNECT_SECONDS=5
+EOF
+
+# Security: chmod 600 .env (operator-only read)
+chmod 600 .env
+```
+
+**Step 3 — Broadcast operator notice:**
+
+Vì cần restart cả 4 service (central + 3 hub con) để load env mới, expect ~15-30s downtime. Broadcast Slack/Email TRƯỚC khi deploy:
+
+> "Medinet Wiki deploy v3.0 Phase 6 lúc HH:MM. Expect 15-30s downtime. Sau deploy, mọi user phải re-login (nếu JWT M2 cũ KHÔNG có `kid`/`aud`/`hub_ids` claim — Phase 3 backward incompat carry forward) + settings cache Redis flush tự động qua pub/sub."
+
+**Step 4 — Stop + start docker-compose 4 service:**
+
+```bash
+docker compose down  # graceful shutdown — subscriber_task.cancel() + wait_for(10s) Phase 6 + sync_worker shutdown Phase 4
+docker compose up -d  # boot 4 service (central + 3 hub con) đồng thời
+```
+
+Wait ~10-20s cho lifespan hub con `rag_client.fetch_initial()` blocking 5s + `hub_client.fetch_initial()` blocking 5s. Nếu central down hoặc network fail → hub con uvicorn exit 1 (boot fail-loud — operator catch ngay).
+
+**Step 5 — Verify deployment:**
+
+```bash
+# Check 4 service healthy
+curl -s http://localhost:8180/api/health  # central
+curl -s http://localhost:8181/api/health  # yte
+curl -s http://localhost:8182/api/health  # duoc
+curl -s http://localhost:8183/api/health  # hcns
+
+# Verify settings sync subscriber task running (qua docker logs)
+docker compose logs python-api-yte 2>&1 | grep "settings_subscriber_task_started"
+# Expected: "settings_subscriber_task_started: hub=yte"
+
+# Verify rag_config fetch_initial ready
+docker compose logs python-api-yte 2>&1 | grep "lifespan_settings_sync_ready"
+# Expected: "lifespan_settings_sync_ready: hub=yte"
+
+# End-to-end test pub/sub propagate (manual smoke):
+# 1. Đăng nhập admin ở central (https://central/api/auth/login)
+# 2. PUT /api/rag-config với body mới (vd đổi temperature 0.7 → 0.5)
+# 3. Trong < 2s, hub yte cache settings:rag_config:yte sẽ bị flush
+# 4. Yêu cầu next /api/ask ở yte sẽ re-fetch rag_config mới (cache miss → HTTP fetch central → cache write TTL 60s)
+```
+
+### Rollback Procedure
+
+Nếu Phase 6 deploy fail (vd central /api/api-keys/verify endpoint trả 500, hub con boot fail-loud lifespan vì CENTRAL_URL DNS fail):
+
+```bash
+# Option A: Hot fallback dùng escape hatch (testing/staging only — KHÔNG production)
+docker compose down
+export SETTINGS_SKIP_FETCH=1
+docker compose up -d python-api-yte python-api-duoc python-api-hcns
+# → hub con boot OK nhưng SETTINGS_UNAVAILABLE cho rag_config + apikey verify
+# → require_api_key sẽ trả 503 APIKEY_VERIFY_CLIENT_UNAVAILABLE
+# → /api/ask sẽ trả 503 SETTINGS_UNAVAILABLE
+# → ONLY dùng cho debug Phase 6 lifespan boot issue, KHÔNG long-term
+
+# Option B: Revert git commit Phase 6 + redeploy (production-safe)
+git revert <phase-6-commits>  # 5 plan = 5 commit cluster (06-01..06-05)
+docker compose down
+docker compose build
+docker compose up -d
+# → fall back to Phase 5 v3.0-b state (Caddy subpath + frontend prefix detect + per-hub branding OK)
+# → hub con KHÔNG có settings_sync module wired; require_api_key fall back M2 local AES-GCM
+```
+
+### Smoke Defer Phase 7 MIGRATE-05
+
+Manual smoke runtime full (PUT central → all 3 hub con cache flush < 30s + apikey verify proxy → central round-trip + hub_registry pull) defer Phase 7 MIGRATE-05 full E2E (3 hub con + central + golden path + JWT SSO live + cross-hub search live + per-hub branding visual diff + settings sync pub/sub live propagate).
+
+Plan 06-05 Task 5b smoke checkpoint `skip smoke` auto-fallback per `--auto chain` mode active + v3.0-b precedent (Plan 03-05 + 04-07 + 05-06 pre-resolved skip pattern). Evidence chain in-process 87+ unit + 6 integration test PASS cover semantic SETTINGS-01..04.
+
+### Phase 6 Architecture Reference
+
+Chi tiết implementation:
+- `Hub_All/CLAUDE.md` §6 "Phase 6 System Settings Sync pattern" — 7 architecture insight + STRIDE coverage T-06-01..04 + R-V3-6 LOW mitigation chain + E-V3-4 propagate.
+- `.planning/phases/06-system-settings-sync/06-CONTEXT.md` — 4 D-V3-Phase6-A..D LOCKED 2026-05-23.
+- `.planning/phases/06-system-settings-sync/06-PATTERNS.md` — Pattern map 14 file analog 100% + 5 Wave grouping.
+- `.planning/phases/06-system-settings-sync/06-{01..05}-PLAN.md` — 5 plan implementation chi tiết.
+- `.planning/phases/06-system-settings-sync/06-{01..05}-SUMMARY.md` — deliverable + commit + test count per plan.
+- `.planning/REQUIREMENTS.md` § SETTINGS-01..04 — REQ-ID spec + Phase 6 closeout note.
 
 ---
 
-*README cập nhật: 2026-05-21 (Plan 10-05 — HARD-04 docs closeout). Trước đó README đã rỗng (Go cũ xoá TEARDOWN-01 pull-in 2026-05-14).*
+## Milestone status
+
+- ✅ **M2 v2.0 — Full RAG Rewrite** đã đóng (Phase 1-10, 38/38 REQ-ID done, M2a EXIT GATE PASS, ship 2026-05-21).
+- 🔄 **v3.0 Multi-Hub Split mid-flight 2026-05-23:** Phase 1+2+3+4+5+6 DONE (33/~37 plan ≈ 89%, 25/29 REQ-ID closed); v3.0-a EXIT GATE TRIGGERED (Phase 3 close); v3.0-b 3/4 phase complete (Phase 4+5+6 DONE). Còn Phase 7 MIGRATE-01..05 (pg_dump per hub_id + blue/green restore + MCP re-point + smoke E2E full v3.0).
+
+---
+
+*README cập nhật: 2026-05-23 (Plan 06-05 — Phase 6 System Settings Sync closeout: 5 plan ship SETTINGS-01..04 + 4 D-V3-Phase6 LOCKED + 6 Prometheus metric mới + System Settings Sync Deploy Notes section thêm). Trước đó: 2026-05-23 Plan 05-06 (Reverse Proxy Subpath Deploy Notes); 2026-05-22 Plan 04-07 (Cross-hub Sync Deploy Notes); 2026-05-22 Plan 03-05 (SSO Backward Incompat); 2026-05-21 Plan 10-05 (HARD-04 docs closeout M2).*
