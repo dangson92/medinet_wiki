@@ -164,6 +164,45 @@ class Settings(BaseSettings):
         default_factory=lambda: [1, 5, 30, 120]
     )
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 6 Plan 06-01 — System Settings Sync config (SETTINGS-01..04)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D LOCKED) — Shared secret cho 2
+    # endpoint internal-only ở central (POST /api/api-keys/verify hub con call;
+    # future POST /api/rag-config/internal-flush defer). Required BOTH central
+    # (verify header X-Internal-Auth qua hmac.compare_digest) + hub con (gửi
+    # header khi call central proxy). Length min 32 char = 128-bit entropy
+    # mitigation T-06-04-01 timing attack constant-time compare. Validator
+    # `_enforce_settings_proxy_secret` enforce length BẤT KỂ hub_name (KHÁC
+    # Phase 3+4 validator hub con only). Generate: openssl rand -hex 32.
+    settings_proxy_secret: str = ""
+
+    # Phase 6 Plan 06-01 SETTINGS-01 (D-V3-Phase6-B) — Cache TTL rag_config 60s.
+    # E-V3-4 propagate < 30s primary qua pub/sub `settings:invalidate`; TTL là
+    # FALLBACK Redis down recovery (KHÔNG silent degrade). Hub con đọc rag_config
+    # qua RagConfigClient.get() — Redis cache miss → HTTP fetch central + write
+    # cache TTL 60s.
+    settings_cache_ttl_rag_config: int = 60
+
+    # Phase 6 Plan 06-01 SETTINGS-04 (D-V3-Phase6-B) — Cache TTL hub_registry 5
+    # phút (300s). Rare-change FACTOR-04 `make hub-add` KHÔNG thường xuyên +
+    # pub/sub invalidate primary mechanism khi đổi registry → TTL dài giảm load
+    # central.
+    settings_cache_ttl_hub_registry: int = 300
+
+    # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-B) — Cache TTL apikey verify 60s.
+    # M2 AUX-02 hot revoke window acceptable — admin revoke → publish
+    # `settings:invalidate` `config_key="apikey"` flush cache 1 hub hoặc all
+    # qua subscriber.
+    settings_cache_ttl_apikey: int = 60
+
+    # Phase 6 Plan 06-01 SETTINGS-02 (Claude's Discretion CONTEXT.md) — Subscriber
+    # reconnect retry interval khi pubsub disconnect. KHÔNG fail-loud (TTL natural
+    # fallback) — Claude's Discretion fail-quiet retry pattern song song
+    # `documents_service.py` publish_invalidate fail-open.
+    settings_subscriber_reconnect_seconds: int = 5
+
     # File storage
     file_store_dir: Path = Path("./file_store")
 
@@ -518,6 +557,35 @@ class Settings(BaseSettings):
                 f"{self.sync_max_attempts} yêu cầu length={expected} (attempts "
                 f"2..N), got {actual} ({self.sync_backoff_seconds!r}). "
                 f"Plan 04-02 D-V3-Phase4-A5."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_settings_proxy_secret(self) -> Settings:
+        """Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D LOCKED) — Shared secret
+        required BOTH sides.
+
+        Central + hub con đều cần (central verify header `X-Internal-Auth` qua
+        hmac.compare_digest constant-time; hub con gửi header khi call POST
+        /api/api-keys/verify). Length >= 32 char enforce 128-bit entropy
+        mitigation T-06-04-01 timing attack. Generate: ``openssl rand -hex 32``.
+
+        KHÁC pattern `_enforce_central_jwks_url_for_hub` Phase 3 / `_enforce_hub_id_for_hub_con`
+        Phase 4 — shared secret D-V3-Phase6-D LOCKED enforce CẢ 2 phía (KHÔNG
+        branch theo hub_name).
+
+        Threat model cover:
+        - T-06-04-01 Tampering — header spoofing chỉ work nếu attacker biết secret;
+          32-char random hex/base64 = 128-bit entropy đủ.
+        - T-06-01-01 Spoofing — deploy thiếu secret → boot fail-fast validator
+          (ValidationError trước lifespan) thay vì silent allow.
+        """
+        if len(self.settings_proxy_secret) < 32:
+            raise ValueError(
+                f"SETTINGS_PROXY_SECRET phai >= 32 char (entropy 128-bit). "
+                f"Generate: openssl rand -hex 32. Phase 6 SETTINGS-03 "
+                f"D-V3-Phase6-D LOCKED. Current length="
+                f"{len(self.settings_proxy_secret)}."
             )
         return self
 
