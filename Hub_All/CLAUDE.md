@@ -154,7 +154,9 @@ Plan 10-06 CI workflow) + human UAT pass + retrospective ghi nhận.
 | 4 — Cross-hub Data Sync | ✅ **DONE** | **7 plan** | **2026-05-22** | **SYNC-01..05 (5)** |
 | 5 — Reverse Proxy + Frontend Subpath | ✅ **DONE** | **6 plan** | **2026-05-23** | **PROXY-01..04 (4)** |
 | 6 — System Settings Sync | ✅ **DONE** | **5 plan** | **2026-05-23** | **SETTINGS-01..04 (4)** |
-| 7 — Migration + Smoke E2E | 📋 Backlog | — | — | MIGRATE-01..05 |
+| 7 — Migration + Smoke E2E | ✅ **DONE** 🎉 | **5 plan** | **2026-05-23** | **MIGRATE-01..05 (5)** |
+
+**🎉 v3.0 MILESTONE CLOSED 2026-05-23** — 38/38 plan ship · 30/30 REQ-ID consumed (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5) · 7/7 phase complete · v3.0-a (Phase 1-3) + v3.0-b (Phase 4-7) anti-pivot hoàn tất. Next: `/gsd-complete-milestone v3.0` separate command.
 
 **🚦 v3.0-a EXIT GATE** TRIGGERED 2026-05-22 sau Plan 03-05 close — demo 1 hub con (yte) + central + JWT SSO + golden path PASS → user accept là điều kiện tiếp tục v3.0-b (Phase 4-7). Smoke compose runtime SKIP pre-resolved — defer Phase 7 MIGRATE-05 full E2E (3 hub + central golden path + JWT SSO live). Evidence chain: Plan 03-01 (9 unit) + Plan 03-02 (27 unit + 3 integration) + Plan 03-03 (19 unit + 3 integration) + Plan 03-04 (10 unit) = 65+ unit + 6 integration PASS in-process semantic.
 
@@ -378,6 +380,58 @@ Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 - `.planning/phases/06-system-settings-sync/06-{01..05}-PLAN.md` — implementation chi tiết 5 plan.
 - `.planning/phases/06-system-settings-sync/06-{01..05}-SUMMARY.md` — deliverable + commit + test count per plan.
 
+### Phase 7 Migration + Smoke E2E pattern (MIGRATE-01..05 — 2026-05-23) 🎉 v3.0 MILESTONE CLOSED
+
+5 plan đóng 5 REQ-ID Migration + 4 D-V3-Phase7-A/B/C/D LOCKED + 5 bash script + 1 runbook + automated 3 hub × 7-step golden path (final phase v3.0 milestone):
+
+- **Plan 07-01 MIGRATE-01 — Wave 1 BLOCKING (D-V3-Phase7-A pg_dump --where option a LOCKED):** Script `scripts/migrate/01-snapshot-hubs.sh` (~194 LOC) `pg_dump --data-only --no-owner --no-acl --column-inserts --where="hub_id='<uuid>'"` 5 table per hub (chunks/documents/users/audit_logs/usage_events) output `migrate-snapshots/migrate-<hub>-<YYYY-MM-DD>.sql`. Resolve hub_id UUID từ medinet_central.hubs qua psql -tA. Regex + RESERVED + reject central validation chain T-5-05 carry forward. Idempotent skip nếu file đã tồn tại. Sanity check row count post-dump qua grep INSERT. `.gitignore` exclude *.sql + README.md 30-day retention + privacy + recovery procedure docs.
+
+- **Plan 07-02 MIGRATE-02 — Wave 2 BLOCKING (D-V3-Phase7-B blue/green per-hub LOCKED):** Script `02-restore-hub.sh` (~225 LOC) psql `-f` restore từ Plan 07-01 snapshot vào `medinet_hub_<HUB>` (Phase 1 hub-init + Phase 4 Alembic 0005 schema ready). Auto-detect latest snapshot date qua `ls migrate-snapshots/migrate-<HUB>-*.sql | sort -r | head -1`. T-07-02-03 mitigation verify `SELECT current_database() == 'medinet_hub_<HUB>'` fail-fast trước restore. Post-restore row count sanity check. Script `03-switch-caddy.sh` (~132 LOC) **VERIFY-ONLY** (per CONTEXT.md `<specifics>` correction — Caddyfile Phase 5 `{re.hub_api.1}` đã dynamic capture hub_name, KHÔNG cần sed edit) check `docker compose ps python-api-<HUB>` running + caddy validate + smoke curl `/<HUB>/api/health`. Hỗ trợ `--rollback` flag stop hub container (Caddy regex fall-through 404 user-visible signal switch revert).
+
+- **Plan 07-03 MIGRATE-03 — Wave 3 BLOCKING (D-V3-02 LOCKED — chunks KHÔNG truncate):** Script `04-truncate-central.sh` (~269 LOC) atomic BEGIN/COMMIT psql heredoc DELETE 4 table per hub (documents/users/audit_logs/usage_events) WHERE hub_id = '<uuid>' — **explicit KHÔNG DELETE FROM chunks** (D-V3-02 LOCKED, vẫn nhận sync 1-way từ hub con cho cross-hub search). audit_logs INSERT TRƯỚC DELETE atomic (carry forward Phase 4 Plan 04-06 sync.py W8 pattern) — `action='migrate.truncate_hub' + actor=NULL system + target_type='central_hub_rows' + payload jsonb với row counts pre-delete`. Dry-run DEFAULT ON safety — operator phải explicit `--apply [--yes]` để thực thi DELETE (T-07-03-04 misfire mitigation). Pre + post DELETE row count log. audit_logs DELETE filter `action != 'migrate.truncate_hub'` để tránh xóa row vừa INSERT.
+
+- **Plan 07-04 MIGRATE-04 — Wave 3 parallel (D-V3-Phase7-C MCP re-point central):** `mcp_service/mcp_app/config.py::Settings.api_base_url` default đổi `"http://localhost:8180"` → `"http://python-api-central:8080"` (1-line change + 5-line comment Phase 7 decision reference). `field_validator _validate_base_url` UNCHANGED (SSRF mitigation T-08.2-01-T Phase 8.3 carry forward). docker-compose.yml mcp_service env block comment update `re-confirm` → `CONFIRMED Phase 7 MIGRATE-04` — env value `MCP_API_BASE_URL: http://python-api-central:8080` UNCHANGED (Phase 2 Plan 02-02 đã set đúng). Runbook `scripts/migrate/06-mcp-smoke.md` (~181 LOC) 5-step Inspector OAuth manual checklist: (1) pre-deploy 135/135 mcp_service test regression + container running + env verify, (2) Inspector OAuth connect via discovery + token exchange, (3) `search_wiki(query, hub_id="yte")` single-hub envelope D6 + isolation verify, (4) `ask_wiki(query)` cross-hub no hub_id → citations multi-hub + p95 < 1.5s, (5) citation `[N]` resolve document detail + Prometheus assertion. Rollback procedure git revert + re-build mcp_service.
+
+- **Plan 07-05 closeout — Wave 5 (file này, 2026-05-23):** Automated smoke `05-smoke-e2e.sh` (~271 LOC) 3 hub × 7-step golden path (login + upload DOCX + poll status + search local + search cross-hub + ask + citation [N] + logout) qua `curl` + `jq` envelope D6 parse + Prometheus assertion post-loop (cross_hub_search_latency p95 < 1.5s + sync_lag < 30s + apikey_verify_total{result=cached} > 0 + sync_count_drift < 0.01). Test fixture `fixtures/sample-document.docx` 37KB Vietnamese content (vaccin + dược keyword) + `generate-sample.py` reproducible script qua python-docx. Closeout 5 doc update + v3.0 milestone CLOSED marker (38/38 plan 100%). Manual visual smoke checkpoint 4 hub × 11 trang React M2 COMPAT-01 = `checkpoint:human-action gate=advisory` KHÔNG blocking (D-V3-Phase7-D LOCKED — Phase 7 cuối, automated semantic đủ MIGRATE-05 coverage; visual regression log v3.1 follow-up issue, closeout vẫn proceed). HUMAN-UAT batch resolve 11+ pending items từ Phase 3+4+5+6.
+
+**Architecture insights (Phase 7):**
+
+1. **Blue/green per-hub zero-downtime (D-V3-Phase7-B LOCKED):** Snapshot → restore green DB → smoke green → switch Caddy (verify-only auto-route) → repeat 2-3 hub còn lại → truncate central. Caddy reload ~50-100ms negligible (HTTP/2 keep-alive resume); R-V3-4 mitigation full.
+2. **D-V3-02 chunks PRESERVED:** `medinet_central.chunks` aggregated cross-hub search target — Phase 7 Plan 07-03 KHÔNG truncate (explicit grep -v DELETE FROM chunks + 10+ comment reference). Sync 1-way từ hub con tiếp tục post-migration qua outbox worker Phase 4.
+3. **MCP re-point 1-line config + 5-line decision comment (D-V3-Phase7-C):** Small surface area — env wire đã đúng từ Phase 2 (docker-compose MCP_API_BASE_URL: http://python-api-central:8080). Cross-hub aggregate 1 SQL Phase 4 Plan 04-05 carry forward — MCP KHÔNG fan-out N hub.
+4. **Caddyfile dynamic regex KHÔNG sed edit (correction during planning):** Phase 5 đã ship `{re.hub_api.1}` dynamic capture → `reverse_proxy python-api-{re.hub_api.1}:8080` → Phase 7 chỉ cần container `python-api-<HUB>` running → Caddy auto-route. `03-switch-caddy.sh` shrink từ sed edit phức tạp xuống verify-only ~132 LOC.
+5. **Automated mandatory + human advisory (D-V3-Phase7-D):** `05-smoke-e2e.sh` BLOCKING evidence chain (3 hub × 7 step + Prometheus). Manual visual smoke checkpoint advisory KHÔNG blocking — Phase 7 cuối, KHÔNG defer; regression log v3.1 issue.
+
+**T-07-01..05 STRIDE coverage:**
+- T-07-01-01..04 Plan 07-01 — Tampering hub arg (regex+RESERVED+central reject) + Info Disclosure .sql privacy + DoS pg_dump off-peak + Repudiation immutable timestamp filename.
+- T-07-02-01..05 Plan 07-02 — Tampering arg + path traversal + current_database verify + DoS rollback accept + Repudiation forward-only accept.
+- T-07-03-01..05 Plan 07-03 — Tampering arg + DoS single-hub transaction + Repudiation audit INSERT atomic + Tampering misfire dry-run default + Elevation chunks explicit preserved.
+- T-07-04-01..04 Plan 07-04 — Info Disclosure SSRF validator unchanged + Spoofing OAuth Phase 8.3 carry + Repudiation audit M2 + DoS fan-out rejected D-V3-02.
+- T-07-05-01..05 Plan 07-05 — Info Disclosure creds env var + Tampering fixture text-only + DoS smoke accept + Repudiation audit accept + Spoofing visual smoke advisory.
+
+**Backward compat (Phase 7 KHÔNG break M2 / v2.0):**
+- MCP tools `search_wiki + ask_wiki` signature UNCHANGED.
+- mcp_service `field_validator _validate_base_url` UNCHANGED — SSRF mitigation T-08.2-01-T Phase 8.3 carry forward.
+- 143/135 `mcp_service/tests/` PASS regression mandatory (Phase 8.3 v2.0 baseline 135 + Plan 10-04 CORS split 8).
+- Envelope D6 LOCKED — smoke script parse same shape.
+- OAuth flow Phase 8.3 v2.0 carry forward UNCHANGED — Caddy `/.well-known/*` + `/mcp/*` route Phase 5.
+- Hub_id rows central skeleton truncated NHƯNG chunks PRESERVED (D-V3-02 LOCKED).
+- audit_logs row `migrate.truncate_hub` persistent — forensic trail.
+
+**R-V3-4 migration downtime mitigation chain:**
+- Blue/green per-hub procedure (D-V3-Phase7-B) — Caddy reload ~50-100ms negligible.
+- Snapshot 30-day retention (Plan 07-01 migrate-snapshots/README.md) — rollback path enable.
+- `03-switch-caddy.sh --rollback` mode — Caddy regex fall-through 404 user-visible signal.
+- Dry-run default ON truncate (Plan 07-03 --apply explicit) — misfire mitigation T-07-03-04.
+
+**v3.0 milestone CLOSED 🎉:** 38/38 plan ship (7 phase × ~5.4 plan avg) — 30 REQ-ID consumed (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5). v3.0-a (Phase 1-3) + v3.0-b (Phase 4-7) anti-pivot pattern hoàn tất. Next: `/gsd-complete-milestone v3.0` separate command — archive `.planning/milestones/v3.0-archive/` + reset ROADMAP.md cho v4.0 backlog (sub-hub split + HA Redis cluster + OCR Vietnamese + streaming /api/ask).
+
+**Reference:**
+- `.planning/phases/07-migration-smoke-e2e/07-CONTEXT.md` — 4 D-V3-Phase7-A..D LOCKED 2026-05-23.
+- `.planning/phases/07-migration-smoke-e2e/07-PATTERNS.md` — Pattern map 14 file analog 100% coverage.
+- `.planning/phases/07-migration-smoke-e2e/07-{01..05}-PLAN.md` — implementation chi tiết 5 plan.
+- `.planning/phases/07-migration-smoke-e2e/07-{01..05}-SUMMARY.md` — deliverable + commit + test count per plan.
+
 ---
 
-*Cập nhật: 2026-05-23 (Phase 6 DONE — SETTINGS-01..04 ship 5 plan; settings_sync/ module HTTP pull + Redis pub/sub invalidate hybrid + 3 client class RagConfigClient + HubRegistryClient + ApiKeyVerifyClient + settings_subscriber_loop single channel `settings:invalidate` + Pydantic InvalidateMessage Literal enum payload + require_api_key branch hub_name central/hub-con + require_internal_auth shared secret 32-char hmac.compare_digest constant-time + POST /api/api-keys/verify central-only endpoint + lifespan blocking fetch_initial fail-loud + SETTINGS_SKIP_FETCH=1 escape hatch + 6 Prometheus metric. Project: MEDWIKI. M2 v2.0 done; v3.0 Multi-Hub Split — Phase 1+2+3+4+5+6 DONE (33/~37 plan ≈ 89%), v3.0-a EXIT GATE TRIGGERED + v3.0-b mid-flight (3/4 phase). Next: `/gsd-discuss-phase 7` Migration + Smoke E2E (MIGRATE-01..05 — pg_dump snapshot per hub_id + blue/green restore + MCP re-point + smoke E2E full v3.0).*
+*Cập nhật: 2026-05-23 (Phase 7 DONE — MIGRATE-01..05 ship 5 plan; scripts/migrate/ module 5 bash script (01-snapshot-hubs.sh + 02-restore-hub.sh + 03-switch-caddy.sh + 04-truncate-central.sh + 05-smoke-e2e.sh) + 1 runbook 06-mcp-smoke.md + fixture sample-document.docx (37KB python-docx generator + reproducible) + automated 3 hub × 7-step golden path (login + upload + poll + search local + cross-hub + ask + citation [N]) + Prometheus assertion post-loop + blue/green per-hub procedure (D-V3-Phase7-B) + dry-run default ON truncate (D-V3-02 chunks PRESERVED) + MCP re-point central aggregate (D-V3-Phase7-C) + manual visual smoke advisory KHÔNG blocking (D-V3-Phase7-D). Project: MEDWIKI. **🎉 v3.0 MILESTONE CLOSED 2026-05-23** — 38/38 plan ship · 30/30 REQ-ID consumed (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5) · 7/7 phase complete · v3.0-a (Phase 1-3) + v3.0-b (Phase 4-7) anti-pivot pattern hoàn tất. M2 v2.0 closeout 2026-05-21 archived. Next: `/gsd-complete-milestone v3.0` separate command — archive `.planning/milestones/v3.0-archive/` + reset ROADMAP cho v4.0 backlog (sub-hub split per project_v3_multi_hub_split.md seed 2026-05-21 + HA Redis cluster + OCR Vietnamese + streaming /api/ask).*
