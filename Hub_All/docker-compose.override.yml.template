@@ -37,6 +37,11 @@
       # Phase 4 Plan 04-02 SYNC-01 — Dedicated asyncpg pool toi medinet_central
       # cho outbox worker push chunks ON CONFLICT.
       CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
+      # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D) — Shared secret cho hub con
+      # call central internal endpoint (POST /api/api-keys/verify). Inherit tu .env
+      # (operator set lan boot dau qua `openssl rand -hex 32`). Same env value 4
+      # service (central + 3 hub con + dynamic hub). Fail-loud ${VAR:?msg} syntax.
+      SETTINGS_PROXY_SECRET: ${SETTINGS_PROXY_SECRET:?SETTINGS_PROXY_SECRET env var phai set min 32 char — Plan 06-01 SETTINGS-03}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:

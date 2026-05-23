@@ -102,6 +102,12 @@ services:
       # Vi du shell:
       #   export CHECKSUM_HUB_DSNS_JSON='{"yte":"postgresql://medinet:dev@postgres:5432/medinet_hub_yte","duoc":"postgresql://medinet:dev@postgres:5432/medinet_hub_duoc","hcns":"postgresql://medinet:dev@postgres:5432/medinet_hub_hcns"}'
       CHECKSUM_HUB_DSNS_JSON: ${CHECKSUM_HUB_DSNS_JSON:-}
+      # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D) — Shared secret cho 2 endpoint
+      # internal-only (POST /api/api-keys/verify hub con call; future flush).
+      # 32 char min (Settings validator `_enforce_settings_proxy_secret` enforce).
+      # Operator gen: openssl rand -hex 32. Fail-loud syntax ${VAR:?msg} truoc boot
+      # Settings validation (docker-compose interpolation error truoc container start).
+      SETTINGS_PROXY_SECRET: ${SETTINGS_PROXY_SECRET:?SETTINGS_PROXY_SECRET env var phai set min 32 char — Plan 06-01 SETTINGS-03}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -149,6 +155,10 @@ services:
       # `sync_user` GRANT INSERT/UPDATE/DELETE ON chunks (theo hub_id) + SELECT
       # ON hubs (T-04-06 Elevation mitigation — defer doc Phase 7 MIGRATE).
       CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
+      # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D) — Shared secret cho hub con
+      # call central internal endpoint (POST /api/api-keys/verify). 32 char min
+      # (Settings validator enforce). Same env value 4 service (central + 3 hub con).
+      SETTINGS_PROXY_SECRET: ${SETTINGS_PROXY_SECRET:?SETTINGS_PROXY_SECRET env var phai set min 32 char — Plan 06-01 SETTINGS-03}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -186,6 +196,8 @@ services:
       # chu python-api-yte). Operator export HUB_DUOC_ID truoc compose up.
       HUB_ID: ${HUB_DUOC_ID:?HUB_DUOC_ID env var phai set khop central.hubs.id UUID — Plan 04-02 SYNC-01}
       CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
+      # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D) — Shared secret (xem yte block).
+      SETTINGS_PROXY_SECRET: ${SETTINGS_PROXY_SECRET:?SETTINGS_PROXY_SECRET env var phai set min 32 char — Plan 06-01 SETTINGS-03}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -223,6 +235,8 @@ services:
       # chu python-api-yte). Operator export HUB_HCNS_ID truoc compose up.
       HUB_ID: ${HUB_HCNS_ID:?HUB_HCNS_ID env var phai set khop central.hubs.id UUID — Plan 04-02 SYNC-01}
       CENTRAL_SYNC_DSN: postgresql+asyncpg://medinet:${POSTGRES_PASSWORD:-medinet_dev_pwd}@postgres:5432/medinet_central
+      # Phase 6 Plan 06-01 SETTINGS-03 (D-V3-Phase6-D) — Shared secret (xem yte block).
+      SETTINGS_PROXY_SECRET: ${SETTINGS_PROXY_SECRET:?SETTINGS_PROXY_SECRET env var phai set min 32 char — Plan 06-01 SETTINGS-03}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
