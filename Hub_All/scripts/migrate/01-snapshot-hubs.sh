@@ -143,7 +143,12 @@ snapshot_one_hub() {
     fi
 
     # pg_dump (D-V3-Phase7-A LOCKED)
+    # WR-02 fix — tách stderr ra file riêng để debug, KHÔNG mix vào SQL output.
+    # `2>&1` cũ làm warning pg_dump (vd "WARNING: terminating connection...") lẫn
+    # vào giữa SQL → psql restore Plan 07-02 FAIL ON_ERROR_STOP=1 + grep INSERT
+    # count sai (false-positive nếu warning text chứa "INSERT").
     echo "[snapshot-hubs] (2/3) pg_dump --data-only --where=\"hub_id='$HUB_ID'\" 5 table..."
+    local ERR_FILE="${OUT_FILE}.stderr"
     if ! pg_dump \
         -h "$PGHOST" -p "$PGPORT" -U "$PGUSER_EFFECTIVE" \
         --data-only \
@@ -156,10 +161,20 @@ snapshot_one_hub() {
         --table=audit_logs \
         --table=usage_events \
         --where="hub_id = '$HUB_ID'" \
-        "$SOURCE_DB" > "$OUT_FILE" 2>&1; then
+        "$SOURCE_DB" > "$OUT_FILE" 2> "$ERR_FILE"; then
         echo "[snapshot-hubs] ERROR: pg_dump FAIL cho hub '$HUB'."
-        rm -f "$OUT_FILE"
+        if [ -s "$ERR_FILE" ]; then
+            echo "  stderr:"
+            sed 's/^/    /' "$ERR_FILE"
+        fi
+        rm -f "$OUT_FILE" "$ERR_FILE"
         return 4
+    fi
+    # Happy path — empty stderr → rm; non-empty (warning) → giữ debug operator review
+    if [ ! -s "$ERR_FILE" ]; then
+        rm -f "$ERR_FILE"
+    else
+        echo "[snapshot-hubs] WARN: pg_dump stderr non-empty — giữ debug $ERR_FILE"
     fi
 
     # Sanity check
