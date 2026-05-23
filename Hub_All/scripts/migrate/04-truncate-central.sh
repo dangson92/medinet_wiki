@@ -76,11 +76,18 @@ if [ "$MODE" = "--apply" ] && [ "$AUTO_YES" != "true" ]; then
     echo "[truncate-central] Hubs: ${HUBS_TO_TRUNCATE[*]}"
     echo "[truncate-central] D-V3-02 LOCKED — chunks KHÔNG truncate, chỉ documents/users/audit_logs/usage_events."
     echo ""
-    printf "[truncate-central] Type 'yes' để confirm: "
-    read -r CONFIRM
+    printf "[truncate-central] Type 'yes' để confirm (timeout 60s): "
+    # WR-04 fix — timeout 60s + distinct exit code 2 cho cancel (KHÔNG 0 success).
+    # Trước: \`read\` block forever trong CI/cron không stdin (vd systemd) → hang
+    # silent. Exit 0 khi CONFIRM != yes làm caller workflow nhầm thành success.
+    if ! read -r -t 60 CONFIRM; then
+        echo ""
+        echo "[truncate-central] ABORTED — read timeout 60s (no stdin? use --yes flag for automation)."
+        exit 2
+    fi
     if [ "$CONFIRM" != "yes" ]; then
-        echo "[truncate-central] ABORTED — confirm fail."
-        exit 0
+        echo "[truncate-central] ABORTED — user declined."
+        exit 2
     fi
 fi
 
