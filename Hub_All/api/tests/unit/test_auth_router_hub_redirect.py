@@ -58,6 +58,12 @@ def _setup_env(monkeypatch: pytest.MonkeyPatch, hub_name: str) -> None:
         # qua SYNC_SKIP_CENTRAL_POOL=1 escape hatch (pattern song song
         # JWKS_SKIP_FETCH Plan 03-02 + COCOINDEX_SKIP_SETUP DEF-05-01).
         monkeypatch.setenv("SYNC_SKIP_CENTRAL_POOL", "1")
+        # Plan 06-04 Task 1 — lifespan settings_sync blocking fetch_initial
+        # (RagConfigClient + HubRegistryClient) → fail-loud boot abort khi
+        # CENTRAL_URL DNS không resolve (test in-process fake URL).
+        # SETTINGS_SKIP_FETCH=1 bypass (pattern song song JWKS_SKIP_FETCH +
+        # SYNC_SKIP_CENTRAL_POOL + COCOINDEX_SKIP_SETUP).
+        monkeypatch.setenv("SETTINGS_SKIP_FETCH", "1")
     from app.config import get_settings
 
     get_settings.cache_clear()

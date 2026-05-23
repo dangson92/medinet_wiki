@@ -462,6 +462,105 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
         except Exception as e:  # noqa: BLE001
             logger.warning("sync_worker_task_start_failed: %s", e)
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 6 Plan 06-04 (SETTINGS-01..04, D-V3-Phase6-A/B/C/D) — Hub con settings_sync
+    # ──────────────────────────────────────────────────────────────────────
+    # Hub con (settings.hub_name != "central") spawn 3 client + 1 subscriber task.
+    # - RagConfigClient.fetch_initial() blocking 5s (R-V3-6 LOW + D-V3-Phase6-A
+    #   fail-loud boot pattern song song JWKSCache Plan 03-02).
+    # - HubRegistryClient.fetch_initial() blocking 5s.
+    # - ApiKeyVerifyClient KHÔNG fetch_initial (lazy — verify on demand qua
+    #   require_api_key dependency Plan 06-03).
+    # - settings_subscriber_task asyncio.create_task spawn subscribe settings:invalidate.
+    #
+    # Test-mode escape hatch: env `SETTINGS_SKIP_FETCH=1` bypass blocking fetch_initial
+    # (pattern song song COCOINDEX_SKIP_SETUP + JWKS_SKIP_FETCH + SYNC_SKIP_CENTRAL_POOL).
+    app.state.rag_config_client = None
+    app.state.hub_registry_client = None
+    app.state.api_key_verify_client = None
+    app.state.settings_subscriber_task = None
+
+    if settings.hub_name != "central":
+        if os.environ.get("SETTINGS_SKIP_FETCH") == "1":
+            logger.warning(
+                "settings_sync_skipped: SETTINGS_SKIP_FETCH=1 (test mode — "
+                "lifespan bypass blocking fetch_initial)"
+            )
+        else:
+            from app.settings_sync.client import (
+                ApiKeyVerifyClient,
+                HubRegistryClient,
+                RagConfigClient,
+            )
+            from app.settings_sync.subscriber import settings_subscriber_loop
+
+            if not settings.central_url:
+                raise RuntimeError(
+                    f"hub_name={settings.hub_name!r} thiếu CENTRAL_URL — "
+                    "Settings validator phải đã raise ở boot (Phase 3 Plan 03-04 "
+                    "_enforce_central_url_for_hub)."
+                )
+
+            rag_client = RagConfigClient(
+                central_url=settings.central_url,
+                redis=app.state.redis,
+                hub_name=settings.hub_name,
+                ttl=settings.settings_cache_ttl_rag_config,
+            )
+            hub_client = HubRegistryClient(
+                central_url=settings.central_url,
+                redis=app.state.redis,
+                hub_name=settings.hub_name,
+                ttl=settings.settings_cache_ttl_hub_registry,
+            )
+            apikey_client = ApiKeyVerifyClient(
+                central_url=settings.central_url,
+                redis=app.state.redis,
+                hub_name=settings.hub_name,
+                settings_proxy_secret=settings.settings_proxy_secret,
+                ttl=settings.settings_cache_ttl_apikey,
+            )
+            try:
+                await rag_client.fetch_initial()  # blocking 5s, raise on fail
+                await hub_client.fetch_initial()
+            except Exception as e:
+                logger.critical(
+                    "lifespan_settings_sync_init_failed: hub_name=%s "
+                    "central_url=%s err=%s — boot abort",
+                    settings.hub_name,
+                    settings.central_url,
+                    e,
+                )
+                raise  # boot fail-loud D-V3-Phase6-A → uvicorn exit 1
+
+            app.state.rag_config_client = rag_client
+            app.state.hub_registry_client = hub_client
+            app.state.api_key_verify_client = apikey_client
+
+            # Spawn subscriber task (best-effort — Redis None KHÔNG fail-loud
+            # per CONTEXT Claude's Discretion fail-quiet subscriber).
+            if app.state.redis is not None:
+                app.state.settings_subscriber_task = asyncio.create_task(
+                    settings_subscriber_loop(
+                        app.state.redis,
+                        hub_name=settings.hub_name,
+                        reconnect_seconds=settings.settings_subscriber_reconnect_seconds,
+                    )
+                )
+                logger.info(
+                    "settings_subscriber_task_started: hub=%s",
+                    settings.hub_name,
+                )
+            else:
+                logger.warning(
+                    "settings_subscriber_skipped: redis None — TTL natural fallback"
+                )
+            logger.info(
+                "lifespan_settings_sync_ready: hub=%s central_url=%s",
+                settings.hub_name,
+                settings.central_url,
+            )
+
     try:
         yield
     finally:
@@ -552,6 +651,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             except Exception as e:  # noqa: BLE001
                 logger.warning("search_cache_task_stop_failed: %s", e)
             app.state.search_cache_task = None
+
+        # ──────────────────────────────────────────────────────────────────
+        # Phase 6 Plan 06-04 (SETTINGS-01..04 / D-V3-Phase6-C) — Graceful
+        # shutdown settings_subscriber_task. Pattern song song sync_worker_task
+        # Plan 04-04 + search_cache_task M2 — cancel + wait_for timeout 10s.
+        # Subscriber finally block `pubsub.aclose()` đảm bảo Redis connection
+        # close (T-06-04-03 resource exhaustion mitigation). Đặt TRƯỚC redis
+        # aclose vì subscriber dùng redis connection.
+        # ──────────────────────────────────────────────────────────────────
+        if getattr(app.state, "settings_subscriber_task", None) is not None:
+            app.state.settings_subscriber_task.cancel()
+            try:
+                await asyncio.wait_for(
+                    app.state.settings_subscriber_task, timeout=10.0
+                )
+            except (asyncio.CancelledError, TimeoutError):
+                pass
+            except Exception as e:  # noqa: BLE001
+                logger.warning("settings_subscriber_task_stop_failed: %s", e)
+            app.state.settings_subscriber_task = None
+            logger.info("settings_subscriber_task_stopped")
 
         # ──────────────────────────────────────────────────────────────────
         # Phase 4 Plan 04-06 (SYNC-04 / D-V3-Phase4-C3) — Graceful shutdown
