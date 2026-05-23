@@ -285,6 +285,15 @@ Plans:
 - MCP fan-out vs central aggregate: re-confirm KHÔNG fan-out N hub (đã LOCKED D-V3-02 nhưng MCP re-point cần re-test).
 - Post-migration verification: smoke test automated mandatory vs human UAT sampling.
 
+**Plans:** 5 plans (4 waves — Wave 1 BLOCKING + Wave 2 BLOCKING + Wave 3 BLOCKING + Wave 3 parallel + Wave 5 closeout)
+
+Plans:
+- [ ] 07-01-PLAN.md — `scripts/migrate/01-snapshot-hubs.sh` pg_dump --data-only --where hub_id 3 hub (yte/duoc/hcns) → migrate-snapshots/migrate-<hub>-<date>.sql + .gitignore exclude *.sql + README.md 30-day retention (MIGRATE-01 — D-V3-Phase7-A LOCKED)
+- [ ] 07-02-PLAN.md — `scripts/migrate/02-restore-hub.sh` psql -f restore vào medinet_hub_<HUB> blue/green (D-V3-Phase7-B) + `03-switch-caddy.sh` VERIFY-ONLY (Caddyfile dynamic regex KHÔNG sed) + --rollback flag (MIGRATE-02)
+- [ ] 07-03-PLAN.md — `scripts/migrate/04-truncate-central.sh` atomic BEGIN/COMMIT DELETE 4 table per hub_id + audit_logs INSERT TRƯỚC DELETE (Phase 4 W8 pattern) + dry-run DEFAULT ON safety + --apply explicit; KHÔNG DELETE chunks (D-V3-02 LOCKED) (MIGRATE-03)
+- [ ] 07-04-PLAN.md — `mcp_service/mcp_app/config.py` Settings.api_base_url default re-point `http://python-api-central:8080` (D-V3-Phase7-C) + docker-compose.yml comment update CONFIRMED + `scripts/migrate/06-mcp-smoke.md` 5-step Inspector OAuth runbook + 135/135 mcp_service test regression mandatory (MIGRATE-04)
+- [ ] 07-05-PLAN.md — `scripts/migrate/05-smoke-e2e.sh` automated 3 hub × 7-step golden path (login + upload + poll + search local + cross-hub + ask + citation [N]) + Prometheus assertion p95 < 1.5s/sync_lag < 30s/cache_hit/drift < 1% + fixture sample-document.docx + 5-doc closeout + v3.0 milestone CLOSED 🎉 + manual visual smoke checkpoint advisory KHÔNG blocking (D-V3-Phase7-D) (MIGRATE-05)
+
 ---
 
 ## Phases — v2.0 (ARCHIVED ✅)
