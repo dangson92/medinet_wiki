@@ -123,6 +123,15 @@ snapshot_one_hub() {
         return 3
     fi
 
+    # CR-01 defense-in-depth — Re-validate UUID v4 format SAU khi resolve TRƯỚC khi
+    # interpolate vào pg_dump --where SQL. Nếu central.hubs.id bị corrupt hoặc psql
+    # output có warning prefix lẫn vào stdout, regex sẽ reject thay vì cho phép SQL
+    # injection qua '$HUB_ID' shell-expand vào --where filter.
+    if ! [[ "$HUB_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+        echo "[snapshot-hubs] ERROR: HUB_ID '$HUB_ID' KHÔNG match UUID v4 format — abort (CR-01 defense-in-depth)."
+        return 3
+    fi
+
     echo "[snapshot-hubs] (1/3) hub_id='$HUB_ID'"
 
     local OUT_FILE="$OUT_DIR/migrate-${HUB}-${DATE_TAG}.sql"

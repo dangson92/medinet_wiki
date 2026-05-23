@@ -150,6 +150,15 @@ truncate_one_hub() {
         return 3
     fi
 
+    # CR-01 defense-in-depth — Re-validate UUID v4 format SAU khi resolve TRƯỚC khi
+    # interpolate vào SQL heredoc. Nếu central.hubs.id bị corrupt hoặc psql output có
+    # warning prefix lẫn vào stdout, regex sẽ reject thay vì cho phép SQL injection
+    # qua '${HUB_ID}' shell-expand vào psql heredoc.
+    if ! [[ "$HUB_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+        echo "[truncate-central] ERROR: HUB_ID '$HUB_ID' KHÔNG match UUID v4 format — abort (CR-01 defense-in-depth)."
+        return 3
+    fi
+
     echo "[truncate-central] hub_id='$HUB_ID'"
 
     # Determine COMMIT or ROLLBACK based on MODE

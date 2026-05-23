@@ -76,6 +76,15 @@ export PGPASSWORD=${PGPASSWORD:-${POSTGRES_PASSWORD:-medinet_dev_pwd}}
 
 TARGET_DB="medinet_hub_$HUB"
 
+# CR-01 defense-in-depth — Re-validate TARGET_DB format SAU khi compose TRƯỚC khi
+# interpolate vào psql `-d` arg + heredoc `WHERE datname='$TARGET_DB'`. $HUB đã
+# validate regex `^[a-z][a-z0-9_]{0,15}$` (line 45) — TARGET_DB phải match
+# `^medinet_hub_[a-z][a-z0-9_]{0,15}$`. Reject bất kỳ char ngoài alnum/underscore.
+if ! [[ "$TARGET_DB" =~ ^medinet_hub_[a-z][a-z0-9_]{0,15}$ ]]; then
+    echo "[restore-hub] ERROR: TARGET_DB '$TARGET_DB' KHÔNG match format — abort (CR-01 defense-in-depth)."
+    exit 2
+fi
+
 # Repo root resolve (3-tier fallback — sync hub-add.sh)
 if [ -f "docker-compose.yml" ]; then
     REPO_ROOT="$(pwd)"
