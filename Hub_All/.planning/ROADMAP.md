@@ -52,13 +52,12 @@
 - Helper function placement — `app/auth/role.py` module mới vs extend `app/auth/dependencies.py`.
 - CHECK constraint name preserve vs rename — Alembic `op.create_check_constraint` đòi name; M2 dùng default name; cần verify post-migration introspect.
 
-**Plans estimate:** 3-4 plans (Wave 1 BLOCKING Alembic migration + Wave 2 helper + Wave 3 closeout).
+**Plans:** 3 plans (Wave 1 parallel Plan 01-01 + 01-02 — KHÔNG file conflict; Wave 2 sequential Plan 01-03 closeout).
 
 Plans:
-- [ ] 01-01-PLAN.md — Alembic migration 0006_role_hub_admin + CHECK constraint mở rộng + user_hubs.role column (ROLE-01, ROLE-02)
-- [ ] 01-02-PLAN.md — get_effective_role helper + 4-case unit test (ROLE-04)
-- [ ] 01-03-PLAN.md — Migration seed script + audit log INSERT (ROLE-03)
-- [ ] 01-04-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md mark ROLE-01..04 [x] + idempotent verify test
+- [ ] 01-01-PLAN.md — Alembic migration 0006_role_hub_admin (CHECK constraint mở rộng + user_hubs.role nullable + audit_logs seed `migration.role_seed`) (ROLE-01, ROLE-02, ROLE-03)
+- [ ] 01-02-PLAN.md — get_effective_role helper module + 6-case unit test (ROLE-04)
+- [ ] 01-03-PLAN.md — Closeout (integration test idempotent + STATE.md + REQUIREMENTS.md + CLAUDE.md update)
 
 ---
 
