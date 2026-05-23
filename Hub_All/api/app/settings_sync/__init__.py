@@ -38,6 +38,10 @@ from app.settings_sync.metrics import (
     SETTINGS_PULL_LATENCY_SECONDS,
     SETTINGS_STALE_SECONDS,
 )
+from app.settings_sync.subscriber import (
+    InvalidateMessage,
+    settings_subscriber_loop,
+)
 
 __all__ = [
     "APIKEY_VERIFY_KEY_PREFIX",
@@ -45,6 +49,7 @@ __all__ = [
     "ApiKeyVerifyClient",
     "HUB_REGISTRY_KEY",
     "HubRegistryClient",
+    "InvalidateMessage",
     "RAG_CONFIG_KEY_PREFIX",
     "RagConfigClient",
     "SETTINGS_CACHE_HIT_TOTAL",
@@ -55,4 +60,5 @@ __all__ = [
     "SETTINGS_STALE_SECONDS",
     "SettingsUnavailableError",
     "make_apikey_cache_key",
+    "settings_subscriber_loop",
 ]

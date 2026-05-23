@@ -27,12 +27,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
-
 
 # ────────────────────────────────────────────────────────────────────
 # Pydantic InvalidateMessage (3 test)
@@ -103,11 +103,13 @@ def _make_message(payload: dict[str, Any] | str) -> dict[str, Any]:
 
 
 def _make_pubsub_mock(
-    messages: list[dict[str, Any] | Exception],
+    messages: list[dict[str, Any]],
 ) -> MagicMock:
     """Mock Redis pubsub object — .subscribe() async + .listen() async iterator.
 
-    `messages` list có thể chứa dict (yield) hoặc Exception (raise trong async for).
+    Yields each message in turn → iterator ends → subscriber outer except generic
+    catches StopAsyncIteration / drain → reconnect sleep. Caller dùng wait_for
+    timeout để exit graceful (tránh CancelledError pytest-asyncio conflict).
     """
     pubsub = MagicMock()
     pubsub.subscribe = AsyncMock(return_value=None)
@@ -115,8 +117,6 @@ def _make_pubsub_mock(
 
     async def _listen() -> AsyncIterator[dict[str, Any]]:
         for item in messages:
-            if isinstance(item, Exception):
-                raise item
             yield item
 
     pubsub.listen = _listen
@@ -144,35 +144,45 @@ def _make_redis_with_pubsub(
 # ────────────────────────────────────────────────────────────────────
 
 
-async def test_subscriber_rag_config_broadcast_deletes_per_hub_key() -> None:
-    """rag_config hub="*" broadcast → delete settings:rag_config:<hub_name>."""
+async def _run_loop_until_stop(
+    redis: Any, hub_name: str, *, timeout: float = 2.0
+) -> None:
+    """Chạy subscriber_loop với asyncio.wait_for timeout — tránh test hang."""
     from app.settings_sync.subscriber import settings_subscriber_loop
 
+    try:
+        await asyncio.wait_for(
+            settings_subscriber_loop(
+                redis, hub_name=hub_name, reconnect_seconds=10
+            ),
+            timeout=timeout,
+        )
+    except TimeoutError:
+        # Subscriber stuck in reconnect sleep (after exception drained iterator)
+        # — expected exit path để assert sau khi message đã consume.
+        pass
+
+
+async def test_subscriber_rag_config_broadcast_deletes_per_hub_key() -> None:
+    """rag_config hub="*" broadcast → delete settings:rag_config:<hub_name>."""
     payload = {"config_key": "rag_config", "hub": "*", "timestamp": 1000}
-    # Sau khi yield message, raise CancelledError để loop exit graceful
-    pubsub = _make_pubsub_mock([_make_message(payload), asyncio.CancelledError()])
+    # Yield 1 message → iterator end → subscriber generic except catches
+    # StopAsyncIteration / drain → reconnect sleep → wait_for timeout exit.
+    pubsub = _make_pubsub_mock([_make_message(payload)])
     redis = _make_redis_with_pubsub(pubsub)
 
-    with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
+    await _run_loop_until_stop(redis, hub_name="yte")
 
     redis.delete.assert_any_call("settings:rag_config:yte")
 
 
 async def test_subscriber_rag_config_hub_mismatch_skips_delete() -> None:
     """rag_config hub="duoc" ở subscriber hub_name="yte" → KHÔNG delete (skip)."""
-    from app.settings_sync.subscriber import settings_subscriber_loop
-
     payload = {"config_key": "rag_config", "hub": "duoc", "timestamp": 1000}
-    pubsub = _make_pubsub_mock([_make_message(payload), asyncio.CancelledError()])
+    pubsub = _make_pubsub_mock([_make_message(payload)])
     redis = _make_redis_with_pubsub(pubsub)
 
-    with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
+    await _run_loop_until_stop(redis, hub_name="yte")
 
     # delete KHÔNG được gọi vì hub mismatch
     redis.delete.assert_not_called()
@@ -180,52 +190,62 @@ async def test_subscriber_rag_config_hub_mismatch_skips_delete() -> None:
 
 async def test_subscriber_hub_registry_deletes_singleton_key() -> None:
     """hub_registry → delete settings:hub_registry (singleton, any hub)."""
-    from app.settings_sync.subscriber import settings_subscriber_loop
-
     payload = {"config_key": "hub_registry", "hub": "*", "timestamp": 1000}
-    pubsub = _make_pubsub_mock([_make_message(payload), asyncio.CancelledError()])
+    pubsub = _make_pubsub_mock([_make_message(payload)])
     redis = _make_redis_with_pubsub(pubsub)
 
-    with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
+    await _run_loop_until_stop(redis, hub_name="yte")
 
     redis.delete.assert_any_call("settings:hub_registry")
 
 
 async def test_subscriber_invalid_json_logs_warning_and_continues() -> None:
     """Invalid JSON payload → log warning skip + KHÔNG redis.delete + KHÔNG crash."""
-    from app.settings_sync.subscriber import settings_subscriber_loop
-
     pubsub = _make_pubsub_mock(
         [
             {"type": "message", "channel": "settings:invalidate", "data": "not-json{"},
-            asyncio.CancelledError(),
         ]
     )
     redis = _make_redis_with_pubsub(pubsub)
 
-    with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
+    await _run_loop_until_stop(redis, hub_name="yte")
 
     redis.delete.assert_not_called()  # invalid → skip
 
 
 async def test_subscriber_cancelled_error_reraises_graceful() -> None:
-    """asyncio.CancelledError → loop re-raise (graceful shutdown lifespan)."""
+    """asyncio.CancelledError trong listen → loop re-raise (graceful shutdown).
+
+    Test manually drive subscriber qua asyncio.create_task + task.cancel() — đây
+    là cách production thực sự cancel subscriber (lifespan task.cancel()).
+    """
     from app.settings_sync.subscriber import settings_subscriber_loop
 
-    pubsub = _make_pubsub_mock([asyncio.CancelledError()])
-    redis = _make_redis_with_pubsub(pubsub)
+    # Pubsub blocks forever on listen() — task.cancel() trigger CancelledError
+    # truyền vào async for loop.
+    pubsub = MagicMock()
+    pubsub.subscribe = AsyncMock(return_value=None)
+    pubsub.aclose = AsyncMock(return_value=None)
 
+    async def _listen_forever() -> AsyncIterator[dict[str, Any]]:
+        await asyncio.sleep(60)  # block — task.cancel() trigger CancelledError
+        yield {}  # unreachable
+
+    pubsub.listen = _listen_forever
+    redis = MagicMock()
+    redis.pubsub = MagicMock(return_value=pubsub)
+    redis.delete = AsyncMock(return_value=1)
+    redis.scan = AsyncMock(return_value=(0, []))
+
+    task = asyncio.create_task(
+        settings_subscriber_loop(redis, hub_name="yte", reconnect_seconds=1)
+    )
+    # Cho task start subscribe + enter listen sleep
+    await asyncio.sleep(0.1)
+    task.cancel()
     with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
-    # pubsub.aclose() vẫn được gọi qua finally
+        await task
+    # pubsub.aclose() vẫn được gọi
     pubsub.aclose.assert_called()
 
 
@@ -236,18 +256,13 @@ async def test_subscriber_cancelled_error_reraises_graceful() -> None:
 
 async def test_subscriber_apikey_null_key_id_scans_and_flushes() -> None:
     """apikey null key_id → SCAN + DEL all apikey:verify:* keys."""
-    from app.settings_sync.subscriber import settings_subscriber_loop
-
     payload = {"config_key": "apikey", "hub": "*", "timestamp": 1000}
-    pubsub = _make_pubsub_mock([_make_message(payload), asyncio.CancelledError()])
+    pubsub = _make_pubsub_mock([_make_message(payload)])
     # Mock scan trả về 2 keys ở first iteration, cursor 0 (done)
     scan_keys = [b"apikey:verify:hash1", b"apikey:verify:hash2"]
     redis = _make_redis_with_pubsub(pubsub, scan_return=(0, scan_keys))
 
-    with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
+    await _run_loop_until_stop(redis, hub_name="yte")
 
     redis.scan.assert_called()
     redis.delete.assert_called_with(*scan_keys)
@@ -255,20 +270,12 @@ async def test_subscriber_apikey_null_key_id_scans_and_flushes() -> None:
 
 async def test_subscriber_invalid_payload_schema_skips() -> None:
     """Pydantic ValidationError (config_key INVALID enum) → log warning skip."""
-    from app.settings_sync.subscriber import settings_subscriber_loop
-
     pubsub = _make_pubsub_mock(
-        [
-            _make_message({"config_key": "INVALID", "hub": "yte", "timestamp": 1}),
-            asyncio.CancelledError(),
-        ]
+        [_make_message({"config_key": "INVALID", "hub": "yte", "timestamp": 1})]
     )
     redis = _make_redis_with_pubsub(pubsub)
 
-    with pytest.raises(asyncio.CancelledError):
-        await settings_subscriber_loop(
-            redis, hub_name="yte", reconnect_seconds=1
-        )
+    await _run_loop_until_stop(redis, hub_name="yte")
 
     redis.delete.assert_not_called()
 
