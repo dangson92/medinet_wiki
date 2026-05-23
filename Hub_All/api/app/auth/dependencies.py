@@ -248,6 +248,45 @@ async def get_current_user(  # noqa: C901 — Phase 3 branch verify path hub con
     return user
 
 
+async def require_internal_auth(
+    x_internal_auth: str | None = Header(default=None, alias="X-Internal-Auth"),  # noqa: B008
+) -> None:
+    """Phase 6 Plan 06-03 SETTINGS-03 (D-V3-Phase6-D) — Internal-only endpoint gate.
+
+    Verify header `X-Internal-Auth: <settings_proxy_secret>` constant-time compare
+    qua `hmac.compare_digest`. 401 INTERNAL_AUTH_FAIL nếu mismatch hoặc thiếu.
+
+    Dùng cho POST /api/api-keys/verify (Plan 06-03 Task 2 — hub con call central
+    proxy). KHÔNG expose ra public internet (Caddy block /api/api-keys/verify
+    nếu cần — review Plan 05-01 caddy config nếu deploy public-facing).
+
+    Threat model:
+    - T-06-03-01 Tampering — secret leak / brute force → attacker bypass.
+      `hmac.compare_digest` tránh timing attack (secret entropy ≥ 128-bit
+      enforce qua Settings validator Plan 06-01 length ≥ 32 char).
+    - T-06-04-03 DoS rate limit — slowapi middleware 100 req/s per IP defer
+      Plan 06-XX `rate_limit_internal_per_minute` Settings field nếu cần.
+
+    Returns:
+        None on success (FastAPI Depends pattern). Raise HTTPException 401
+        INTERNAL_AUTH_FAIL trên mọi failure case (missing/empty/wrong).
+    """
+    import hmac
+
+    from app.config import get_settings
+
+    settings = get_settings()
+    expected = settings.settings_proxy_secret
+    if not x_internal_auth or not hmac.compare_digest(x_internal_auth, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INTERNAL_AUTH_FAIL",
+                "message": "Internal auth header missing or invalid",
+            },
+        )
+
+
 def require_role(
     *roles: str,
 ) -> Callable[[User], Awaitable[User]]:

@@ -15,13 +15,12 @@ Decision traceability:
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
 
 from app.auth.dependencies import require_internal_auth
-
 
 SECRET = "x" * 32  # 32 char min — D-V3-Phase6-D validator Plan 06-01
 
