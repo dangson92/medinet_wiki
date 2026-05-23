@@ -654,6 +654,14 @@ def hub_app_factory(
             # test_sync_lifespan_integration mock asyncpg.create_pool riêng —
             # KHÔNG cần skip flag.
             monkeypatch.setenv("SYNC_SKIP_CENTRAL_POOL", "1")
+            # Plan 06-04 Task 1 — lifespan settings_sync blocking fetch_initial
+            # (RagConfigClient + HubRegistryClient) fail-loud nếu CENTRAL_URL
+            # KHÔNG resolve. Phase 2 hub_app_factory consumer KHÔNG verify
+            # settings_sync path → skip qua SETTINGS_SKIP_FETCH=1 escape hatch
+            # (pattern song song JWKS_SKIP_FETCH + SYNC_SKIP_CENTRAL_POOL).
+            # Phase 6 dedicated test test_settings_sync_lifespan_integration
+            # mock httpx.AsyncClient riêng — KHÔNG cần skip flag.
+            monkeypatch.setenv("SETTINGS_SKIP_FETCH", "1")
 
         # Force re-parse env (lru_cache singleton).
         get_settings.cache_clear()

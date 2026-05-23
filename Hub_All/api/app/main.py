@@ -537,9 +537,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
             app.state.hub_registry_client = hub_client
             app.state.api_key_verify_client = apikey_client
 
-            # Spawn subscriber task (best-effort — Redis None KHÔNG fail-loud
-            # per CONTEXT Claude's Discretion fail-quiet subscriber).
-            if app.state.redis is not None:
+            # Spawn subscriber task (best-effort — Redis NOT ready KHÔNG fail-loud
+            # per CONTEXT Claude's Discretion fail-quiet subscriber). Check
+            # `app.state.redis_ready` (PING xác nhận live) thay vì only `redis is
+            # not None` — `from_url()` lazy KHÔNG verify connection; ping() là
+            # nguồn truth duy nhất xác định Redis usable (T-06-04-04 carry forward
+            # M2 main.py:107-115 try/except pattern).
+            if app.state.redis is not None and app.state.redis_ready:
                 app.state.settings_subscriber_task = asyncio.create_task(
                     settings_subscriber_loop(
                         app.state.redis,
@@ -553,7 +557,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
                 )
             else:
                 logger.warning(
-                    "settings_subscriber_skipped: redis None — TTL natural fallback"
+                    "settings_subscriber_skipped: redis_ready=%s — TTL natural fallback",
+                    app.state.redis_ready,
                 )
             logger.info(
                 "lifespan_settings_sync_ready: hub=%s central_url=%s",
