@@ -288,7 +288,7 @@ Plans:
 **Plans:** 5 plans (4 waves — Wave 1 BLOCKING + Wave 2 BLOCKING + Wave 3 BLOCKING + Wave 3 parallel + Wave 5 closeout)
 
 Plans:
-- [ ] 07-01-PLAN.md — `scripts/migrate/01-snapshot-hubs.sh` pg_dump --data-only --where hub_id 3 hub (yte/duoc/hcns) → migrate-snapshots/migrate-<hub>-<date>.sql + .gitignore exclude *.sql + README.md 30-day retention (MIGRATE-01 — D-V3-Phase7-A LOCKED)
+- [x] 07-01-PLAN.md — `scripts/migrate/01-snapshot-hubs.sh` pg_dump --data-only --where hub_id 3 hub (yte/duoc/hcns) → migrate-snapshots/migrate-<hub>-<date>.sql + .gitignore exclude *.sql + README.md 30-day retention (MIGRATE-01 — D-V3-Phase7-A LOCKED) — **DONE 2026-05-23** (2 commit e057e5f feat + 786586d docs; script 194 LOC bash -n PASS + 18 grep acceptance PASS; scope limit honored — KHONG run pg_dump runtime, syntax + grep verify only)
 - [ ] 07-02-PLAN.md — `scripts/migrate/02-restore-hub.sh` psql -f restore vào medinet_hub_<HUB> blue/green (D-V3-Phase7-B) + `03-switch-caddy.sh` VERIFY-ONLY (Caddyfile dynamic regex KHÔNG sed) + --rollback flag (MIGRATE-02)
 - [ ] 07-03-PLAN.md — `scripts/migrate/04-truncate-central.sh` atomic BEGIN/COMMIT DELETE 4 table per hub_id + audit_logs INSERT TRƯỚC DELETE (Phase 4 W8 pattern) + dry-run DEFAULT ON safety + --apply explicit; KHÔNG DELETE chunks (D-V3-02 LOCKED) (MIGRATE-03)
 - [ ] 07-04-PLAN.md — `mcp_service/mcp_app/config.py` Settings.api_base_url default re-point `http://python-api-central:8080` (D-V3-Phase7-C) + docker-compose.yml comment update CONFIRMED + `scripts/migrate/06-mcp-smoke.md` 5-step Inspector OAuth runbook + 135/135 mcp_service test regression mandatory (MIGRATE-04)
@@ -327,7 +327,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **33/~37** | **25/29** | 🔄 **Phase 1+2+3+4+5+6 DONE 2026-05-23 (33/~37 ≈ 89%) — v3.0-b 3/4 phase complete, Phase 7 MIGRATE còn lại** | — |
+| **v3.0 Multi-Hub Split** | **7** | **34/~38** | **26/30** | 🔄 **Phase 1+2+3+4+5+6 DONE + Phase 7 Plan 07-01 DONE 2026-05-23 (34/~38 ≈ 89%) — v3.0-b 3/4 phase complete + Phase 7 Wave 1 BLOCKING ship MIGRATE-01, 4 plan Phase 7 còn lại** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
