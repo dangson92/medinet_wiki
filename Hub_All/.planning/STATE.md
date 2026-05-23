@@ -631,6 +631,19 @@ phase_5_status: "DONE 2026-05-23 ✅ — 6 plan/5 wave shipped qua /gsd-execute-
 
 > **CRIT-01 status:** ✅ ĐÃ ĐÓNG Plan 10-04 (2026-05-21) — KHÔNG còn defer.
 
+## Deferred Items
+
+Items acknowledged and deferred at v3.0 milestone close on 2026-05-23:
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug_sessions | podman-init-admin-issue | deferred (WSL provider hang — Windows env-specific, không block v3.0) |
+| uat_gaps | Phase 06: 06-HUMAN-UAT.md | partial (0 pending scenarios — auto-fallback skip per --auto chain v3.0-b precedent) |
+| verification_gaps | Phase 06: 06-VERIFICATION.md | human_needed (visual smoke runtime defer Phase 7 MIGRATE-05 → defer ops handover post-milestone-close) |
+| seeds | SEED-001-local-embedding-model | dormant (HuggingFace sentence-transformers local embedding — v4.0 backlog) |
+
+Carry forward vào v3.1 RBAC milestone hoặc v4.0 follow-up.
+
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-21 v3.0 milestone start) + `.planning/REQUIREMENTS.md` (v3.0 — 29 REQ-ID v1) + `.planning/ROADMAP.md` (v3.0 — 7 phase reset numbering)

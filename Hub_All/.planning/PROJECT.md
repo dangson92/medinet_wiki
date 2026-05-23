@@ -1,12 +1,15 @@
 # Medinet Wiki — Hub_All
 
 **Mã dự án:** MEDWIKI
-**Giai đoạn:** **v3.0 Multi-Hub Split STARTED** 2026-05-21 — defining requirements + roadmap
-**Current Milestone:** **v3.0 — Multi-Hub Split** (started 2026-05-21, phase numbering reset về 1, granularity large, mode YOLO)
-**Shipped:** **v2.0 — Full RAG Rewrite (CocoIndex + Python FastAPI + pgvector)** ✅ 2026-05-21 (13 phase / ~75 plan / 38 REQ-ID — archive `.planning/milestones/v2.0-full-rag-rewrite/`)
+**Giai đoạn:** **v3.0 Multi-Hub Split SHIPPED ✅ 2026-05-23** — milestone closed, archive `.planning/milestones/v3.0-multi-hub-split/`
+**Current Milestone:** **(none — between milestones)** — Next: `/gsd-new-milestone v3.1` RBAC hub_admin (user request 2026-05-23)
+**Shipped:**
+- **v2.0 — Full RAG Rewrite** ✅ 2026-05-21 (13 phase / ~75 plan / 38 REQ-ID — archive `.planning/milestones/v2.0-full-rag-rewrite/`)
+- **v3.0 — Multi-Hub Split** ✅ 2026-05-23 (7 phase / 38 plan / 30 REQ-ID — archive `.planning/milestones/v3.0-multi-hub-split/`)
+**Next:** v3.1 = RBAC hub_admin (gap thiết kế role-per-hub user yêu cầu 2026-05-23). Memory: `project_rbac_hub_admin_gap`.
 **Defer:** v4.0 = Production Hardening + Advanced RAG (OCR VN, streaming SSE, cross-dim swap, coverage >80%, ...). v4.1+ = Hybrid BM25 + reranker + local embedding (SEED-001) + version history & concurrent editing.
 **Abandoned:** v1.0 = RAG Quality with Docling (2026-05-13 — xem `MILESTONES.md`)
-**Ngày khởi tạo GSD:** 2026-04-28 · **Pivot 2:** 2026-05-13 · **v2.0 shipped:** 2026-05-21 · **v3.0 started:** 2026-05-21
+**Ngày khởi tạo GSD:** 2026-04-28 · **Pivot 2:** 2026-05-13 · **v2.0 shipped:** 2026-05-21 · **v3.0 shipped:** 2026-05-23
 
 ---
 
@@ -22,9 +25,16 @@ Medinet Wiki là hệ thống quản lý tri thức nội bộ đa-Hub (3 Hub: y
 
 Core value không đổi qua các milestone — chỉ cách triển khai thay đổi (Go-native → Docling sidecar → CocoIndex + FastAPI). Khi RAG chất lượng ổn định, các milestone sau (Multi-subdomain SPA, MCP Server, AI Post) mới có giá trị thực tế.
 
-## Current Milestone: v3.0 Multi-Hub Split
+## Current State (post v3.0 shipped 2026-05-23)
 
-**Goal:** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL (1 DB `medinet_central` + `WHERE hub_id`) sang **multi-tenancy PHYSICAL** — mỗi hub con có **process + Postgres database riêng cùng 1 instance**, hub tổng đóng vai trò aggregator nhận chunks + vector từ hub con (sync 1 chiều) để search cross-hub tập trung. URL subpath `wiki.domain.com/<ten_hub>`.
+**Status:** v3.0 Multi-Hub Split shipped ✅ 2026-05-23 — 7 phase, 38 plan, 30 REQ-ID closed. Stack production-ready cho deploy multi-hub physical (1 Postgres instance + N+1 logical DB + N+1 FastAPI process + Caddy reverse proxy subpath).
+
+**Gap phát hiện sau v3.0 close (2026-05-23):**
+- **RBAC role-per-hub** (v3.1 NEXT) — `users.role` GLOBAL super-admin bypass hub isolation; user assign hub `dmd` vẫn vào được central. User yêu cầu proper fix thêm role `hub_admin`. Phase đề xuất ~4 phase.
+
+## Previous Milestone: v3.0 Multi-Hub Split (SHIPPED 2026-05-23)
+
+**Goal (shipped):** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL (1 DB `medinet_central` + `WHERE hub_id`) sang **multi-tenancy PHYSICAL** — mỗi hub con có **process + Postgres database riêng cùng 1 instance**, hub tổng đóng vai trò aggregator nhận chunks + vector từ hub con (sync 1 chiều) để search cross-hub tập trung. URL subpath `wiki.domain.com/<ten_hub>`.
 
 **Target features (7 phase, ~30 REQ-ID, phase numbering reset về 1):**
 
@@ -77,17 +87,26 @@ Full details: `.planning/milestones/v2.0-full-rag-rewrite/ROADMAP.md`
 
 ## Requirements
 
-### Active (v3.0 scope — see `.planning/REQUIREMENTS.md` for full REQ-IDs)
+### Active (v3.1 NEXT — see project_rbac_hub_admin_gap memory)
 
-7 category × 4-5 REQ trên 7 phase (phase numbering reset về 1):
+User feature request 2026-05-23 — RBAC hub_admin role thực sự (gap thiết kế defer v4.0 trong M2 trở thành block).
 
-- **TOPO-01..04** (Phase 1): Multi-DB factory `medinet_hub_<name>` + per-hub Alembic + cocoindex flow naming per-hub.
-- **FACTOR-01..03** (Phase 2): 1 codebase deploy nhiều lần với `HUB_NAME`; strip system settings ở hub con.
-- **SSO-01..04** (Phase 3): JWKS share central → hub con; refresh token Redis chung; `hub_ids` JWT claim; E4 reinforced.
-- **SYNC-01..05** (Phase 4): Chunks+vector push hub con → central; idempotent retry; checksum verify; mechanism chốt discuss-phase.
-- **PROXY-01..04** (Phase 5): Caddy subpath route; frontend prefix detect; D6 expire formally; per-hub branding.
-- **SETTINGS-01..04** (Phase 6): rag-config HTTP pull + Redis cache + pub/sub invalidate < 30s; api_keys lookup central.
-- **MIGRATE-01..05** (Phase 7): `pg_dump` per `hub_id` → DB con; blue/green per-hub; MCP re-point; smoke E2E 3 hub + tổng.
+- **RBAC-01..04 (TBD Phase 1 v3.1):** DB migration `role_enum` thêm `hub_admin` + `UserHub.role` per-hub column carry forward M2 schema
+- **RBAC-05..08 (TBD Phase 2 v3.1):** Backend `require_role()` + `require_hub_admin_for(hub_id)` dependency + filter `GET /api/hubs` cho hub_admin (KHÔNG branch admin bypass)
+- **RBAC-09..12 (TBD Phase 3 v3.1):** Frontend UserManagement form tách "Admin toàn hệ thống" vs "Quản lý hub này" + hub switcher hide central nếu non-super-admin
+- **RBAC-13 (TBD Phase 4 v3.1):** Migration script seed existing admins giữ super-admin role + audit trail
+
+REQ-ID cụ thể chốt qua `/gsd-new-milestone v3.1`.
+
+### Validated (v3.0 shipped 2026-05-23 — 30/30 REQ-ID done)
+
+- ✓ TOPO-01..04 — Multi-DB factory `medinet_hub_<name>` + per-hub Alembic head SHA match + cocoindex flow naming per-hub + HUB_NAME DSN isolation enforce DB-level (E-V3-3) — v3.0
+- ✓ FACTOR-01..04 — `create_app()` factory conditional mount (7 universal + 9 central-only router) + docker-compose YAML anchor 4 service + dynamic hub registration `make hub-add HUB=<name>` Plan 02-05 — v3.0
+- ✓ SSO-01..04 — JWKS endpoint central RFC 7517 + hub con JWKSCache TTL 1h + Redis blacklist `auth:blacklist:{jti}` + JWT `aud` + `hub_ids` REQUIRED + Layer 3 `get_current_user_for_hub_access` dependency — v3.0
+- ✓ SYNC-01..05 — sync_outbox table + Postgres trigger AFTER INSERT/DELETE chunks + asyncio worker SKIP LOCKED + ON CONFLICT idempotent + 1 SQL cross-hub search aggregated + checksum scheduler daily/hourly + `POST /api/sync/replay` admin endpoint — v3.0
+- ✓ PROXY-01..04 — Caddy subpath route `path_regexp + uri strip_prefix + reverse_proxy` + frontend 1 build runtime detect prefix + D6 EXPIRED formally + per-hub branding registry Vite glob 4 hub — v3.0
+- ✓ SETTINGS-01..04 — HTTP pull on-demand + Redis cache TTL 60s/300s/60s + pub/sub invalidate `settings:invalidate` channel + 3 client class + `X-Internal-Auth` shared secret 32-char `hmac.compare_digest` — v3.0
+- ✓ MIGRATE-01..05 — `scripts/migrate/` 5 bash script blue/green per-hub + MCP re-point central aggregate + smoke E2E automated 3 hub × 7-step golden path + chunks PRESERVED D-V3-02 — v3.0
 
 ### Validated (M2 v2.0 shipped 2026-05-21 — 38/38 REQ-ID done)
 
@@ -269,4 +288,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-21 sau `/gsd-new-milestone v3.0` — Multi-Hub Split STARTED. Phase numbering reset về 1 (D-V3-05). 7 phase × ~4-5 REQ = ~30 REQ-ID v1 (TOPO/FACTOR/SSO/SYNC/PROXY/SETTINGS/MIGRATE). v3.0-a (Phase 1-3) vs v3.0-b (Phase 4-7) split anti-pivot. v2.0 archive: `.planning/milestones/v2.0-full-rag-rewrite/` (REQUIREMENTS + ROADMAP + 13 phase dirs). Next: `/gsd-discuss-phase 1` Multi-DB topology + per-hub Alembic.*
+*Last updated: 2026-05-23 sau `/gsd-complete-milestone v3.0` — Multi-Hub Split SHIPPED ✅. 7 phase / 38 plan / 30 REQ-ID (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5). v3.0-a (Phase 1-3) + v3.0-b (Phase 4-7) anti-pivot pattern hoàn tất. Archive: `.planning/milestones/v3.0-multi-hub-split/`. RBAC hub_admin gap phát hiện sau close → v3.1 next milestone (user request memory `project_rbac_hub_admin_gap`). Next command: `/gsd-new-milestone v3.1`.*

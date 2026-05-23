@@ -1,3 +1,11 @@
+# Requirements — Milestone v3.0 Multi-Hub Split (ARCHIVE)
+
+**Status:** ✅ SHIPPED 2026-05-23 · **REQ-ID closed:** 30/30 (100%)
+
+> Archive snapshot — tất cả REQ-ID marked [x] sau Phase 7 closeout. Fresh REQUIREMENTS.md sẽ tạo qua `/gsd-new-milestone` cho milestone tiếp theo.
+
+---
+
 # Requirements: Medinet Wiki — Milestone v3.0 (Multi-Hub Split)
 
 **Defined:** 2026-05-21

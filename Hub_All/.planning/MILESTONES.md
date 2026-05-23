@@ -119,9 +119,84 @@ Full archive: `.planning/milestones/v2.0-full-rag-rewrite/ROADMAP.md` + `REQUIRE
 
 ---
 
-## Milestones tương lai (sau v2.0)
+## v3.0 — Multi-Hub Split — ✅ SHIPPED 2026-05-23
+
+**Status:** 100% COMPLETE — 7 phase / 38 plan / 30 REQ-ID consumed (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5). Tag `v3.0` annotated. Archive: `.planning/milestones/v3.0-multi-hub-split/`.
+
+**Goal:** Tách hub con (y_te, dược, HCNS) từ multi-tenancy LOGICAL → PHYSICAL — mỗi hub có process + Postgres database riêng cùng instance; central aggregator nhận chunks + vector qua outbox sync 1 chiều; URL subpath `wiki.domain.com/<hub>`.
+
+**Calendar:** Started 2026-05-21 → Shipped 2026-05-23 (~3 ngày calendar AI-assisted; v3.0-a Phase 1-3 trong 2 ngày 21-22/05, v3.0-b Phase 4-7 trong 2 ngày 22-23/05).
+
+### Phases shipped (7/7 ✅)
+
+| # | Phase | Plans | REQ-ID | Completed |
+|---|---|---|---|---|
+| 1 | Multi-DB Topology + Per-hub Alembic | 5/5 | TOPO-01..04 | 2026-05-21 |
+| 2 | Hub-con Codebase Factor | 5/5 | FACTOR-01..04 (+04 added 2026-05-22) | 2026-05-22 |
+| 3 | Auth SSO + hub_ids trong JWT | 5/5 | SSO-01..04 | 2026-05-22 |
+| 🚦 | **v3.0-a EXIT GATE** | — | — | TRIGGERED 2026-05-22 → user accept tiếp tục v3.0-b |
+| 4 | Cross-hub Data Sync | 7/7 | SYNC-01..05 | 2026-05-22 |
+| 5 | Reverse Proxy + Frontend Subpath | 6/6 | PROXY-01..04 | 2026-05-23 |
+| 6 | System Settings Sync | 5/5 | SETTINGS-01..04 | 2026-05-23 |
+| 7 | Migration + Smoke E2E | 5/5 | MIGRATE-01..05 | 2026-05-23 |
+
+### Key accomplishments
+
+1. **Multi-DB topology** — Postgres init script idempotent tạo N+1 logical DB cùng instance (`medinet_central` + `medinet_hub_<name>`) + per-hub Alembic migration set khớp head SHA + cocoindex flow naming per-hub + HUB_NAME env DSN isolation enforce DB-level (E-V3-3).
+2. **Codebase factor 1 deploy nhiều lần** — `create_app()` factory no-arg đọc `settings.hub_name` conditional mount (7 universal + 9 central-only router) + docker-compose YAML anchor 4 service dedicated + dynamic hub registration (FACTOR-04) `make hub-add HUB=<name>` regex + RESERVED blacklist + override.yml.template sed substitute zero-downtime caddy reload.
+3. **Auth SSO + JWKS + Layer 3 enforcement** — central JWKS endpoint RFC 7517 + hub con JWKSCache in-process LRU TTL 1h refresh + 24h hard limit fail-loud + JWT `aud=["medinet-wiki"]` + `hub_ids: list[str]` REQUIRED + `auth:blacklist:{jti}` Redis chung + `get_current_user_for_hub_access` dependency 403 CROSS_HUB_ACCESS_DENIED stale JWT.
+4. **Cross-hub data sync outbox + worker** — `sync_outbox` table per-hub + Postgres trigger AFTER INSERT/DELETE chunks atomic + asyncio worker hub con `SELECT FOR UPDATE SKIP LOCKED` batch 100/5s + `ON CONFLICT (id) DO UPDATE WHERE content_hash IS DISTINCT` idempotent + exp backoff [1,5,30,120]s + 6 Prometheus metric (`sync_lag_seconds/outbox_pending/attempt_total/dead_total/count_drift/hash_drift`) + admin `POST /api/sync/replay` recovery + checksum scheduler daily/hourly.
+5. **Cross-hub search 1 SQL aggregated** — `_search_cross_hub_impl` refactor từ fan-out `asyncio.gather` → 1 SQL `WHERE c.hub_id = ANY($2::uuid[]) ORDER BY vector <=> $1::vector` re-rank tự nhiên + HNSW `iterative_scan=relaxed_order` + `ef_search=200` + `max_scan_tuples=20000` carry forward M2. Public API signature unchanged backward compat M2.
+6. **Reverse proxy subpath + frontend 1 build** — Caddy `path_regexp hub_api ^/({HUBS}|)/api/(.*)$` + `uri strip_prefix /{re.hub_api.1}` + `reverse_proxy http://python-api-{re.hub_api.1}:8080` (port STATIC anti SSRF) + frontend module-level runtime detect `window.location.pathname` → `PREFIX/API_BASE/APP_BASE/CURRENT_HUB` + `BrowserRouter basename` auto-prepend. D6 EXPIRED formally. Per-hub branding registry Vite glob 4 hub + inline CSS var `--hub-theme` + WCAG 1.4.11 mitigation hcns amber.
+7. **System settings sync hybrid** — HTTP pull on-demand + Redis cache TTL 60s/300s/60s + pub/sub invalidate channel `settings:invalidate` Pydantic Literal enum payload (< 1s thực tế propagate vs E-V3-4 < 30s threshold) + 3 client class (RagConfigClient + HubRegistryClient + ApiKeyVerifyClient) + shared secret header `X-Internal-Auth` 32-char `hmac.compare_digest` constant-time + 6 Prometheus metric mới.
+8. **Migration blue/green per-hub** — `scripts/migrate/` 5 bash script (01-snapshot pg_dump --where + 02-restore + 03-switch-caddy verify-only + 04-truncate dry-run default + 05-smoke-e2e automated 3 hub × 7-step golden path) + 06-mcp-smoke runbook 5-step Inspector OAuth + fixture sample-document.docx 37KB Vietnamese y tế (python-docx reproducible). MCP re-point central aggregate 1-line config + 143/135 mcp_service test regression. D-V3-02 chunks PRESERVED invariant strict (10+ explicit reference truncate script).
+
+### Issues encountered & resolutions
+
+- **BLOCKER 1 (Plan 04-01):** `documents.sync_status` initial state `'pending' → 'syncing'` không idempotent — fix UPDATE guard `WHERE sync_status='pending'` D-V3-Phase4-B2 lifecycle.
+- **BLOCKER 2 (Plan 04-01/03):** Postgres trigger `to_jsonb(NEW)` fail pgvector serialization — fix explicit `jsonb_build_object` field + `NEW.vector::float4[]` cast + `encode(content_hash, 'hex')` 64 char; ChunkPayload `content_hash` field_validator mode=before decode hex string → bytes.
+- **T-06-04-04 race redis lazy init (Plan 06-04):** M2 `from_url()` lazy assign object trước ping; ping fail → `app.state.redis` non-None NHƯNG `redis_ready=False` → subscriber spawn broken connection infinite reconnect hang — fix subscriber spawn guard `redis is not None AND redis_ready` (Rule 3 inline auto-fix).
+- **Caddyfile dynamic regex Plan 07-02 correction:** Phase 5 đã ship `{re.hub_api.1}` dynamic capture → Phase 7 chỉ cần container `python-api-<HUB>` running → Caddy auto-route. `03-switch-caddy.sh` shrink từ sed edit phức tạp → verify-only ~132 LOC.
+
+### Known deferred items (recorded — KHÔNG block close)
+
+| Type | Item | Tracker |
+|---|---|---|
+| Debug | podman-init-admin-issue (WSL Windows env-specific) | STATE.md Deferred Items |
+| UAT | Phase 06 HUMAN-UAT partial — visual smoke runtime | Defer ops handover |
+| Verification | Phase 06 VERIFICATION human_needed | Defer ops handover |
+| Seed | SEED-001 local embedding model (HuggingFace sentence-transformers) | v4.1 backlog dormant |
+| Tech debt | RBAC role-per-hub (gap thiết kế — user request fix 2026-05-23) | **v3.1 next milestone** |
+| Tech debt | Visual regression smoke 4 hub × 11 trang React M2 COMPAT-01 | Defer ops handover post-v3.0 |
+
+> **RBAC hub_admin gap:** Phát hiện 2026-05-23 sau v3.0 close — `users.role` GLOBAL super-admin bypass hub isolation; user yêu cầu proper fix thêm role `hub_admin`. Phase v3.1 next.
+
+### Key decisions (carry forward to v3.1)
+
+- **6 D-V3-01..06 LOCKED 2026-05-21** carry forward — multi-DB cùng instance + chunks+vector sync 1 chiều + milestone-level scoping + M2 closeout precondition + phase numbering reset + D6 expire formally Phase 5.
+- **38 D-V3-Phase{2..7}-X LOCKED 2026-05-22..23** documented in archive `milestones/v3.0-multi-hub-split/ROADMAP.md`.
+- **Anti-pivot pattern success:** v3.0-a/v3.0-b split + EXIT GATE giữa Phase 3-4 user accept → never pivot multi-DB topology. R-V3-1..6 mitigation effective; E-V3-1..5 không trigger.
+
+Full archive: `.planning/milestones/v3.0-multi-hub-split/ROADMAP.md` + `REQUIREMENTS.md`.
+
+---
+
+## Milestones tương lai (sau v3.0)
+
+### v3.1 — RBAC hub_admin (NEXT 2026-05-23 — user request)
+
+**Goal:** Đóng gap RBAC role-per-hub được defer v4.0 trong M2. Thêm role `hub_admin` quản lý 1 hub cụ thể (không phải super-admin toàn hệ thống). User được assign hub nào CHỈ quản lý hub đó.
+
+**Trigger:** `/gsd-new-milestone v3.1` (user đã accept 2026-05-23).
+
+**Scope estimate:** ~4 phase / ~12-18 plan — DB migration `role_enum` + backend `require_hub_admin_for(hub_id)` dependency + frontend form refactor + migration script seed existing admin.
+
+Memory reference: `project_rbac_hub_admin_gap.md`.
 
 ### v3.0 — Multi-Hub Split (SEEDED 2026-05-21 — chờ trigger)
+
+> **NOTE:** Section này là seed cũ trước khi v3.0 chạy. Giữ làm lịch sử. v3.0 đã SHIPPED 2026-05-23 (xem section trên).
+
 
 **Goal redefine:** Tách hub con (y_te, dược, HCNS) sang multi-tenancy PHYSICAL — mỗi hub con có process + Postgres database riêng cùng 1 instance, hub tổng aggregator nhận chunks + vector sync 1 chiều. URL subpath `wiki.domain.com/<ten_hub>` thay subdomain (đảo PRD v1.3 cũ).
 
