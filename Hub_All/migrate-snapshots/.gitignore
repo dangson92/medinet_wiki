@@ -1,0 +1,10 @@
+# Phase 7 MIGRATE-01 (D-V3-Phase7-A LOCKED 2026-05-23)
+# Loại trừ snapshot pg_dump khỏi git — chứa PII (users + audit_logs + usage_events).
+# KHÔNG commit production data vào repo public/private.
+*.sql
+*.sql.gpg
+*.dump
+
+# Giữ README.md + .gitignore (tracked)
+!.gitignore
+!README.md
