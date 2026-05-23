@@ -27,7 +27,7 @@
 | 🚦 | **v3.0-a EXIT GATE** | Demo 1 hub con (yte) + tổng + JWT SSO + golden path PASS — user accept tiếp tục v3.0-b | — | — | Phase 1-3 done |
 | ✅ **4** | Cross-hub data sync | Chunks+vector denormalized push hub con → central qua outbox + worker; idempotent ON CONFLICT retry; cross-hub search 1 SQL aggregated; checksum scheduler daily/hourly verify; admin /api/sync/replay endpoint; 6 Prometheus metric infrastructure | SYNC-01..05 (5) | 5 | M2 shipped — **DONE 2026-05-22** (7 plans / ~21 commits / 113 unit + 21 integration test PASS in-process) |
 | ✅ **5** | Reverse proxy + frontend subpath | Caddy subpath route; frontend detect prefix 1 build; D6 expire formally; per-hub login branding | PROXY-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-23** (6 plans / ~13 commits / 37/37 vitest PASS + caddy validate + docker compose config + bash -n hub-add.sh PASS) |
-| **6** | System settings sync | rag-config HTTP pull + Redis cache 60s + pub/sub invalidate < 30s; api_keys verify proxy central; hub_registry read-only | SETTINGS-01..04 (4) | 4 | Phase 3 |
+| ✅ **6** | System settings sync | rag-config HTTP pull + Redis cache 60s + pub/sub invalidate < 30s; api_keys verify proxy central `X-Internal-Auth`; hub_registry read-only TTL 5 phút; 6 Prometheus metric mới | SETTINGS-01..04 (4) | 4 | M2 shipped — **DONE 2026-05-23** (5 plans / ~13 commits / 87+ unit + 6 integration test PASS in-process) |
 | **7** | Migration + smoke E2E | pg_dump per hub_id; restore blue/green per-hub; truncate central skeleton; MCP re-point central; smoke E2E 3 hub + tổng PASS | MIGRATE-01..05 (5) | 5 | Phase 1-6 |
 
 **v3.0-a (Phase 1-3):** Topology + Codebase Factor + SSO — có thể ship standalone. Demo: 1 hub con + tổng + JWT SSO PASS golden path. User accept v3.0-a → never pivot multi-DB topology.
@@ -232,7 +232,7 @@ Plans:
 
 ---
 
-### Phase 6 — System Settings Sync (GA-V3-B)
+### Phase 6 — System Settings Sync (GA-V3-B) ✅ DONE 2026-05-23
 
 **Goal:** Hub con đọc `rag_config` từ central qua HTTP pull on-demand + Redis cache local TTL 60s + pub/sub invalidate channel `settings:invalidate` (< 30s propagate E-V3-4); api_keys verify proxy gọi central; hub_registry read-only ở hub con.
 
@@ -262,7 +262,7 @@ Plans:
 - [x] 06-02-PLAN.md — Wave 2 client (RagConfigClient + HubRegistryClient + ApiKeyVerifyClient) + subscriber + Pydantic schema (SETTINGS-01/02/04 — D-V3-Phase6-A/C) — **DONE 2026-05-23** (22 unit test 11 client + 11 subscriber + 430/430 regression + ruff/mypy clean; 3 Rule 1 fix httpx.Timeout 4-param + pytest-asyncio CancelledError hang + C901 complexity refactor)
 - [x] 06-03-PLAN.md — Wave 3 require_api_key branch + require_internal_auth + update_rag_config publish + /api/api-keys/verify endpoint (SETTINGS-02/03 — D-V3-Phase6-A/C/D) — **DONE 2026-05-23** (22 unit test 6 require_api_key + 6 require_internal_auth + 4 rag_config publish + 6 api_keys/verify + 452/452 unit regression + 50/50 cluster auth/rag_config/api_keys/sso + 19/19 integration factor+rate_limit + ruff/mypy clean; 0 deviation Plan executed exactly as written)
 - [x] 06-04-PLAN.md — Wave 4 lifespan integration BLOCKING + ASGI integration test + SETTINGS_SKIP_FETCH escape hatch (SETTINGS-01..04 — D-V3-Phase6-A) — **DONE 2026-05-23** (6 integration test ASGI LifespanManager PASS + 452/452 unit regression + 19/19 Phase 2+5 integration regression + ruff/mypy --strict clean; 3 Rule 3 deviation auto-fix inline — main.py subscriber spawn guard redis_ready (T-06-04-04) + conftest hub_app_factory SETTINGS_SKIP_FETCH=1 + test_auth_router_hub_redirect SETTINGS_SKIP_FETCH=1; pubsub e2e defer Phase 7 MIGRATE-05 fakeredis async limit)
-- [ ] 06-05-PLAN.md — Wave 5 closeout CLAUDE.md + STATE.md + REQUIREMENTS.md + ROADMAP.md + README.md + smoke checkpoint (skip auto-fallback)
+- [x] 06-05-PLAN.md — Wave 5 closeout CLAUDE.md §6 progress + Phase 6 pattern subsection + STATE.md frontmatter + Phase 6 Planning + Results Summary + REQUIREMENTS.md SETTINGS-01..04 [x] + NOTE Phase 6 closeout + ROADMAP.md Phase 6 row DONE + Decisions block + README.md NEW section "System Settings Sync Deploy Notes" (5-step + rollback + escape hatch) + smoke checkpoint Task 5b SKIP auto-fallback per --auto chain + v3.0-b precedent (Plan 03-05 + 04-07 + 05-06) — **DONE 2026-05-23** (5 task commit + 1 SUMMARY commit; Task 5b smoke runtime defer Phase 7 MIGRATE-05 evidence chain 87+ unit + 6 integration cover SETTINGS-01..04 semantic)
 
 ---
 
@@ -318,7 +318,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | --- | --- | --- | --- | --- | --- |
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
-| **v3.0 Multi-Hub Split** | **7** | **31/~33** | **21/29** | 🔄 **Phase 1+2+3+4+5 DONE + Phase 6 Plan 06-01..06-03 DONE 2026-05-23 (31/~33 ≈ 94%) — v3.0-b mid-flight** | — |
+| **v3.0 Multi-Hub Split** | **7** | **33/~37** | **25/29** | 🔄 **Phase 1+2+3+4+5+6 DONE 2026-05-23 (33/~37 ≈ 89%) — v3.0-b 3/4 phase complete, Phase 7 MIGRATE còn lại** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
@@ -406,4 +406,4 @@ Tham chiếu `.planning/BACKLOG.md` cho 999.x items. Highlights chuyển vào v4
 
 ---
 
-*Last updated: 2026-05-22 sau `/gsd-execute-phase 4` Plan 04-07 closeout — Phase 4 Cross-hub Data Sync DONE 7 plans (Wave 1 BLOCKING + Wave 2 parallel + Wave 3 + Wave 4 + Wave 5 + Wave 6 closeout). 9 D-V3-Phase4-A1..D3 consumed; outbox + worker mechanism + idempotent ON CONFLICT + cross-hub 1 SQL aggregated + checksum scheduler + admin replay + 6 Prometheus metric infrastructure. SYNC-01..05 fully shipped. 113 unit + 21 integration PASS in-process. v3.0-b mở màn (22/~32 plan ≈ 69%). Next: `/gsd-discuss-phase 5` Reverse Proxy + Frontend Subpath (PROXY-01..04 — GA-V3-C confirm + D-V3-06 D6 expire formally).*
+*Last updated: 2026-05-23 sau `/gsd-execute-phase 6` Plan 06-05 closeout — Phase 6 System Settings Sync DONE 5 plans (Wave 1 BLOCKING + Wave 2 + Wave 3 + Wave 4 BLOCKING + Wave 5 closeout). 4 D-V3-Phase6-A..D consumed; HTTP pull on-demand + Redis pub/sub invalidate hybrid + api_keys verify proxy central X-Internal-Auth hmac.compare_digest + hub_registry read-only + 6 Prometheus metric infrastructure (settings_cache_hit/miss + pull_latency + invalidate_received + stale_seconds + apikey_verify_total). SETTINGS-01..04 fully shipped. 87+ unit + 6 integration PASS in-process. v3.0-b 3/4 phase complete (33/~37 plan ≈ 89%). Next: `/gsd-discuss-phase 7` Migration + Smoke E2E (MIGRATE-01..05 — pg_dump per hub_id + blue/green restore + MCP re-point + smoke E2E full v3.0).*
