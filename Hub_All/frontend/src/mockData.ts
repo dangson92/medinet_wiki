@@ -73,6 +73,20 @@ export const MOCK_HUBS: Hub[] = [
     pendingSync: 12,
     createdAt: '2023-08-20',
   },
+  // Plan 03-01 v3.1 Phase 3 FE-04 — ADD hub tdt (Thuốc Dân Tộc — 1 trong 2 hub thật DB)
+  // Source: memory/project_real_hubs_deployment.md (dmd Đỗ Minh Đường + tdt Thuốc Dân Tộc)
+  {
+    id: '7',
+    name: 'Thuốc Dân Tộc',
+    code: 'tdt',
+    subdomain: 'wiki.medinet.vn/tdt',
+    pages: 178,
+    users: 22,
+    lastUpdate: '4 giờ trước',
+    status: 'active',
+    pendingSync: 1,
+    createdAt: '2025-01-20',
+  },
 ];
 
 export const MOCK_USERS: User[] = [
@@ -111,6 +125,11 @@ export const MOCK_USERS: User[] = [
   { id: 'u33', name: 'Sơn Thị HH', email: 'sthh@medinet.vn', role: 'viewer', hubId: '1', createdAt: '15/03/2025', lastLogin: '1 giờ trước', status: 'active' },
   { id: 'u34', name: 'Ông Văn II', email: 'ovii@medinet.vn', role: 'viewer', hubId: '1', createdAt: '18/03/2025', lastLogin: '4 ngày trước', status: 'active' },
   { id: 'u35', name: 'Âu Thị KK', email: 'atkk@medinet.vn', role: 'viewer', hubId: '2', createdAt: '20/03/2025', lastLogin: '7 giờ trước', status: 'active' },
+  // v3.1 Phase 3 FE-04 fixture — RBAC hub_admin scope (D-V3.1-Phase3-C LOCKED)
+  // Source: .planning/phases/03-frontend-form-refactor/03-CONTEXT.md D-V3.1-Phase3-C
+  //         memory/project_real_hubs_deployment.md (dmd Đỗ Minh Đường + tdt Thuốc Dân Tộc 2 hub thật DB)
+  { id: 'u-hadmin-dmd', name: 'Nguyễn Hub Admin DMD', email: 'hadmin.dmd@medinet.vn', role: 'hub_admin', hubId: MOCK_HUBS.find(h => h.code === 'dmd')?.id ?? '', createdAt: '01/05/2026', lastLogin: '1 giờ trước', status: 'active' },
+  { id: 'u-hadmin-tdt', name: 'Trần Hub Admin TDT', email: 'hadmin.tdt@medinet.vn', role: 'hub_admin', hubId: MOCK_HUBS.find(h => h.code === 'tdt')?.id ?? '', createdAt: '01/05/2026', lastLogin: '30 phút trước', status: 'active' },
 ];
 
 export const MOCK_SYNC_BATCHES: SyncBatch[] = [

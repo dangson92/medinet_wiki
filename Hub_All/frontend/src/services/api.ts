@@ -478,6 +478,16 @@ export interface UserWithRoles {
   roles: RoleAPI[];
 }
 
+// Plan 03-01 v3.1 Phase 3 FE-04 — UserRole literal union mirror BE Pydantic Literal
+// Source: .planning/phases/02-backend-rbac-enforcement/02-CONTEXT.md D-V3.1-Phase2-A LOCKED
+//         api/app/schemas/users.py:UserRole = Literal["admin","hub_admin","editor","viewer"]
+//         .planning/phases/01-rbac-schema-migration/01-01-PLAN.md migration 0006 CHECK constraint
+//         .planning/phases/03-frontend-form-refactor/03-CONTEXT.md D-V3.1-Phase3-D LOCKED
+//
+// CRITICAL: Drift giữa FE alias + BE Literal + Phase 1 CHECK constraint → 422 reject runtime.
+// Centralize export tại đây (api.ts) — consumer import qua `import type { UserRole } from '../services/api'`.
+export type UserRole = 'admin' | 'hub_admin' | 'editor' | 'viewer';
+
 export interface UserAPI {
   id: string;
   email: string;
@@ -486,6 +496,7 @@ export interface UserAPI {
   department?: string;
   avatar_url?: string;
   status: string;
+  role: UserRole;  // Plan 03-01 v3.1 Phase 3 FE-04 — BE Phase 2 ship qua /api/auth/me (D-V3.1-Phase3-B LOCKED)
   failed_login_count: number;
   created_at: string;
   updated_at: string;

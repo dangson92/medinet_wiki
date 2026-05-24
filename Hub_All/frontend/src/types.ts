@@ -15,7 +15,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'viewer';
+  role: 'admin' | 'hub_admin' | 'editor' | 'viewer';  // Plan 03-01 v3.1 Phase 3 FE-04 — extend match UserRole (api.ts)
   hubId: string;
   createdAt: string;
   lastLogin: string;
