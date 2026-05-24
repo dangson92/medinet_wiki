@@ -21,13 +21,24 @@ def _make_user(role: str) -> SimpleNamespace:
     return SimpleNamespace(id="user-1", role=role)
 
 
-def _make_db(hub_ids: list[str]) -> MagicMock:
-    """Mock AsyncSession.execute — trả scalar list `hub_ids` cho query user_hubs."""
+def _make_db(hub_ids: list[str], override_count: int = 0) -> MagicMock:
+    """Mock AsyncSession.execute — multi-call:
+
+    - Admin branch (Plan 02-02 B2 defensive): SELECT COUNT(*) → `scalar_one()`
+      returns `override_count` (default 0 = clean state).
+    - Non-admin else branch (M2 baseline): SELECT UserHub.hub_id →
+      `scalars().all()` returns `hub_ids`.
+
+    Cùng MagicMock result hỗ trợ cả 2 path (scalar_one + scalars().all)
+    — caller chỉ dùng 1 path, path còn lại idle.
+    """
     db = MagicMock()
     result = MagicMock()
     scalars = MagicMock()
     scalars.all.return_value = hub_ids
     result.scalars.return_value = scalars
+    # Plan 02-02 B2 defensive: admin branch dùng scalar_one() cho COUNT(*).
+    result.scalar_one = MagicMock(return_value=override_count)
     db.execute = AsyncMock(return_value=result)
     return db
 

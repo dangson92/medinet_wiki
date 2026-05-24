@@ -24,9 +24,9 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_api_key_or_jwt, require_role
@@ -71,6 +71,36 @@ async def list_hubs(
     capped_page = max(1, page)
 
     if user.role == "admin":
+        # B2 iter 1 defensive: D-V3.1-01 LOCKED invariant — super admin
+        # global (users.role='admin') KHÔNG được có per-hub override.
+        # Nếu có → state inconsistent, raise 500 (KHÔNG silently bypass).
+        # DEP-02 spec literal: "bỏ branch" — D-V3.1-Phase2-A LOCKED giữ
+        # branch nhưng add invariant guard cho compliance.
+        override_count = (await db.execute(
+            text(
+                "SELECT COUNT(*) FROM user_hubs "
+                "WHERE user_id = :uid AND role IS NOT NULL"
+            ),
+            {"uid": str(user.id)},
+        )).scalar_one()
+        if override_count > 0:
+            logger.error(
+                "auth_state_inconsistent user_id=%s role=admin global "
+                "có %d per-hub override (D-V3.1-01 invariant violated, "
+                "Phase 2 DEP-02 defensive guard B2)",
+                user.id, override_count,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "AUTH_STATE_INCONSISTENT",
+                    "message": (
+                        "User role='admin' global KHÔNG được có per-hub "
+                        "override — Phase 2 invariant violated "
+                        "(D-V3.1-01 LOCKED)."
+                    ),
+                },
+            )
         # admin quản trị cross-hub — thấy mọi hub.
         items, total = await service.list(
             page=capped_page, per_page=capped_per_page
