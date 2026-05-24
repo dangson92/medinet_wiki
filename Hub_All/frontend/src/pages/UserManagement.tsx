@@ -206,7 +206,23 @@ const UserManagement = () => {
       );
       const failed = results.filter(r => !r.success);
       if (failed.length > 0) {
-        setManageError(`${failed.length}/${results.length} cập nhật thất bại.`);
+        const code = failed[0].error?.code;
+        let msg = `${failed.length}/${results.length} cập nhật thất bại.`;
+        // Plan 03-03 v3.1 Phase 3 FE-03 — switch BE envelope code Phase 2 v3.1 Manage modal context
+        // Source: .planning/phases/02-backend-rbac-enforcement/02-CONTEXT.md envelope spec
+        //         .planning/phases/03-frontend-form-refactor/03-UI-SPEC.md §7.4 toast copy tiếng Việt
+        switch (code) {
+          case 'HUB_ADMIN_REQUIRED':
+            msg = 'Bạn không có quyền gán role này. Liên hệ Super Admin.';
+            break;
+          case 'CROSS_HUB_USER_DELETE_DENIED':
+            msg = 'Không thể xóa user thuộc nhiều hub. Liên hệ Super Admin để xử lý.';
+            break;
+          case 'FORBIDDEN':
+            msg = 'Bạn không có quyền thực hiện thao tác này.';
+            break;
+        }
+        setManageError(msg);
       } else {
         setIsManageHubModalOpen(false);
         fetchUsers();
@@ -1022,43 +1038,84 @@ const UserManagement = () => {
                   </div>
                 ) : manageDetail ? (
                   <>
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                        Quyền <span className="text-[11px] font-normal text-slate-400">(áp cho tất cả hub user thuộc về)</span>
-                      </label>
-                      <div className="grid grid-cols-1 gap-2">
-                        <button
-                          onClick={() => setManageRole('admin')}
-                          className={cn(
-                            'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
-                            manageRole === 'admin'
-                              ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
-                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
-                          )}
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">Admin</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Toàn quyền quản lý Hub, User và Tài liệu.</p>
+                    {/* Plan 03-03 v3.1 Phase 3 FE-03 — Manage modal 3 option + DISABLED Admin cho hub_admin (defense in depth) */}
+                    {/* Source: .planning/phases/03-frontend-form-refactor/03-UI-SPEC.md §6.3 + §7.3 + §8.1 */}
+                    {(() => {
+                      const currentRoleInline: UserRole = (currentUser?.user?.role as UserRole) ?? 'viewer';
+                      const isCurrentSuper = currentRoleInline === 'admin';
+
+                      return (
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                            Quyền <span className="text-[11px] font-normal text-slate-400">(áp cho tất cả hub user thuộc về)</span>
+                          </label>
+                          <div className="grid grid-cols-1 gap-2">
+                            {/* Option 1: Admin toàn hệ thống — DISABLED nếu hub_admin (FE-03 defense in depth, BE Plan 02-03 T-02-02-E authoritative) */}
+                            <button
+                              onClick={() => isCurrentSuper && setManageRole('admin')}
+                              disabled={!isCurrentSuper}
+                              aria-disabled={!isCurrentSuper}
+                              title={!isCurrentSuper ? 'Cần Admin toàn hệ thống' : undefined}
+                              aria-describedby={!isCurrentSuper ? 'manage-admin-tooltip-desc' : undefined}
+                              className={cn(
+                                'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
+                                manageRole === 'admin'
+                                  ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
+                                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
+                                !isCurrentSuper && 'opacity-50 cursor-not-allowed hover:border-slate-200 dark:hover:border-slate-700',
+                              )}
+                            >
+                              <div>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">Admin toàn hệ thống</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Toàn quyền quản lý Hub, User và Tài liệu.</p>
+                              </div>
+                              {manageRole === 'admin' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
+                            </button>
+
+                            {/* Option 2: Quản lý hub này (hub_admin) — luôn enable */}
+                            <button
+                              onClick={() => setManageRole('hub_admin')}
+                              className={cn(
+                                'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
+                                manageRole === 'hub_admin'
+                                  ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
+                                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
+                              )}
+                            >
+                              <div>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">Quản lý hub này</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý user + document trong hub được chỉ định.</p>
+                              </div>
+                              {manageRole === 'hub_admin' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
+                            </button>
+
+                            {/* Option 3: Viewer */}
+                            <button
+                              onClick={() => setManageRole('viewer')}
+                              className={cn(
+                                'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
+                                manageRole === 'viewer'
+                                  ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
+                                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
+                              )}
+                            >
+                              <div>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">Viewer</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Xem document + search trong hub được gán.</p>
+                              </div>
+                              {manageRole === 'viewer' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
+                            </button>
                           </div>
-                          {manageRole === 'admin' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
-                        </button>
-                        <button
-                          onClick={() => setManageRole('viewer')}
-                          className={cn(
-                            'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
-                            manageRole === 'viewer'
-                              ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
-                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
+
+                          {/* a11y: hidden helper text linked via aria-describedby (UI-SPEC §8.1) */}
+                          {!isCurrentSuper && (
+                            <p id="manage-admin-tooltip-desc" className="sr-only">
+                              Tùy chọn này yêu cầu quyền Admin toàn hệ thống.
+                            </p>
                           )}
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">Viewer</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Chỉ xem tài liệu và thao tác cơ bản.</p>
-                          </div>
-                          {manageRole === 'viewer' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
-                        </button>
-                      </div>
-                    </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">

@@ -27,12 +27,93 @@ import GeminiAssistant from './components/GeminiAssistant';
 import { useTheme } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
 import { getBranding, getContrastTextColor } from './branding';
-import { CURRENT_HUB } from './services/api';
+import { api, CURRENT_HUB } from './services/api';
+import type { UserRole, HubAPI } from './services/api';
 
 // Phase 5 PROXY-04 — branding resolution module-level (compute 1 lần)
 // Source: .planning/phases/05-reverse-proxy-frontend-subpath/05-UI-SPEC.md §3
 const HUB_BRANDING = getBranding(CURRENT_HUB);
 const HUB_CONTRAST = getContrastTextColor(HUB_BRANDING.themeColor);
+
+// Plan 03-03 v3.1 Phase 3 FE-02 — Hub switcher sidebar component
+// Source: .planning/phases/03-frontend-form-refactor/03-CONTEXT.md D-V3.1-Phase3-A LOCKED (hardcode 'central' slug)
+//         .planning/phases/03-frontend-form-refactor/03-UI-SPEC.md §6.2 + §7.2 + §8.2
+//         .planning/phases/03-frontend-form-refactor/03-PATTERNS.md Option A userHubIds derive (roles[].hub_id)
+function HubSwitcher() {
+  const { user, isLoading } = useAuth();
+  const currentUser = user?.user;
+  const currentRole: UserRole = (currentUser?.role as UserRole) ?? 'viewer';
+  // Option A LOCKED — derive userHubIds từ roles: RoleAPI[] (existing M2/v3.0)
+  const userHubIds: string[] = user?.roles?.map((r) => r.hub_id) ?? [];
+
+  const [hubs, setHubs] = useState<HubAPI[]>([]);
+  const [hubsLoading, setHubsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    api.getHubs().then((res) => {
+      if (mounted && res.success && res.data) {
+        setHubs(res.data);
+      }
+    }).finally(() => {
+      if (mounted) setHubsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  // Filter logic — D-V3.1-Phase3-A LOCKED hardcode 'central' slug + Plan 02-02 backend filter authoritative
+  const visibleHubs = currentRole === 'admin'
+    ? hubs
+    : hubs.filter((h) => h.code !== 'central' && userHubIds.includes(h.id));
+
+  if (isLoading || hubsLoading) {
+    return (
+      <div
+        className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50"
+        aria-busy="true"
+        aria-label="Đang tải danh sách hub"
+      >
+        <div className="h-9 w-full rounded-md bg-slate-200 dark:bg-slate-800 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (visibleHubs.length === 0) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50 text-sm text-slate-500 italic"
+      >
+        Bạn chưa được gán hub nào — liên hệ admin.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50">
+      <label
+        htmlFor="hub-switcher"
+        className="block text-xs uppercase text-slate-500 font-medium mb-1"
+      >
+        Hub đang xem:
+      </label>
+      <select
+        id="hub-switcher"
+        value={CURRENT_HUB}
+        onChange={(e) => { window.location.href = `/${e.target.value}/`; }}
+        aria-label="Chọn hub đang xem"
+        className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent"
+      >
+        {visibleHubs.map((h) => (
+          <option key={h.code} value={h.code}>
+            {h.name} ({h.code})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 const SidebarItem = ({
   to,
@@ -213,6 +294,9 @@ const Layout = () => {
             <X size={18} />
           </button>
         </div>
+
+        {/* Plan 03-03 v3.1 Phase 3 FE-02 — Hub switcher sidebar (hide khi sidebar collapsed desktop) */}
+        {(!collapsed || isMobileMenuOpen) && <HubSwitcher />}
 
         <nav className={cn("flex-1 p-4 space-y-1", collapsed ? "overflow-visible" : "overflow-y-auto")}>
           {menuItems.map((item, idx) => {

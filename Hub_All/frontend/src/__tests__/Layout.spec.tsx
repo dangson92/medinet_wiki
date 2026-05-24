@@ -41,6 +41,17 @@ async function renderLayoutWithCurrentHub(hub: string) {
     default: () => null,
   }));
 
+  // Plan 03-03 v3.1 Phase 3 FE-02 — HubSwitcher mới gọi api.getHubs khi mount Layout
+  // Mock api.getHubs để tránh unhandled fetch (jsdom KHÔNG resolve relative URL `/yte/api/hubs`).
+  // CURRENT_HUB const phải re-export đúng (services/api line 46 compute từ window.location).
+  vi.doMock('../services/api', async () => {
+    const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
+    return {
+      ...actual,
+      api: { ...actual.api, getHubs: vi.fn().mockResolvedValue({ success: true, data: [] }) },
+    };
+  });
+
   const { default: Layout } = await import('../Layout');
   return render(
     <MemoryRouter>
