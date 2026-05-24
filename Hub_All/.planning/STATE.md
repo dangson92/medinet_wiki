@@ -3,16 +3,19 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: RBAC hub_admin
 status: "🚧 v3.1 STARTED 2026-05-23 — defining requirements + roadmap. Trigger: user bug report 2026-05-23 sau v3.0 close — tạo user gán hub `dmd` nhưng vẫn vào được central (gap thiết kế role-per-hub defer v4.0 trong M2). Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
-last_updated: "2026-05-23T18:00:00.000Z"
+last_updated: "2026-05-24T09:30:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 15  # estimate ~12-15 plan
+  total_plans: 15  # estimate ~12-15 plan (Phase 1 ship 3; Phase 2 plan 5 — total 8 plan ship/planned)
   completed_plans: 3
   percent: 20
 milestone_status: "STARTED"
 milestone_start_date: "2026-05-23"
-next_action: "/gsd-discuss-phase 2 — DEP backend RBAC enforcement (require_hub_admin_for dependency + GET /api/hubs filter + CRUD scope)"
+phase_2_status: "PLANNED"
+phase_2_plan_count: 5
+phase_2_planned_date: "2026-05-24"
+next_action: "/gsd-execute-phase 2 — DEP backend RBAC enforcement (5 plan / 4 wave / DEP-01..05 coverage 100%, iter 2 plan-checker VERIFICATION PASSED)"
 ---
 
 # State — MEDWIKI (v3.1)
@@ -24,12 +27,36 @@ next_action: "/gsd-discuss-phase 2 — DEP backend RBAC enforcement (require_hub
 
 ## Current Position
 
-🚧 **v3.1 STARTED 2026-05-23** — Defining requirements + roadmap. 4 phase / 15 REQ-ID v1 / phase numbering reset về 1 (precedent D9 v2.0 + D-V3-05 v3.0).
+🚧 **v3.1 PHASE 2 PLANNED 2026-05-24** — Phase 1 DONE (3 plan / 4 REQ-ID); Phase 2 plan files ship đầy đủ (5 plan / 4 wave / DEP-01..05 coverage 100%). Iter 2 plan-checker VERIFICATION PASSED — 7 BLOCKER + 4 WARNING iter 1 fixed.
 
-- **Phase:** Not started (defining requirements)
-- **Plan:** — (sẽ tạo qua `/gsd-plan-phase 1`)
-- **Status:** Requirements + roadmap defined; awaiting `/gsd-discuss-phase 1` ROLE migration.
-- **Next Action:** `/gsd-discuss-phase 1` ROLE — Alembic migration 0006_role_hub_admin + user_hubs.role column + helper get_effective_role + migration seed.
+- **Phase:** 02-backend-rbac-enforcement (PLANNED — chưa execute)
+- **Plan:** 5 plan ship `.planning/phases/02-backend-rbac-enforcement/02-{01..05}-PLAN.md`
+- **Status:** Ready to execute — `/gsd-execute-phase 2` will run Wave 1 (02-01 BLOCKING assert_hub_admin_for + 5 unit test) → Wave 2 (02-02 + 02-03 parallel — hubs GET defensive AUTH_STATE_INCONSISTENT + users CRUD scope DEP-03 với DELETE 3-branch logic) → Wave 3 (02-04 audit payload nest actor_role + actor_hub_id) → Wave 4 (02-05 closeout 4 docs + W5 FE breakage operator broadcast note).
+- **Next Action:** `/gsd-execute-phase 2` — execute 5 plan với atomic commits per plan; expected ~12 file modified + ~25 test ship (5 unit + 20 integration); coverage ≥80% target trên auth/dependencies + routers/users + services/audit (D-V3.1-Phase2-F LOCKED).
+
+## Phase 2 Planning Summary (PLANNED 2026-05-24)
+
+| Plan | Wave | Objective | REQ-ID | Files modified | Tasks |
+|------|------|-----------|--------|----------------|-------|
+| 02-01 | 1 | assert_hub_admin_for validator function + 5-case unit test + envelope HUB_ADMIN_REQUIRED | DEP-01 | 2 | 2 |
+| 02-02 | 2 | GET /api/hubs defensive AUTH_STATE_INCONSISTENT invariant + 5 mutate preserve require_role("admin") | DEP-02, DEP-04 | 3 | 2 |
+| 02-03 | 2 | users.py 4 endpoint refactor (POST/PATCH role/GET list/DELETE 3-branch) + UserRole Literal extend | DEP-03 | 3 | 2 |
+| 02-04 | 3 | build_audit_payload helper + 5 service callsite refactor + 5 router actor derive + api_key_service guard | DEP-05 | 7 | 2 |
+| 02-05 | 4 | Closeout 4 docs (STATE/REQUIREMENTS/ROADMAP/CLAUDE) + W5 FE breakage operator broadcast | DEP-01..05 (all) | 4 | 1 |
+
+**Coverage:** 5/5 REQ-ID DEP-01..05 mapped. Wave 1 BLOCKING (1) + Wave 2 parallel (2) + Wave 3 sequential (1) + Wave 4 closeout (1).
+
+## Phase 2 Key Design Decisions (LOCKED 2026-05-24 từ ROADMAP gray areas + Iter 1 revision)
+
+| # | Decision | Rationale |
+|---|---|---|
+| **D-V3.1-Phase2-A** | Backend filter cho GET /api/hubs (defense in depth) — KHÔNG dựa vào FE hide central | Stale JWT / FE bug / direct API call KHÔNG bypass; đối xứng `get_current_user_for_hub_access` Phase 3 v3.0 SSO-04 Layer 3 |
+| **D-V3.1-Phase2-B** | 403 envelope `HUB_ADMIN_REQUIRED` riêng (KHÔNG reuse `FORBIDDEN`) + `CROSS_HUB_USER_DELETE_DENIED` mới (B1 iter 1 DELETE branch) | FE Phase 3 FE-01 có thể switch trên error.code; pattern Phase 3 SSO-04 + Phase 6 SETTINGS-03 carry forward |
+| **D-V3.1-Phase2-C** | Audit log payload nest `actor_role` + `actor_hub_id` (KHÔNG schema migration audit_logs) | audit_logs.payload đã JSONB nullable đủ chứa; đối xứng pattern Plan 04-01 migration.role_seed nest |
+| **D-V3.1-Phase2-D** | Hybrid dependency design — `assert_hub_admin_for(*, user, db, hub_id)` validator function (KHÔNG Depends factory) | Body param case (POST/PATCH với hub_id trong body) cần parse body trước check → inline validator linh hoạt hơn Depends factory |
+| **D-V3.1-Phase2-E** | DELETE branch 3 trường hợp (B1 iter 1) — single-hub user-of-own → hub_admin pass; cross-hub user → super-only `CROSS_HUB_USER_DELETE_DENIED`; user-of-other-hub → `HUB_ADMIN_REQUIRED` | REQUIREMENTS.md DEP-03 literal text "Cross-hub admin operation chỉ super admin" honor đúng — single-hub DELETE hub_admin pass |
+| **D-V3.1-Phase2-F** | Test coverage ≥ 80% trên file thay đổi (`--cov-fail-under=80`) | ROADMAP success criterion 5; pattern Phase 1 carry forward |
+| **D-V3.1-Phase2-G** (B2 iter 1) | Defensive AUTH_STATE_INCONSISTENT invariant guard ở GET /api/hubs admin branch (≤15 line insert) | REQUIREMENTS DEP-02 literal "bỏ branch" honor qua defensive invariant — user role='admin' global + per-hub override = inconsistent state, 500 fail-loud |
 
 ## Trigger context (2026-05-23)
 
