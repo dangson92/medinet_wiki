@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, HubAPI, UserWithRolesAPI } from '../services/api';
+import type { UserRole } from '../services/api';
 import { User } from '../types';
 import { cn, getHubUrl } from '../lib/utils';
 import { Search, Plus, Shield, UserX, UserCheck, X, CheckCircle2, MoreVertical, Loader2, Building2, Info, KeyRound, Copy, Check, AlertTriangle, Trash2 } from 'lucide-react';
@@ -34,14 +35,14 @@ const UserManagement = () => {
   // là role GLOBAL, áp cho mọi hub user thuộc về; role per-hub defer v4.0).
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'viewer'>('viewer');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('viewer');
   const [newUserHubIds, setNewUserHubIds] = useState<Set<string>>(new Set());
   const [addError, setAddError] = useState<string | null>(null);
 
   // Manage-hub modal state — đổi role global + thêm hub user chưa thuộc.
   // Gỡ user khỏi hub yêu cầu backend mới (DELETE /api/users/:id/hub/:hub_id) — defer.
   const [manageDetail, setManageDetail] = useState<UserWithRolesAPI | null>(null);
-  const [manageRole, setManageRole] = useState<'admin' | 'viewer'>('viewer');
+  const [manageRole, setManageRole] = useState<UserRole>('viewer');
   const [manageHubIds, setManageHubIds] = useState<Set<string>>(new Set());
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
@@ -372,7 +373,26 @@ const UserManagement = () => {
         role: newUserRole,
       });
       if (!createRes.success || !createRes.data) {
-        setAddError(createRes.error?.message ?? 'Tạo user thất bại.');
+        const code = createRes.error?.code;
+        let msg = createRes.error?.message ?? 'Tạo user thất bại.';
+        // Plan 03-02 v3.1 Phase 3 FE-01 — switch BE envelope code Phase 2 v3.1 (Plan 02-01..04 ship)
+        // Source: .planning/phases/02-backend-rbac-enforcement/02-CONTEXT.md envelope spec
+        //         .planning/phases/03-frontend-form-refactor/03-UI-SPEC.md §7.4 toast copy tiếng Việt
+        switch (code) {
+          case 'HUB_ADMIN_REQUIRED':
+            msg = 'Bạn không có quyền tạo user với role Admin toàn hệ thống. Liên hệ Super Admin.';
+            break;
+          case 'HUB_ID_REQUIRED':
+            msg = 'Vui lòng chọn hub trước khi tạo user.';
+            break;
+          case 'AUTH_STATE_INCONSISTENT':
+            msg = 'Lỗi hệ thống xác thực — liên hệ admin. Mã: AUTH_STATE_INCONSISTENT';
+            break;
+          case 'FORBIDDEN':
+            msg = 'Bạn không có quyền thực hiện thao tác này.';
+            break;
+        }
+        setAddError(msg);
         return;
       }
       const createdId = createRes.data.id;
@@ -628,18 +648,82 @@ const UserManagement = () => {
                   <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Email</label>
                   <input type="email" placeholder="nva@medinet.vn" className="input-field w-full" value={newUserEmail} onChange={e => { setNewUserEmail(e.target.value); setAddError(null); }} />
                 </div>
+                {/* Plan 03-02 v3.1 Phase 3 FE-01 — Form 3 option radio + warning banner conditional */}
+                {/* Source: .planning/phases/03-frontend-form-refactor/03-UI-SPEC.md §6.1 + §7.1 + §8.1 */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Quyền <span className="text-[11px] font-normal text-slate-400">(áp cho tất cả hub được gán)</span></label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="role" value="admin" checked={newUserRole === 'admin'} onChange={() => setNewUserRole('admin')} className="text-accent focus:ring-accent" />
-                      <span className="text-sm text-slate-700 dark:text-slate-200">Admin Hub</span>
+                  <fieldset role="radiogroup" aria-labelledby="role-group-label" className="space-y-2">
+                    <legend id="role-group-label" className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Quyền <span className="text-danger">*</span>
+                    </legend>
+
+                    {/* Option 1: Admin toàn hệ thống */}
+                    <label className="flex items-start gap-2.5 p-2.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="admin"
+                        checked={newUserRole === 'admin'}
+                        onChange={() => setNewUserRole('admin')}
+                        aria-describedby="role-admin-desc"
+                        className="mt-1 text-accent focus:ring-accent"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Admin toàn hệ thống</div>
+                        <div id="role-admin-desc" className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                          Có thể quản lý tất cả hub, user, settings. Cảnh báo: gán cho user TIN CẬY.
+                        </div>
+                      </div>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="role" value="viewer" checked={newUserRole === 'viewer'} onChange={() => setNewUserRole('viewer')} className="text-accent focus:ring-accent" />
-                      <span className="text-sm text-slate-700 dark:text-slate-200">Viewer</span>
+
+                    {/* Option 2: Quản lý hub này (hub_admin) */}
+                    <label className="flex items-start gap-2.5 p-2.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="hub_admin"
+                        checked={newUserRole === 'hub_admin'}
+                        onChange={() => setNewUserRole('hub_admin')}
+                        aria-describedby="role-hubadmin-desc"
+                        className="mt-1 text-accent focus:ring-accent"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Quản lý hub này</div>
+                        <div id="role-hubadmin-desc" className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                          Quản lý user + document trong hub được chỉ định. KHÔNG vào hub khác.
+                        </div>
+                      </div>
                     </label>
-                  </div>
+
+                    {/* Option 3: Viewer (default) */}
+                    <label className="flex items-start gap-2.5 p-2.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="viewer"
+                        checked={newUserRole === 'viewer'}
+                        onChange={() => setNewUserRole('viewer')}
+                        aria-describedby="role-viewer-desc"
+                        className="mt-1 text-accent focus:ring-accent"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Viewer</div>
+                        <div id="role-viewer-desc" className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                          Xem document + search trong hub được gán. KHÔNG quản lý user.
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Warning banner — chỉ mount khi admin selected */}
+                    {newUserRole === 'admin' && (
+                      <div
+                        role="alert"
+                        aria-live="polite"
+                        className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md p-3 mt-2 text-sm font-medium dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-200"
+                      >
+                        ⚠  Quyền cao nhất — quản lý toàn bộ hệ thống
+                      </div>
+                    )}
+                  </fieldset>
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
