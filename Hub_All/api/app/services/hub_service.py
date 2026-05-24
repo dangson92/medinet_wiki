@@ -26,7 +26,11 @@ from app.schemas.hubs import (
     HubStats,
     UpdateHubRequest,
 )
-from app.services.audit_service import AuditEntry, enqueue_audit
+from app.services.audit_service import (
+    AuditEntry,
+    build_audit_payload,  # Phase 2 Plan 02-04 DEP-05 — D-V3.1-Phase2-C LOCKED.
+    enqueue_audit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +74,19 @@ class HubService:
         *,
         req: CreateHubRequest,
         created_by: UUID,
+        actor_role: str = "admin",  # Phase 2 Plan 02-04 — DEP-04 LOCKED hub mutate super-only.
+        actor_hub_id: str | None = None,  # Phase 2 Plan 02-04.
         request_id: str | None = None,
     ) -> HubResponse:
         """INSERT hub mới → HubResponse.
 
         W1: set `slug = code.lower()` (cột Phase 2 NOT NULL unique).
         Timestamps SQL NOW() server-side.
+
+        Phase 2 Plan 02-04 DEP-05 — `actor_role` + `actor_hub_id` nest vào
+        audit payload (D-V3.1-Phase2-C LOCKED). Default `'admin'` + None vì
+        DEP-04 LOCKED hub mutate luôn super-only — router caller vẫn pass
+        explicit cho traceability.
 
         Raises:
             HubConflictError: code/slug trùng (unique constraint).
@@ -110,6 +121,8 @@ class HubService:
             ) from e
 
         # Sau INSERT thành công — enqueue audit non-blocking (T-05-03-05).
+        # Phase 2 Plan 02-04 DEP-05 — nest actor_role + actor_hub_id qua
+        # build_audit_payload (D-V3.1-Phase2-C LOCKED).
         enqueue_audit(
             AuditEntry(
                 action="hub.create",
@@ -117,7 +130,11 @@ class HubService:
                 target_type="hub",
                 target_id=str(hub_id),
                 hub_id=str(hub_id),
-                payload={"code": req.code, "name": req.name},
+                payload=build_audit_payload(
+                    actor_role=actor_role,
+                    actor_hub_id=actor_hub_id,
+                    extra={"code": req.code, "name": req.name},
+                ),
                 request_id=request_id,
             )
         )
@@ -213,12 +230,18 @@ class HubService:
         hub_id: UUID,
         req: UpdateHubRequest,
         updated_by: UUID,
+        actor_role: str = "admin",  # Phase 2 Plan 02-04 — DEP-04 LOCKED hub mutate super-only.
+        actor_hub_id: str | None = None,  # Phase 2 Plan 02-04.
         request_id: str | None = None,
     ) -> HubResponse | None:
         """UPDATE hub (PUT — D-07). None nếu hub không tồn tại.
 
         Build SET clause động chỉ cho field không None (name/description);
         cả 2 None → chỉ refresh updated_at.
+
+        Phase 2 Plan 02-04 DEP-05 — `actor_role` + `actor_hub_id` nest vào
+        audit payload (D-V3.1-Phase2-C LOCKED). Default `'admin'` + None vì
+        DEP-04 LOCKED.
         """
         set_parts: list[str] = []
         params: dict[str, object] = {"id": str(hub_id)}
@@ -243,6 +266,8 @@ class HubService:
         if row is None:
             return None
 
+        # Phase 2 Plan 02-04 DEP-05 — nest actor_role + actor_hub_id qua
+        # build_audit_payload (D-V3.1-Phase2-C LOCKED).
         enqueue_audit(
             AuditEntry(
                 action="hub.update",
@@ -250,7 +275,11 @@ class HubService:
                 target_type="hub",
                 target_id=str(hub_id),
                 hub_id=str(hub_id),
-                payload={"changed": req.model_dump(exclude_none=True)},
+                payload=build_audit_payload(
+                    actor_role=actor_role,
+                    actor_hub_id=actor_hub_id,
+                    extra={"changed": req.model_dump(exclude_none=True)},
+                ),
                 request_id=request_id,
             )
         )
@@ -263,12 +292,18 @@ class HubService:
         hub_id: UUID,
         status: str,
         updated_by: UUID,
+        actor_role: str = "admin",  # Phase 2 Plan 02-04 — DEP-04 LOCKED hub mutate super-only.
+        actor_hub_id: str | None = None,  # Phase 2 Plan 02-04.
         request_id: str | None = None,
     ) -> bool:
         """PATCH status hub. Returns True nếu update 1 row, False nếu không.
 
         Dùng `RETURNING id` thay `.rowcount` — phát hiện row tồn tại qua
         fetchone() (SQLAlchemy `Result` type stub không expose `rowcount`).
+
+        Phase 2 Plan 02-04 DEP-05 — `actor_role` + `actor_hub_id` nest vào
+        audit payload (D-V3.1-Phase2-C LOCKED). Default `'admin'` + None vì
+        DEP-04 LOCKED.
         """
         row = (
             await self.db.execute(
@@ -282,6 +317,8 @@ class HubService:
         if row is None:
             return False
 
+        # Phase 2 Plan 02-04 DEP-05 — nest actor_role + actor_hub_id qua
+        # build_audit_payload (D-V3.1-Phase2-C LOCKED).
         enqueue_audit(
             AuditEntry(
                 action="hub.update",
@@ -289,7 +326,11 @@ class HubService:
                 target_type="hub",
                 target_id=str(hub_id),
                 hub_id=str(hub_id),
-                payload={"status": status},
+                payload=build_audit_payload(
+                    actor_role=actor_role,
+                    actor_hub_id=actor_hub_id,
+                    extra={"status": status},
+                ),
                 request_id=request_id,
             )
         )

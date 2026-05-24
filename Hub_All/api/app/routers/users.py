@@ -132,10 +132,19 @@ async def create_user(
     # DEP-03 — inline scope check sau body parse (hybrid pattern D-V3.1-Phase2-D LOCKED).
     await assert_hub_admin_for(user=user, db=db, target_hub_id=req.hub_id)
 
+    # Phase 2 Plan 02-04 DEP-05 B5 iter 1 — derive actor metadata cho audit payload nest.
+    # Super admin → ('admin', None) cross-hub. Hub_admin → ('hub_admin', req.hub_id).
+    actor_role = "admin" if user.role == "admin" else "hub_admin"
+    actor_hub_id = None if user.role == "admin" else req.hub_id
+
     request_id = getattr(request.state, "request_id", None)
     try:
         result = await service.create(
-            req=req, created_by=user.id, request_id=request_id
+            req=req,
+            created_by=user.id,
+            actor_role=actor_role,  # Phase 2 Plan 02-04 B5 iter 1
+            actor_hub_id=actor_hub_id,  # Phase 2 Plan 02-04 B5 iter 1
+            request_id=request_id,
         )
     except UserConflictError as e:
         return resp.conflict(message=str(e), code="EMAIL_CONFLICT")
@@ -345,11 +354,21 @@ async def delete_user(
                 code="HUB_ADMIN_REQUIRED",
             )
 
+    # Phase 2 Plan 02-04 DEP-05 B5 iter 1 — derive actor metadata cho audit payload.
+    # Super admin → ('admin', None). Hub_admin single-hub (B1 iter 1 guaranteed) →
+    # ('hub_admin', target_hub_ids[0]). Cross-hub + orphan đã 403 sớm.
+    actor_role = "admin" if user.role == "admin" else "hub_admin"
+    actor_hub_id = (
+        None if user.role == "admin" else target_hub_ids[0]
+    )
+
     request_id = getattr(request.state, "request_id", None)
     try:
         deleted = await service.delete(
             user_id=user_uuid,
             deleted_by=user.id,
+            actor_role=actor_role,  # Phase 2 Plan 02-04 B5 iter 1
+            actor_hub_id=actor_hub_id,  # Phase 2 Plan 02-04 B5 iter 1
             request_id=request_id,
         )
     except LastAdminError as e:

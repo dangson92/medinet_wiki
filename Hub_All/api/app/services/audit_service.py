@@ -65,6 +65,57 @@ class AuditEntry:
     request_id: str | None = None
 
 
+def build_audit_payload(
+    *,
+    actor_role: str,
+    actor_hub_id: str | None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Phase 2 Plan 02-04 DEP-05 (D-V3.1-Phase2-C LOCKED) — Nest actor scope vào payload.
+
+    Helper convenience dedup pattern 5 callsite enqueue_audit (user_service +
+    hub_service). KHÔNG migration schema thêm cột cho audit_logs — payload
+    JSONB nullable đủ chứa metadata (migration 0001 baseline).
+
+    **Pattern Phase 2 DEP-05 (B7 iter 1 MANDATORY):** mọi audit-emitter
+    (user_service, hub_service, api_key_service) PHẢI dùng build_audit_payload
+    để thread-through actor_role + actor_hub_id. KHÔNG construct payload dict
+    raw. Khi nào api_key_service.py thêm audit emit (currently 0 enqueue_audit
+    calls — Phase 2 DEP-05 chưa cover) → BẮT BUỘC refactor add actor_role +
+    actor_hub_id qua helper này. Acceptance criterion lock invariant tại Plan
+    02-04 acceptance:
+        grep -c "enqueue_audit" app/services/api_key_service.py == 0
+
+    Args:
+        actor_role: 'admin' (super admin) | 'hub_admin' (per-hub).
+        actor_hub_id: None nếu super admin (cross-hub op); hub_id cụ thể nếu hub_admin.
+        extra: payload-specific data (email, role, code, name, ...) — merge vào dict.
+
+    Returns:
+        dict shape: {actor_role: str, actor_hub_id: str | None, **extra}
+
+    Forensic query (D-V3.1-Phase2-C LOCKED):
+        SELECT * FROM audit_logs WHERE payload->>'actor_role' = 'hub_admin'
+          AND payload->>'actor_hub_id' = '<dmd-uuid>';
+
+    Example:
+        >>> build_audit_payload(
+        ...     actor_role='hub_admin',
+        ...     actor_hub_id='dmd-uuid',
+        ...     extra={'email': 'new@dmd.vn', 'role': 'viewer'},
+        ... )
+        {'actor_role': 'hub_admin', 'actor_hub_id': 'dmd-uuid',
+         'email': 'new@dmd.vn', 'role': 'viewer'}
+    """
+    base: dict[str, Any] = {
+        "actor_role": actor_role,
+        "actor_hub_id": actor_hub_id,
+    }
+    if extra:
+        base.update(extra)
+    return base
+
+
 _queue: asyncio.Queue[AuditEntry] | None = None
 
 

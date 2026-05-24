@@ -37,7 +37,11 @@ from app.schemas.users import (
     UserResponse,
     UserWithRolesResponse,
 )
-from app.services.audit_service import AuditEntry, enqueue_audit
+from app.services.audit_service import (
+    AuditEntry,
+    build_audit_payload,  # Phase 2 Plan 02-04 DEP-05 — D-V3.1-Phase2-C LOCKED.
+    enqueue_audit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,12 +135,19 @@ class UserService:
         *,
         req: CreateUserRequest,
         created_by: UUID,
+        actor_role: str,  # Phase 2 Plan 02-04 DEP-05 — required kwarg, router derive.
+        actor_hub_id: str | None,  # Phase 2 Plan 02-04 DEP-05.
         request_id: str | None = None,
     ) -> UserWithRolesResponse:
         """INSERT user mới + INSERT user_hubs assignment → UserWithRolesResponse.
 
         `password` hash NGAY qua argon2 — KHÔNG lưu plaintext. Timestamps
         SQL NOW() server-side.
+
+        Phase 2 Plan 02-04 DEP-05 — `actor_role` + `actor_hub_id` nest vào
+        audit payload qua `build_audit_payload` (D-V3.1-Phase2-C LOCKED, KHÔNG
+        schema migration audit_logs). Router caller derive đúng từ
+        `user.role` + `req.hub_id`.
 
         Raises:
             UserConflictError: email trùng (unique constraint `users.email`).
@@ -179,6 +190,8 @@ class UserService:
 
         # Audit non-blocking — payload CHỈ email+role (KHÔNG password —
         # T-05-04-03 Information Disclosure mitigation).
+        # Phase 2 Plan 02-04 DEP-05 — nest actor_role + actor_hub_id qua
+        # build_audit_payload (D-V3.1-Phase2-C LOCKED).
         enqueue_audit(
             AuditEntry(
                 action="user.create",
@@ -186,7 +199,11 @@ class UserService:
                 target_type="user",
                 target_id=str(user_id),
                 hub_id=req.hub_id,
-                payload={"email": req.email, "role": req.role},
+                payload=build_audit_payload(
+                    actor_role=actor_role,
+                    actor_hub_id=actor_hub_id,
+                    extra={"email": req.email, "role": req.role},
+                ),
                 request_id=request_id,
             )
         )
@@ -410,9 +427,16 @@ class UserService:
         *,
         user_id: UUID,
         deleted_by: UUID,
+        actor_role: str,  # Phase 2 Plan 02-04 DEP-05 — required kwarg.
+        actor_hub_id: str | None,  # Phase 2 Plan 02-04 DEP-05.
         request_id: str | None = None,
     ) -> bool:
         """Hard DELETE user (USER-04 admin-only). Returns False nếu không tồn tại.
+
+        Phase 2 Plan 02-04 DEP-05 — `actor_role` + `actor_hub_id` nest vào
+        audit payload (D-V3.1-Phase2-C LOCKED). Router derive từ
+        `user.role` + (target_hub_ids[0] khi hub_admin single-hub case B1
+        iter 1; None khi super admin).
 
         Schema FK đã thiết kế cho hard delete safe (migration 0001):
         - refresh_tokens.user_id ON DELETE CASCADE → force logout ngay
@@ -462,6 +486,8 @@ class UserService:
         # row audit này luôn (deleted_by = chính user vừa xoá thì cũng vẫn được
         # ghi từ deleted_by != user_id trường hợp khác). Payload giữ email +
         # role để forensic (KHÔNG password — T-05-04-03).
+        # Phase 2 Plan 02-04 DEP-05 — nest actor_role + actor_hub_id qua
+        # build_audit_payload (D-V3.1-Phase2-C LOCKED).
         enqueue_audit(
             AuditEntry(
                 action="user.delete",
@@ -469,10 +495,14 @@ class UserService:
                 target_type="user",
                 target_id=str(user_id),
                 hub_id=None,
-                payload={
-                    "deleted_email": email_to_delete,
-                    "deleted_role": role_to_delete,
-                },
+                payload=build_audit_payload(
+                    actor_role=actor_role,
+                    actor_hub_id=actor_hub_id,
+                    extra={
+                        "deleted_email": email_to_delete,
+                        "deleted_role": role_to_delete,
+                    },
+                ),
                 request_id=request_id,
             )
         )

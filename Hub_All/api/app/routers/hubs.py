@@ -135,7 +135,11 @@ async def create_hub(
     request_id = getattr(request.state, "request_id", None)
     try:
         result = await service.create(
-            req=req, created_by=user.id, request_id=request_id
+            req=req,
+            created_by=user.id,
+            actor_role="admin",  # Phase 2 Plan 02-04 — DEP-04 LOCKED hub mutate super-only.
+            actor_hub_id=None,  # Phase 2 Plan 02-04.
+            request_id=request_id,
         )
     except HubConflictError as e:
         return resp.conflict(message=str(e), code="HUB_CODE_CONFLICT")
@@ -186,6 +190,8 @@ async def update_hub(
         hub_id=hub_uuid,
         req=req,
         updated_by=user.id,
+        actor_role="admin",  # Phase 2 Plan 02-04 — DEP-04 LOCKED hub mutate super-only.
+        actor_hub_id=None,  # Phase 2 Plan 02-04.
         request_id=request_id,
     )
     if result is None:
@@ -216,6 +222,8 @@ async def update_hub_status(
         hub_id=hub_uuid,
         status=req.status,
         updated_by=user.id,
+        actor_role="admin",  # Phase 2 Plan 02-04 — DEP-04 LOCKED hub mutate super-only.
+        actor_hub_id=None,  # Phase 2 Plan 02-04.
         request_id=request_id,
     )
     if not ok:
