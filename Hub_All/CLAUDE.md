@@ -432,6 +432,31 @@ Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 - `.planning/phases/07-migration-smoke-e2e/07-{01..05}-PLAN.md` — implementation chi tiết 5 plan.
 - `.planning/phases/07-migration-smoke-e2e/07-{01..05}-SUMMARY.md` — deliverable + commit + test count per plan.
 
+### Phase 1 v3.1 RBAC schema pattern (ROLE-01..04 — 2026-05-23)
+
+3 plan đóng 4 REQ-ID ROLE schema migration + helper:
+
+- **Plan 01-01 ROLE-01 + ROLE-02 + ROLE-03 — Alembic migration 0006_role_hub_admin.py:** CHECK constraint `users.role` mở rộng 4 value (admin|hub_admin|editor|viewer) qua DROP + ADD raw SQL với introspect `sa.inspect().get_check_constraints("users")` tìm tên constraint thật (chống discrepancy `ck_users_role_enum` migration 0001 vs `role_enum` model auth.py). user_hubs.role TEXT NULL DEFAULT NULL + CHECK NULL-aware `(role IS NULL OR role IN (...))` per-hub override (D-V3.1-02 LOCKED). audit_logs INSERT seed `action='migration.role_seed'` với jsonb_build_object payload (migration_revision + admin_count + user_hubs_count + timestamp_utc) + WHERE NOT EXISTS idempotent guard. downgrade() defensive RuntimeError nếu COUNT(*) role='hub_admin' > 0 (E-V3.1-1 STOP). Reference: `.planning/phases/01-rbac-schema-migration/01-01-PLAN.md` + `01-01-SUMMARY.md`.
+
+- **Plan 01-02 ROLE-04 — Module mới api/app/auth/role.py:** `async def get_effective_role(session: AsyncSession, user_id: UUID | str, hub_id: UUID | str) -> str` + `UserNotFoundError(Exception)`. Logic: SELECT user_hubs.role WHERE (user, hub) → non-NULL return (override); NULL hoặc no-row fallthrough → SELECT users.role return (inherit global); no user → UserNotFoundError raise. Raw SQL via `sqlalchemy.text()` + named bind params `:user_id`/`:hub_id` (T-01-02-01 SQL injection mitigation; CLAUDE.md stack pin). KHÔNG import `User`/`UserHub` ORM model (chống cycle Phase 2). Test pytest 6 case + AsyncMock — KHÔNG cần Postgres runtime. Phase 2 import qua `from app.auth.role import get_effective_role` build `require_hub_admin_for(hub_id)` (DEP-01). Reference: `01-02-PLAN.md` + `01-02-SUMMARY.md`.
+
+- **Plan 01-03 closeout — Integration test + docs:** `tests/integration/test_migration_0006_idempotent.py` 5 test cover 4 success criteria ROADMAP Phase 1: (1) CHECK accept hub_admin sau upgrade; (2) re-run upgrade head idempotent KHÔNG fail; (3) user_hubs.role nullable + NULL-aware CHECK; (4) audit_logs seed row tồn tại; (5) downgrade -1 restore CHECK 3 value + drop column. Skip-if-no-DB pattern (`TEST_DATABASE_URL` env var); Phase 4 MIGRATE-01 sẽ chạy bắt buộc. **SAFETY-CRITICAL DSN injection (Iter 1 revision fix I-01 + I-02):** fixture monkeypatch `DATABASE_URL` env + `get_settings.cache_clear()` thay vì `cfg.set_main_option("sqlalchemy.url", ...)` — env.py:185-191 runtime OVERRIDE sqlalchemy.url từ get_settings().database_url, IGNORE caller's set_main_option → nếu dùng set_main_option, test apply migration vào DB .env (vd medinet_central) thay vì TEST_DATABASE_URL (SAFETY BLOCKER). Format DSN giữ `postgresql+asyncpg://` (env.py xử lý async natively); chỉ helper `_asyncpg_dsn()` strip prefix khi asyncpg.connect() direct. STATE.md + REQUIREMENTS.md + CLAUDE.md update. Reference: `01-03-PLAN.md` + `01-03-SUMMARY.md`.
+
+**Backward compat (Phase 1 KHÔNG break v3.0):**
+- Schema 0001-0005 carry forward unchanged — chỉ EXTEND CHECK constraint + ADD COLUMN nullable (zero data migration).
+- Existing user `role='admin'` GIỮ semantic super-admin (D-V3.1-01 LOCKED — KHÔNG rename `super_admin`).
+- M2 + v3.0 JWT claim schema KHÔNG đụng (defer Phase 2-3 cho `actor_role` payload nest, KHÔNG schema migration).
+- Frontend hiện tại tiếp tục dùng `users.role` global cho tới Phase 3 FE-04 type extend.
+
+**R-V3.1-1 HIGH mitigation chain Phase 1:**
+- Idempotent introspect ở 3 STEP upgrade() — re-run safety (Plan 01-01 + GA-V3.1-C).
+- downgrade() đầy đủ với defensive RuntimeError chặn rollback unsafe khi có row `role='hub_admin'` (Plan 01-01 + E-V3.1-1).
+- Integration test 5 case verify cả upgrade idempotent + downgrade rollback (Plan 01-03).
+- **Integration test DSN injection SAFETY pattern (Iter 1 fix I-01):** monkeypatch env var thay vì set_main_option — chống test vô tình apply migration vào DB dev/prod (env.py:185-191 override sqlalchemy.url runtime).
+- Phase 4 MIGRATE-01 sẽ verify runtime full E2E với DB live + 4 hub scenario.
+
+**Next:** Phase 2 `/gsd-discuss-phase 2` DEP backend RBAC enforcement (require_hub_admin_for + GET /api/hubs filter + CRUD scope).
+
 ---
 
 *Cập nhật: 2026-05-23 (Phase 7 DONE — MIGRATE-01..05 ship 5 plan; scripts/migrate/ module 5 bash script (01-snapshot-hubs.sh + 02-restore-hub.sh + 03-switch-caddy.sh + 04-truncate-central.sh + 05-smoke-e2e.sh) + 1 runbook 06-mcp-smoke.md + fixture sample-document.docx (37KB python-docx generator + reproducible) + automated 3 hub × 7-step golden path (login + upload + poll + search local + cross-hub + ask + citation [N]) + Prometheus assertion post-loop + blue/green per-hub procedure (D-V3-Phase7-B) + dry-run default ON truncate (D-V3-02 chunks PRESERVED) + MCP re-point central aggregate (D-V3-Phase7-C) + manual visual smoke advisory KHÔNG blocking (D-V3-Phase7-D). Project: MEDWIKI. **🎉 v3.0 MILESTONE CLOSED 2026-05-23** — 38/38 plan ship · 30/30 REQ-ID consumed (TOPO 4 + FACTOR 4 + SSO 4 + SYNC 5 + PROXY 4 + SETTINGS 4 + MIGRATE 5) · 7/7 phase complete · v3.0-a (Phase 1-3) + v3.0-b (Phase 4-7) anti-pivot pattern hoàn tất. M2 v2.0 closeout 2026-05-21 archived. Next: `/gsd-complete-milestone v3.0` separate command — archive `.planning/milestones/v3.0-archive/` + reset ROADMAP cho v4.0 backlog (sub-hub split per project_v3_multi_hub_split.md seed 2026-05-21 + HA Redis cluster + OCR Vietnamese + streaming /api/ask).*

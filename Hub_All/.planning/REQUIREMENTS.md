@@ -12,10 +12,10 @@
 
 ### ROLE — DB schema migration (4 REQ)
 
-- [ ] **ROLE-01** Phase 1: Mở rộng CHECK constraint `role_enum` ở table `users` thêm value `'hub_admin'` (Alembic migration idempotent). Existing rows giữ nguyên; INSERT mới chấp nhận 4 giá trị `admin | hub_admin | editor | viewer`. CHECK constraint name preserve (carry forward M2 schema).
-- [ ] **ROLE-02** Phase 1: Thêm column `user_hubs.role` (nullable, default NULL) per-hub role override. Khi `user_hubs.role IS NOT NULL`, override `users.role` cho hub đó; NULL = inherit `users.role` global. Migration backward compat — toàn bộ row hiện tại `role=NULL`.
-- [ ] **ROLE-03** Phase 1: Migration script seed — existing users với `users.role='admin'` giữ semantic super-admin global (`user_hubs.role=NULL` cho tất cả hub assignment). Audit trail INSERT row `action='migration.role_seed'` ghi nhận count + timestamp.
-- [ ] **ROLE-04** Phase 1: Helper function `get_effective_role(user_id, hub_id)` → string. Logic: SELECT `user_hubs.role` WHERE user=user_id AND hub=hub_id; nếu NOT NULL → return; nếu NULL → return `users.role`. Unit test cover 4 case (super admin / hub_admin / viewer per-hub / no membership).
+- [x] **ROLE-01** Phase 1: Mở rộng CHECK constraint `role_enum` ở table `users` thêm value `'hub_admin'` (Alembic migration idempotent). Existing rows giữ nguyên; INSERT mới chấp nhận 4 giá trị `admin | hub_admin | editor | viewer`. CHECK constraint name preserve (carry forward M2 schema). (DONE 2026-05-23 — Plan 01-01)
+- [x] **ROLE-02** Phase 1: Thêm column `user_hubs.role` (nullable, default NULL) per-hub role override. Khi `user_hubs.role IS NOT NULL`, override `users.role` cho hub đó; NULL = inherit `users.role` global. Migration backward compat — toàn bộ row hiện tại `role=NULL`. (DONE 2026-05-23 — Plan 01-01)
+- [x] **ROLE-03** Phase 1: Migration script seed — existing users với `users.role='admin'` giữ semantic super-admin global (`user_hubs.role=NULL` cho tất cả hub assignment). Audit trail INSERT row `action='migration.role_seed'` ghi nhận count + timestamp. (DONE 2026-05-23 — Plan 01-01)
+- [x] **ROLE-04** Phase 1: Helper function `get_effective_role(user_id, hub_id)` → string. Logic: SELECT `user_hubs.role` WHERE user=user_id AND hub=hub_id; nếu NOT NULL → return; nếu NULL → return `users.role`. Unit test cover 4 case (super admin / hub_admin / viewer per-hub / no membership). (DONE 2026-05-23 — Plan 01-02)
 
 ### DEP — Backend RBAC enforcement (5 REQ)
 

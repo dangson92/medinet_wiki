@@ -55,9 +55,9 @@
 **Plans:** 3 plans (Wave 1 parallel Plan 01-01 + 01-02 — KHÔNG file conflict; Wave 2 sequential Plan 01-03 closeout).
 
 Plans:
-- [ ] 01-01-PLAN.md — Alembic migration 0006_role_hub_admin (CHECK constraint mở rộng + user_hubs.role nullable + audit_logs seed `migration.role_seed`) (ROLE-01, ROLE-02, ROLE-03)
-- [ ] 01-02-PLAN.md — get_effective_role helper module + 6-case unit test (ROLE-04)
-- [ ] 01-03-PLAN.md — Closeout (integration test idempotent + STATE.md + REQUIREMENTS.md + CLAUDE.md update)
+- [x] 01-01-PLAN.md — Alembic migration 0006_role_hub_admin (CHECK constraint mở rộng + user_hubs.role nullable + audit_logs seed `migration.role_seed`) (ROLE-01, ROLE-02, ROLE-03) ✅ DONE 2026-05-23
+- [x] 01-02-PLAN.md — get_effective_role helper module + 6-case unit test (ROLE-04) ✅ DONE 2026-05-23
+- [x] 01-03-PLAN.md — Closeout (integration test idempotent + STATE.md + REQUIREMENTS.md + CLAUDE.md update) ✅ DONE 2026-05-23
 
 ---
 
@@ -172,7 +172,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
 | v3.0 Multi-Hub Split | 7 | 38/38 | 30/30 | ✅ Shipped | 2026-05-23 |
-| **v3.1 RBAC hub_admin** | **4** | **0/~12** | **0/15** | 🚧 **Defining** | — |
+| **v3.1 RBAC hub_admin** | **4** | **3/~12** | **4/15** | 🚧 **Phase 1 DONE** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
