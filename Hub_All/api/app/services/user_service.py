@@ -49,6 +49,15 @@ class UserConflictError(Exception):
     """
 
 
+class LastAdminError(Exception):
+    """Xoá admin cuối cùng → 409 LAST_ADMIN.
+
+    System phải còn ≥ 1 admin để vận hành (CRUD hubs/users/api_keys). Nếu admin
+    cuối cùng bị xoá, KHÔNG ai có thể đăng nhập tạo admin mới qua UI → khoá cứng
+    cần psql tay. Block ở service layer.
+    """
+
+
 # Cột SELECT chuẩn cho UserResponse — dùng lại ở _build_user_with_roles.
 # Lưu ý: cột DB `full_name` map sang field schema `name`.
 _USER_SELECT_COLS = (
@@ -394,6 +403,90 @@ class UserService:
         if row is None:
             return False
         logger.info("user_status_changed: id=%s status=%s", user_id, status)
+        return True
+
+    async def delete(
+        self,
+        *,
+        user_id: UUID,
+        deleted_by: UUID,
+        request_id: str | None = None,
+    ) -> bool:
+        """Hard DELETE user (USER-04 admin-only). Returns False nếu không tồn tại.
+
+        Schema FK đã thiết kế cho hard delete safe (migration 0001):
+        - refresh_tokens.user_id ON DELETE CASCADE → force logout ngay
+        - user_hubs.user_id ON DELETE CASCADE → gỡ tất cả hub assignment
+        - mcp_oauth_clients.user_id ON DELETE CASCADE (migration 0004)
+        - audit_logs.user_id ON DELETE SET NULL → giữ trail, anonymize actor
+        - documents.uploaded_by ON DELETE SET NULL → giữ document, anonymize owner
+        - usage_events / api_keys / settings → ON DELETE SET NULL
+
+        Pre-conditions check ở caller (router) — service KHÔNG check self vì
+        không có context request user; check last-admin TRƯỚC DELETE ở đây.
+
+        Raises:
+            LastAdminError: user là admin và là admin cuối cùng — block.
+        """
+        row = (
+            await self.db.execute(
+                text(
+                    "SELECT email, role FROM users WHERE id = :id"
+                ),
+                {"id": str(user_id)},
+            )
+        ).fetchone()
+        if row is None:
+            return False
+        email_to_delete = str(row[0])
+        role_to_delete = str(row[1])
+
+        if role_to_delete == "admin":
+            admin_count_row = (
+                await self.db.execute(
+                    text(
+                        "SELECT COUNT(*) FROM users WHERE role = 'admin' "
+                        "AND status = 'active' AND id != :id"
+                    ),
+                    {"id": str(user_id)},
+                )
+            ).fetchone()
+            remaining_admins = int(admin_count_row[0]) if admin_count_row else 0
+            if remaining_admins == 0:
+                raise LastAdminError(
+                    f"Không thể xoá admin cuối cùng ({email_to_delete}). "
+                    "Hãy tạo admin khác trước."
+                )
+
+        # Audit log TRƯỚC khi DELETE — ON DELETE SET NULL sẽ NULL hoá user_id của
+        # row audit này luôn (deleted_by = chính user vừa xoá thì cũng vẫn được
+        # ghi từ deleted_by != user_id trường hợp khác). Payload giữ email +
+        # role để forensic (KHÔNG password — T-05-04-03).
+        enqueue_audit(
+            AuditEntry(
+                action="user.delete",
+                user_id=str(deleted_by),
+                target_type="user",
+                target_id=str(user_id),
+                hub_id=None,
+                payload={
+                    "deleted_email": email_to_delete,
+                    "deleted_role": role_to_delete,
+                },
+                request_id=request_id,
+            )
+        )
+
+        await self.db.execute(
+            text("DELETE FROM users WHERE id = :id"),
+            {"id": str(user_id)},
+        )
+        logger.info(
+            "user_deleted: id=%s email=%s by=%s",
+            user_id,
+            email_to_delete,
+            deleted_by,
+        )
         return True
 
     async def reset_password(

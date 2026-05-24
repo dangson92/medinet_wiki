@@ -37,7 +37,11 @@ const firstSegment: string | undefined =
 export const PREFIX: string | null =
   firstSegment && KNOWN_HUBS.includes(firstSegment) ? firstSegment : null;
 
-export const API_BASE: string = PREFIX ? `/${PREFIX}/api` : '/api';
+// API_BASE KHÔNG kèm '/api' — path trong this.request('METHOD', '/api/...') tự chứa prefix.
+// Hub yte: baseURL='/yte' + path='/api/auth/login' → '/yte/api/auth/login' (Caddy strip /yte → upstream /api/auth/login).
+// Central: baseURL=''  + path='/api/auth/login' → '/api/auth/login' (Caddy /api/* → python-api-central).
+// Fix double-prefix regression Plan 05-02 commit 8eb0676 (cũ: '/api' + '/api/...' → '/api/api/...' → 404).
+export const API_BASE: string = PREFIX ? `/${PREFIX}` : '';
 export const APP_BASE: string = PREFIX ? `/${PREFIX}` : '';
 export const CURRENT_HUB: string = PREFIX ?? 'central';
 
@@ -364,6 +368,10 @@ class APIClient {
 
   async changeUserStatus(id: string, status: string) {
     return this.request<{ message: string }>('PATCH', `/api/users/${id}/status`, { status });
+  }
+
+  async deleteUser(id: string) {
+    return this.request<{ message: string }>('DELETE', `/api/users/${id}`);
   }
 
   // ─── Profile ───

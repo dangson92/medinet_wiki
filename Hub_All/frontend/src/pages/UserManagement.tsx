@@ -1,21 +1,25 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, HubAPI, UserWithRolesAPI } from '../services/api';
 import { User } from '../types';
-import { cn } from '../lib/utils';
-import { Search, Plus, Shield, UserX, UserCheck, Mail, X, CheckCircle2, MoreVertical, Loader2 } from 'lucide-react';
+import { cn, getHubUrl } from '../lib/utils';
+import { Search, Plus, Shield, UserX, UserCheck, X, CheckCircle2, MoreVertical, Loader2, Building2, Info, KeyRound, Copy, Check, AlertTriangle, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Pagination from '../components/Pagination';
+import { useAuth } from '../contexts/AuthContext';
 
 const UserManagement = () => {
+  const { user: currentUser } = useAuth();
   const [hubs, setHubs] = useState<HubAPI[]>([]);
   const [activeTab, setActiveTab] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
-  const [isEditRoleModalOpen, setIsEditRoleModalOpen] = useState(false);
+  const [isManageHubModalOpen, setIsManageHubModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [newRole, setNewRole] = useState<'admin' | 'viewer'>('viewer');
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -26,12 +30,34 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Add modal form state
+  // Add modal form state — multi-hub picker + 1 role chung (M2 schema: users.role
+  // là role GLOBAL, áp cho mọi hub user thuộc về; role per-hub defer v4.0).
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserRole, setNewUserRole] = useState<'admin' | 'viewer'>('viewer');
+  const [newUserHubIds, setNewUserHubIds] = useState<Set<string>>(new Set());
+  const [addError, setAddError] = useState<string | null>(null);
 
-  const activeHub = hubs.find(h => h.id === activeTab);
+  // Manage-hub modal state — đổi role global + thêm hub user chưa thuộc.
+  // Gỡ user khỏi hub yêu cầu backend mới (DELETE /api/users/:id/hub/:hub_id) — defer.
+  const [manageDetail, setManageDetail] = useState<UserWithRolesAPI | null>(null);
+  const [manageRole, setManageRole] = useState<'admin' | 'viewer'>('viewer');
+  const [manageHubIds, setManageHubIds] = useState<Set<string>>(new Set());
+  const [manageLoading, setManageLoading] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
+
+  // Show-password-one-time modal — M2 KHÔNG có SMTP (email defer v4.0). Sau khi
+  // tạo user xong, hiển thị password tạm thời cho admin copy + gửi user qua kênh
+  // nội bộ (Zalo, gặp trực tiếp). Backend hash argon2 — KHÔNG lưu plaintext.
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    hubNames: string[];
+  } | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+
+  const activeHubs = hubs.filter(h => h.status === 'active');
 
   // Fetch hubs on mount
   useEffect(() => {
@@ -117,17 +143,76 @@ const UserManagement = () => {
     setCurrentPage(1);
   };
 
-  const handleUpdateRole = async () => {
-    if (!selectedUser || actionLoading) return;
-    setActionLoading(true);
+  // Mở modal "Quản lý hub & quyền" — fetch full user detail (cần roles[] đầy đủ
+  // vì bảng list chỉ map role trong hub đang xem, không có hub thành viên khác).
+  const handleOpenManageHub = async (user: User) => {
+    if (manageLoading) return;
+    setActionMenuId(null);
+    setSelectedUser(user);
+    setIsManageHubModalOpen(true);
+    setManageDetail(null);
+    setManageError(null);
+    setManageLoading(true);
     try {
-      const res = await api.changeUserRole(selectedUser.id, activeTab, newRole);
-      if (res.success) {
-        setIsEditRoleModalOpen(false);
+      const res = await api.getUser(user.id);
+      if (res.success && res.data) {
+        setManageDetail(res.data);
+        const existingHubIds = new Set(res.data.roles.map(r => r.hub_id));
+        setManageHubIds(existingHubIds);
+        // Role global = role bất kỳ assignment đầu tiên (M2: tất cả assignment cùng 1 role).
+        const firstRole = res.data.roles[0]?.role;
+        setManageRole(firstRole === 'admin' ? 'admin' : 'viewer');
+      } else {
+        setManageError(res.error?.message ?? 'Không tải được thông tin user');
+      }
+    } catch (err) {
+      console.error('Failed to fetch user detail:', err);
+      setManageError('Lỗi kết nối — không tải được thông tin user');
+    } finally {
+      setManageLoading(false);
+    }
+  };
+
+  const handleSubmitManageHub = async () => {
+    if (!manageDetail || actionLoading) return;
+    const existingHubIds = new Set(manageDetail.roles.map(r => r.hub_id));
+    const toAddHubIds = Array.from(manageHubIds).filter(h => !existingHubIds.has(h));
+    const currentRole = manageDetail.roles[0]?.role === 'admin' ? 'admin' : 'viewer';
+    const roleChanged = manageRole !== currentRole;
+
+    if (!roleChanged && toAddHubIds.length === 0) {
+      setIsManageHubModalOpen(false);
+      return;
+    }
+    if (manageHubIds.size === 0) {
+      setManageError('User phải thuộc ít nhất 1 hub.');
+      return;
+    }
+
+    setActionLoading(true);
+    setManageError(null);
+    try {
+      // PATCH /api/users/:id/role làm 2 việc: UPDATE users.role global + INSERT
+      // user_hubs ON CONFLICT DO NOTHING. Mỗi hub mới cần 1 call. Nếu chỉ đổi role
+      // không thêm hub, dùng hub đầu tiên user đã thuộc làm anchor.
+      const targetHubs = toAddHubIds.length > 0
+        ? toAddHubIds
+        : [manageDetail.roles[0]!.hub_id];
+      const results = await Promise.all(
+        targetHubs.map(hubId =>
+          api.changeUserRole(manageDetail.user.id, hubId, manageRole),
+        ),
+      );
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        setManageError(`${failed.length}/${results.length} cập nhật thất bại.`);
+      } else {
+        setIsManageHubModalOpen(false);
         fetchUsers();
       }
     } catch (err) {
-      console.error('Failed to update role:', err);
+      console.error('Failed to update hub assignments:', err);
+      setManageError('Lỗi kết nối — vui lòng thử lại.');
     } finally {
       setActionLoading(false);
     }
@@ -149,6 +234,48 @@ const UserManagement = () => {
     }
   };
 
+  const handleOpenDelete = (user: User) => {
+    setActionMenuId(null);
+    setSelectedUser(user);
+    setDeleteConfirmEmail('');
+    setDeleteError(null);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser || actionLoading) return;
+    if (deleteConfirmEmail.trim().toLowerCase() !== selectedUser.email.toLowerCase()) {
+      setDeleteError('Email xác nhận không khớp.');
+      return;
+    }
+    setActionLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await api.deleteUser(selectedUser.id);
+      if (res.success) {
+        setIsDeleteDialogOpen(false);
+        setSelectedUser(null);
+        setDeleteConfirmEmail('');
+        fetchUsers();
+      } else {
+        const code = res.error?.code;
+        const msg = res.error?.message ?? 'Xoá user thất bại.';
+        if (code === 'LAST_ADMIN') {
+          setDeleteError(`${msg} Hãy tạo admin khác trước.`);
+        } else if (code === 'CANNOT_DELETE_SELF') {
+          setDeleteError('Không thể tự xoá tài khoản của chính mình.');
+        } else {
+          setDeleteError(msg);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      setDeleteError('Lỗi kết nối — vui lòng thử lại.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleEnableUser = async (user: User) => {
     if (actionLoading) return;
     setActionLoading(true);
@@ -165,26 +292,125 @@ const UserManagement = () => {
     }
   };
 
-  const handleCreateUser = async () => {
-    if (!newUserName || !newUserEmail || actionLoading) return;
-    setActionLoading(true);
+  // Sinh password tạm 14 char (~83 bits entropy) — bộ ký tự a-z A-Z 0-9 loại trừ
+  // 0/O/1/I/l dễ nhầm khi đọc/gõ tay. crypto.getRandomValues = CSPRNG (KHÔNG dùng
+  // Math.random — yếu cho credential).
+  const generateTempPassword = (): string => {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const bytes = new Uint8Array(14);
+    crypto.getRandomValues(bytes);
+    let out = '';
+    for (let i = 0; i < bytes.length; i++) {
+      out += charset[bytes[i] % charset.length];
+    }
+    return out;
+  };
+
+  const copyToClipboard = async (text: string) => {
     try {
-      const res = await api.createUser({
-        name: newUserName,
-        email: newUserEmail,
-        password: crypto.randomUUID(),
-        hub_id: activeTab,
+      await navigator.clipboard.writeText(text);
+      setPasswordCopied(true);
+      setTimeout(() => setPasswordCopied(false), 2000);
+    } catch (err) {
+      console.error('Clipboard copy failed:', err);
+    }
+  };
+
+  const resetAddModal = () => {
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserRole('viewer');
+    setNewUserHubIds(new Set());
+    setAddError(null);
+  };
+
+  // Prefill hub đang xem khi mở modal — admin thường tạo user cho hub hiện tại.
+  const handleOpenAddModal = () => {
+    resetAddModal();
+    setNewUserHubIds(activeTab ? new Set([activeTab]) : new Set());
+    setIsAddModalOpen(true);
+  };
+
+  const toggleNewUserHub = (hubId: string) => {
+    setNewUserHubIds(prev => {
+      const next = new Set(prev);
+      if (next.has(hubId)) next.delete(hubId);
+      else next.add(hubId);
+      return next;
+    });
+    setAddError(null);
+  };
+
+  const handleCreateUser = async () => {
+    if (actionLoading) return;
+    if (!newUserName.trim()) {
+      setAddError('Vui lòng nhập tên đầy đủ.');
+      return;
+    }
+    if (!newUserEmail.trim()) {
+      setAddError('Vui lòng nhập email.');
+      return;
+    }
+    if (newUserHubIds.size === 0) {
+      setAddError('Vui lòng chọn ít nhất 1 hub.');
+      return;
+    }
+
+    setActionLoading(true);
+    setAddError(null);
+    const hubIds = Array.from(newUserHubIds);
+    const tempPassword = generateTempPassword();
+    const submittedName = newUserName.trim();
+    const submittedEmail = newUserEmail.trim();
+    try {
+      // POST /api/users tạo user + INSERT user_hubs cho hub_id đầu tiên.
+      const createRes = await api.createUser({
+        name: submittedName,
+        email: submittedEmail,
+        password: tempPassword,
+        hub_id: hubIds[0]!,
         role: newUserRole,
       });
-      if (res.success) {
-        setIsAddModalOpen(false);
-        setNewUserName('');
-        setNewUserEmail('');
-        setNewUserRole('viewer');
-        fetchUsers();
+      if (!createRes.success || !createRes.data) {
+        setAddError(createRes.error?.message ?? 'Tạo user thất bại.');
+        return;
+      }
+      const createdId = createRes.data.id;
+      // Các hub còn lại thêm qua PATCH /api/users/:id/role (cùng role global).
+      const extraHubIds = hubIds.slice(1);
+      let partialFailMsg: string | null = null;
+      if (extraHubIds.length > 0) {
+        const patchResults = await Promise.all(
+          extraHubIds.map(hubId =>
+            api.changeUserRole(createdId, hubId, newUserRole),
+          ),
+        );
+        const failed = patchResults.filter(r => !r.success);
+        if (failed.length > 0) {
+          partialFailMsg = `${failed.length}/${extraHubIds.length} hub gán thất bại — kiểm tra trong "Quản lý hub".`;
+        }
+      }
+      const hubNames = hubIds
+        .map(id => hubs.find(h => h.id === id)?.name ?? id)
+        .filter(Boolean);
+      setCreatedCredentials({
+        name: submittedName,
+        email: submittedEmail,
+        password: tempPassword,
+        hubNames,
+      });
+      setPasswordCopied(false);
+      setIsAddModalOpen(false);
+      resetAddModal();
+      fetchUsers();
+      if (partialFailMsg) {
+        // Vẫn show credentials nhưng note partial fail qua addError persist
+        // (sẽ thấy khi mở lại Thêm User). Đủ visibility mà không block flow.
+        setAddError(partialFailMsg);
       }
     } catch (err) {
       console.error('Failed to create user:', err);
+      setAddError('Lỗi kết nối — vui lòng thử lại.');
     } finally {
       setActionLoading(false);
     }
@@ -238,7 +464,7 @@ const UserManagement = () => {
           </select>
         </div>
         <button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={handleOpenAddModal}
           className="btn-primary shrink-0"
         >
           <Plus size={18} /> Thêm User
@@ -311,16 +537,11 @@ const UserManagement = () => {
                               className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden py-1"
                             >
                               <button
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setNewRole(user.role as 'admin' | 'viewer');
-                                  setIsEditRoleModalOpen(true);
-                                  setActionMenuId(null);
-                                }}
+                                onClick={() => handleOpenManageHub(user)}
                                 className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                               >
-                                <Shield size={14} className="text-accent" />
-                                Chỉnh quyền
+                                <Building2 size={14} className="text-accent" />
+                                Quản lý hub & quyền
                               </button>
                               {user.status === 'active' ? (
                                 <button
@@ -345,15 +566,15 @@ const UserManagement = () => {
                                   Kích hoạt lại
                                 </button>
                               )}
-                              {user.lastLogin === 'Chưa đăng nhập' && (
+                              {currentUser?.user.id !== user.id && (
                                 <>
                                   <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                                   <button
-                                    onClick={() => setActionMenuId(null)}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                    onClick={() => handleOpenDelete(user)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-danger hover:bg-danger/10 transition-colors"
                                   >
-                                    <Mail size={14} className="text-slate-400 dark:text-slate-500" />
-                                    Gửi lại email mời
+                                    <Trash2 size={14} />
+                                    Xoá vĩnh viễn
                                   </button>
                                 </>
                               )}
@@ -386,33 +607,33 @@ const UserManagement = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
-              onClick={() => setIsAddModalOpen(false)}
+              onClick={() => { setIsAddModalOpen(false); resetAddModal(); }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden"
+              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Thêm user vào Hub {activeHub?.name}</h3>
-                <button onClick={() => setIsAddModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center shrink-0">
+                <h3 className="text-lg font-semibold">Thêm user mới</h3>
+                <button onClick={() => { setIsAddModalOpen(false); resetAddModal(); }} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 overflow-y-auto">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Tên đầy đủ</label>
-                  <input type="text" placeholder="Nguyễn Văn A" className="input-field w-full" value={newUserName} onChange={e => setNewUserName(e.target.value)} />
+                  <input type="text" placeholder="Nguyễn Văn A" className="input-field w-full" value={newUserName} onChange={e => { setNewUserName(e.target.value); setAddError(null); }} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Email</label>
-                  <input type="email" placeholder="nva@medinet.vn" className="input-field w-full" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} />
+                  <input type="email" placeholder="nva@medinet.vn" className="input-field w-full" value={newUserEmail} onChange={e => { setNewUserEmail(e.target.value); setAddError(null); }} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Quyền</label>
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Quyền <span className="text-[11px] font-normal text-slate-400">(áp cho tất cả hub được gán)</span></label>
                   <div className="flex gap-4">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="radio" name="role" value="admin" checked={newUserRole === 'admin'} onChange={() => setNewUserRole('admin')} className="text-accent focus:ring-accent" />
-                      <span className="text-sm text-slate-700 dark:text-slate-200">Admin Hub Dự Án</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-200">Admin Hub</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="radio" name="role" value="viewer" checked={newUserRole === 'viewer'} onChange={() => setNewUserRole('viewer')} className="text-accent focus:ring-accent" />
@@ -420,15 +641,146 @@ const UserManagement = () => {
                     </label>
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-                  * User sẽ nhận email mời đặt mật khẩu tại {activeHub?.subdomain}. Link có hiệu lực 24 giờ.
-                </p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                      Hub thành viên <span className="text-danger">*</span>
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      Đã chọn {newUserHubIds.size}/{activeHubs.length}
+                    </span>
+                  </div>
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700 max-h-56 overflow-y-auto">
+                    {activeHubs.length === 0 ? (
+                      <p className="px-3 py-4 text-xs text-slate-400 text-center">Chưa có hub active.</p>
+                    ) : (
+                      activeHubs.map(hub => {
+                        const checked = newUserHubIds.has(hub.id);
+                        return (
+                          <label
+                            key={hub.id}
+                            className={cn(
+                              'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors',
+                              checked
+                                ? 'bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08]'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleNewUserHub(hub.id)}
+                              className="w-4 h-4 rounded text-brand-indigo focus:ring-brand-indigo"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{hub.name}</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{hub.code}</p>
+                            </div>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 px-3 py-2 rounded-lg">
+                  <Info size={14} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-500" />
+                  <span>
+                    Hệ thống <b>chưa có SMTP</b> (defer v4.0). Sau khi tạo, mật khẩu tạm thời sẽ hiện 1 lần — copy và gửi user qua kênh nội bộ (Zalo, gặp trực tiếp).
+                  </span>
+                </div>
+                {addError && (
+                  <p className="text-xs text-danger bg-danger/10 px-3 py-2 rounded-lg">{addError}</p>
+                )}
               </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                <button onClick={() => setIsAddModalOpen(false)} className="btn-ghost">Hủy</button>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50 shrink-0">
+                <button onClick={() => { setIsAddModalOpen(false); resetAddModal(); }} className="btn-ghost">Hủy</button>
                 <button onClick={handleCreateUser} disabled={actionLoading} className="btn-primary">
                   {actionLoading ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Tạo & Gửi Email Mời
+                  Tạo & Sinh Mật Khẩu Tạm
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {createdCredentials && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center text-success shrink-0">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold">Tạo user thành công</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{createdCredentials.email}</p>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 px-3 py-2.5 rounded-lg">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">Mật khẩu CHỈ hiện 1 lần</p>
+                    <p>Hệ thống chưa gửi email tự động (defer v4.0). Hãy copy và gửi user qua kênh nội bộ. Đóng modal này = mất mật khẩu, phải reset.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">User</label>
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{createdCredentials.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{createdCredentials.email}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                      Hub: <span className="text-slate-600 dark:text-slate-300">{createdCredentials.hubNames.join(', ')}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <KeyRound size={12} /> Mật khẩu tạm thời
+                  </label>
+                  <div className="flex items-stretch gap-2">
+                    <code className="flex-1 px-3 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-950 text-emerald-300 font-mono text-sm tracking-wider select-all break-all">
+                      {createdCredentials.password}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(createdCredentials.password)}
+                      className={cn(
+                        'shrink-0 px-3 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
+                        passwordCopied
+                          ? 'bg-success/10 text-success border border-success/30'
+                          : 'bg-brand-indigo text-white hover:bg-brand-indigo/90',
+                      )}
+                    >
+                      {passwordCopied ? <Check size={16} /> : <Copy size={16} />}
+                      {passwordCopied ? 'Đã copy' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                    Đăng nhập tại {getHubUrl(hubs.find(h => h.name === createdCredentials.hubNames[0])?.code)}
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                <button
+                  onClick={() => {
+                    setCreatedCredentials(null);
+                    setPasswordCopied(false);
+                  }}
+                  className="btn-primary"
+                >
+                  Đã ghi nhận, đóng
                 </button>
               </div>
             </motion.div>
@@ -467,14 +819,14 @@ const UserManagement = () => {
           </div>
         )}
 
-        {isEditRoleModalOpen && (
+        {isDeleteDialogOpen && selectedUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
-              onClick={() => setIsEditRoleModalOpen(false)}
+              onClick={() => !actionLoading && setIsDeleteDialogOpen(false)}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -482,61 +834,218 @@ const UserManagement = () => {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-md glass-card shadow-lg overflow-hidden"
             >
-              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Chỉnh sửa quyền: {selectedUser?.name}</h3>
-                <button onClick={() => setIsEditRoleModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-danger shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold">Xoá vĩnh viễn user?</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{selectedUser.email}</p>
+                </div>
               </div>
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-4">
+                <div className="flex items-start gap-2 text-xs text-danger bg-danger/10 border border-danger/20 px-3 py-2.5 rounded-lg">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">Hành động không thể hoàn tác</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      <li>User bị logout ngay (refresh token xoá)</li>
+                      <li>Gỡ khỏi tất cả hub thành viên</li>
+                      <li>Documents user đã upload <b>giữ lại</b> nhưng mất tên owner</li>
+                      <li>Audit log lưu trail user.delete</li>
+                    </ul>
+                    <p className="pt-1">Nếu chỉ muốn chặn đăng nhập tạm thời, dùng <b>Vô hiệu hoá</b> thay vì xoá.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Gõ <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-danger font-mono">{selectedUser.email}</code> để xác nhận
+                  </label>
+                  <input
+                    type="text"
+                    autoFocus
+                    autoComplete="off"
+                    value={deleteConfirmEmail}
+                    onChange={e => { setDeleteConfirmEmail(e.target.value); setDeleteError(null); }}
+                    placeholder={selectedUser.email}
+                    className="input-field w-full font-mono text-sm"
+                    disabled={actionLoading}
+                  />
+                </div>
+
+                {deleteError && (
+                  <p className="text-xs text-danger bg-danger/10 px-3 py-2 rounded-lg">{deleteError}</p>
+                )}
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                <button
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  disabled={actionLoading}
+                  className="btn-ghost"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleDeleteUser}
+                  disabled={
+                    actionLoading ||
+                    deleteConfirmEmail.trim().toLowerCase() !== selectedUser.email.toLowerCase()
+                  }
+                  className="btn-primary !bg-danger !shadow-none hover:!bg-danger/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {actionLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
+                  Xoá vĩnh viễn
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isManageHubModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+              onClick={() => setIsManageHubModalOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center shrink-0">
+                <h3 className="text-lg font-semibold">Quản lý hub & quyền</h3>
+                <button onClick={() => setIsManageHubModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
+              </div>
+              <div className="p-6 space-y-5 overflow-y-auto">
                 <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
                   <div className="w-12 h-12 rounded-full bg-brand-indigo/10 flex items-center justify-center text-brand-indigo">
                     <Shield size={24} />
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedUser?.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{selectedUser?.email}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{selectedUser?.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{selectedUser?.email}</p>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Chọn quyền mới cho Hub {activeHub?.name}</label>
-                  <div className="grid grid-cols-1 gap-3">
-                    <button
-                      onClick={() => setNewRole('admin')}
-                      className={cn(
-                        "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
-                        newRole === 'admin'
-                          ? "border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800"
-                      )}
-                    >
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">Admin</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Toàn quyền quản lý Hub, User và Tài liệu.</p>
-                      </div>
-                      {newRole === 'admin' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
-                    </button>
-
-                    <button
-                      onClick={() => setNewRole('viewer')}
-                      className={cn(
-                        "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
-                        newRole === 'viewer'
-                          ? "border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800"
-                      )}
-                    >
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">Viewer</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Chỉ xem tài liệu và thực hiện các thao tác cơ bản.</p>
-                      </div>
-                      {newRole === 'viewer' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
-                    </button>
+                {manageLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="animate-spin text-accent" size={24} />
                   </div>
-                </div>
+                ) : manageDetail ? (
+                  <>
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                        Quyền <span className="text-[11px] font-normal text-slate-400">(áp cho tất cả hub user thuộc về)</span>
+                      </label>
+                      <div className="grid grid-cols-1 gap-2">
+                        <button
+                          onClick={() => setManageRole('admin')}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
+                            manageRole === 'admin'
+                              ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
+                          )}
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">Admin</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Toàn quyền quản lý Hub, User và Tài liệu.</p>
+                          </div>
+                          {manageRole === 'admin' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
+                        </button>
+                        <button
+                          onClick={() => setManageRole('viewer')}
+                          className={cn(
+                            'flex items-center justify-between p-3 rounded-xl border transition-all text-left',
+                            manageRole === 'viewer'
+                              ? 'border-brand-indigo bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] ring-1 ring-brand-indigo'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800',
+                          )}
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">Viewer</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Chỉ xem tài liệu và thao tác cơ bản.</p>
+                          </div>
+                          {manageRole === 'viewer' && <div className="w-5 h-5 rounded-full bg-brand-indigo flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Hub thành viên</label>
+                        <span className="text-[11px] text-slate-400">{manageHubIds.size}/{activeHubs.length}</span>
+                      </div>
+                      <div className="border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700 max-h-56 overflow-y-auto">
+                        {activeHubs.length === 0 ? (
+                          <p className="px-3 py-4 text-xs text-slate-400 text-center">Chưa có hub active.</p>
+                        ) : (
+                          activeHubs.map(hub => {
+                            const existingHubIds = new Set(manageDetail.roles.map(r => r.hub_id));
+                            const wasAssigned = existingHubIds.has(hub.id);
+                            const checked = manageHubIds.has(hub.id);
+                            return (
+                              <label
+                                key={hub.id}
+                                className={cn(
+                                  'flex items-center gap-3 px-3 py-2.5 transition-colors',
+                                  wasAssigned ? 'cursor-not-allowed opacity-90' : 'cursor-pointer',
+                                  checked && !wasAssigned && 'bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08]',
+                                  !wasAssigned && 'hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={wasAssigned}
+                                  onChange={() => {
+                                    if (wasAssigned) return;
+                                    setManageHubIds(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(hub.id)) next.delete(hub.id);
+                                      else next.add(hub.id);
+                                      return next;
+                                    });
+                                    setManageError(null);
+                                  }}
+                                  className="w-4 h-4 rounded text-brand-indigo focus:ring-brand-indigo disabled:opacity-50"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{hub.name}</p>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{hub.code}</p>
+                                </div>
+                                {wasAssigned && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success shrink-0">
+                                    Đã gán
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                      <p className="flex items-start gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 italic">
+                        <Info size={12} className="shrink-0 mt-0.5" />
+                        <span>Có thể thêm hub mới. Gỡ user khỏi hub đã gán cần backend mới — defer v4.0.</span>
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-danger text-center py-6">{manageError ?? 'Không tải được thông tin user.'}</p>
+                )}
+
+                {manageError && manageDetail && (
+                  <p className="text-xs text-danger bg-danger/10 px-3 py-2 rounded-lg">{manageError}</p>
+                )}
               </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                <button onClick={() => setIsEditRoleModalOpen(false)} className="btn-ghost">Hủy</button>
-                <button onClick={handleUpdateRole} disabled={actionLoading} className="btn-primary">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50 shrink-0">
+                <button onClick={() => setIsManageHubModalOpen(false)} className="btn-ghost">Hủy</button>
+                <button onClick={handleSubmitManageHub} disabled={actionLoading || manageLoading || !manageDetail} className="btn-primary">
                   {actionLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : null}
                   Lưu thay đổi
                 </button>

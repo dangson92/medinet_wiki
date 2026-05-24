@@ -36,7 +36,11 @@ from app.schemas.users import (
     CreateUserRequest,
     UpdateUserRequest,
 )
-from app.services.user_service import UserConflictError, UserService
+from app.services.user_service import (
+    LastAdminError,
+    UserConflictError,
+    UserService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +203,55 @@ async def change_user_status(
             message=f"User {user_id} không tồn tại", code="NOT_FOUND"
         )
     return resp.ok(data={"message": "Cập nhật trạng thái thành công"})
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: str,
+    request: Request,
+    user: User = Depends(require_role("admin")),  # noqa: B008
+    service: UserService = Depends(get_user_service),  # noqa: B008
+) -> JSONResponse:
+    """DELETE /api/users/:id — hard delete user, admin-only (USER-04).
+
+    Block:
+    - Self-delete → 403 CANNOT_DELETE_SELF (self-DoS prevention).
+    - Last active admin → 409 LAST_ADMIN (system phải còn ≥ 1 admin).
+
+    Cascade:
+    - refresh_tokens + user_hubs + mcp_oauth_clients ON DELETE CASCADE → cleanup.
+    - documents/audit_logs/usage_events/api_keys/settings ON DELETE SET NULL →
+      giữ trail, anonymize owner (compliance audit non-repudiation).
+    """
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        return resp.bad_request(
+            message=f"user_id không hợp lệ: {user_id!r}",
+            code="INVALID_USER_ID",
+        )
+    if user_uuid == user.id:
+        return resp.forbidden(
+            message=(
+                "Không thể tự xoá tài khoản của chính mình. "
+                "Nhờ admin khác xoá hoặc reset password."
+            ),
+            code="CANNOT_DELETE_SELF",
+        )
+    request_id = getattr(request.state, "request_id", None)
+    try:
+        deleted = await service.delete(
+            user_id=user_uuid,
+            deleted_by=user.id,
+            request_id=request_id,
+        )
+    except LastAdminError as e:
+        return resp.conflict(message=str(e), code="LAST_ADMIN")
+    if not deleted:
+        return resp.not_found(
+            message=f"User {user_id} không tồn tại", code="NOT_FOUND"
+        )
+    return resp.ok(data={"message": "Đã xoá user"})
 
 
 @router.post("/{user_id}/reset-password")

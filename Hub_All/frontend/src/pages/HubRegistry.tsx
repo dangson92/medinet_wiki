@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Hub } from '../types';
-import { cn } from '../lib/utils';
-import { Plus, Edit2, Power, Check, X, Database, Server, ShieldCheck, Search, Loader2 } from 'lucide-react';
+import { cn, getHubUrl } from '../lib/utils';
+import { Plus, Edit2, Power, X, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Pagination from '../components/Pagination';
 import { api, type HubAPI } from '../services/api';
@@ -41,26 +41,17 @@ const HubRegistry = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
   const [selectedHub, setSelectedHub] = useState<any>(null);
-  const [testStatus, setTestStatus] = useState<'none' | 'testing' | 'success' | 'error'>('none');
   const [confirmName, setConfirmName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [saving, setSaving] = useState(false);
   const itemsPerPage = 10;
 
-  // Form state for Add/Edit modal
-  const [formData, setFormData] = useState({
-    name: '', code: '', subdomain: '', description: '',
-    db_host: '', db_port: '5432', db_name: '', db_user: '', db_password: '',
-    chroma_collection: '',
-  });
+  // Form state — chỉ metadata (v3.0 hub provision qua `make hub-add` CLI)
+  const [formData, setFormData] = useState({ name: '', code: '', description: '' });
 
-  const resetForm = () => {
-    setFormData({ name: '', code: '', subdomain: '', description: '', db_host: '', db_port: '5432', db_name: '', db_user: '', db_password: '', chroma_collection: '' });
-    setTestStatus('none');
-  };
+  const resetForm = () => setFormData({ name: '', code: '', description: '' });
 
-  // Fetch hubs from API
   const fetchHubs = useCallback(async () => {
     setHubsLoading(true);
     try {
@@ -98,36 +89,17 @@ const HubRegistry = () => {
     setCurrentPage(1);
   };
 
-  const handleTestConnection = async () => {
-    setTestStatus('testing');
-    // For new hubs (no id yet), simulate test; for existing hubs, call API
-    if (selectedHub?.id) {
-      try {
-        const res = await api.testHubConnection(selectedHub.id);
-        setTestStatus(res.success ? 'success' : 'error');
-      } catch {
-        setTestStatus('error');
-      }
-    } else {
-      // Simulate for new hub creation (no ID yet)
-      setTimeout(() => setTestStatus('success'), 1500);
-    }
-  };
-
   const handleSaveHub = async () => {
     setSaving(true);
     try {
       const res = await api.createHub({
         name: formData.name,
         code: formData.code,
-        subdomain: formData.subdomain,
+        // Backend HubResponse.subdomain still NOT NULL (legacy Phase 5 migration 0003)
+        // — auto-fill = code; UI derives URL via getHubUrl() instead.
+        subdomain: formData.code,
         description: formData.description || undefined,
-        chroma_collection: formData.chroma_collection,
-        db_host: formData.db_host || undefined,
-        db_port: formData.db_port ? parseInt(formData.db_port) : undefined,
-        db_name: formData.db_name || undefined,
-        db_user: formData.db_user || undefined,
-        db_password: formData.db_password || undefined,
+        chroma_collection: '',
       });
       if (res.success) {
         setIsAddModalOpen(false);
@@ -148,11 +120,6 @@ const HubRegistry = () => {
       const res = await api.updateHub(selectedHub.id, {
         name: formData.name || undefined,
         description: formData.description || undefined,
-        db_host: formData.db_host || undefined,
-        db_port: formData.db_port ? parseInt(formData.db_port) : undefined,
-        db_name: formData.db_name || undefined,
-        db_user: formData.db_user || undefined,
-        db_password: formData.db_password || undefined,
       });
       if (res.success) {
         setIsEditModalOpen(false);
@@ -188,12 +155,7 @@ const HubRegistry = () => {
 
   const openEditModal = (hub: Hub) => {
     setSelectedHub(hub);
-    setFormData({
-      name: hub.name, code: hub.code, subdomain: hub.subdomain, description: '',
-      db_host: '', db_port: '5432', db_name: '', db_user: '', db_password: '',
-      chroma_collection: '',
-    });
-    setTestStatus('none');
+    setFormData({ name: hub.name, code: hub.code, description: '' });
     setIsEditModalOpen(true);
   };
 
@@ -207,7 +169,6 @@ const HubRegistry = () => {
         <button
           onClick={() => { resetForm(); setIsAddModalOpen(true); }}
           className="btn-primary w-full sm:w-auto"
-
         >
           <Plus size={18} /> Thêm Hub Mới
         </button>
@@ -232,7 +193,7 @@ const HubRegistry = () => {
               <tr className="bg-slate-50/50 dark:bg-slate-800/50">
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Tên Hub</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Mã Hub</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Subdomain</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">URL Hub</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-center">Số trang</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-center">Số user</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trạng thái</th>
@@ -265,7 +226,7 @@ const HubRegistry = () => {
                   <td className="px-5 py-4">
                     <code className="text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">{hub.code}</code>
                   </td>
-                  <td className="px-5 py-4 text-sm text-accent font-medium">{hub.subdomain}</td>
+                  <td className="px-5 py-4 text-sm text-accent font-medium font-mono">{getHubUrl(hub.code)}</td>
                   <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300 text-center">{hub.pages}</td>
                   <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300 text-center">{hub.users}</td>
                   <td className="px-5 py-4">
@@ -329,7 +290,18 @@ const HubRegistry = () => {
                 <h3 className="text-lg font-semibold">Thêm Hub Mới</h3>
                 <button onClick={() => setIsAddModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
               </div>
-              <div className="p-6 overflow-y-auto max-h-[70vh]">
+              <div className="p-6 overflow-y-auto max-h-[70vh] space-y-6">
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+                  <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-800 dark:text-amber-200 space-y-1">
+                    <p className="font-semibold">Form này chỉ ghi metadata Hub vào DB.</p>
+                    <p>
+                      Hub thực sự truy cập được sau khi admin chạy <code className="bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 rounded font-mono">make hub-add HUB={'<mã hub>'}</code> trên VPS
+                      để provision DB + container + Caddy regex. Xem <code className="bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 rounded font-mono">VPS_DEPLOY.md</code> §9.4.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div className="space-y-1.5">
@@ -338,80 +310,27 @@ const HubRegistry = () => {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mã Hub</label>
-                      <input type="text" placeholder="tamdao" className="input-field w-full" value={formData.code} onChange={e => setFormData(f => ({ ...f, code: e.target.value }))} />
+                      <input
+                        type="text"
+                        placeholder="tamdao"
+                        className="input-field w-full font-mono"
+                        value={formData.code}
+                        onChange={e => setFormData(f => ({ ...f, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
+                      />
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">Chỉ chữ thường, số và dấu gạch dưới. Tối đa 16 ký tự.</p>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Subdomain</label>
-                      <input type="text" placeholder="tamdao.medinet.vn" className="input-field w-full" value={formData.subdomain} onChange={e => setFormData(f => ({ ...f, subdomain: e.target.value }))} />
+                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">URL Hub</label>
+                      <div className="input-field w-full bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono text-sm cursor-not-allowed">
+                        {formData.code ? getHubUrl(formData.code) : `${getHubUrl(null)}/<mã hub>`}
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mô tả</label>
-                      <textarea placeholder="Mô tả ngắn gọn về Hub..." className="input-field w-full h-[124px] resize-none" value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} />
+                      <textarea placeholder="Mô tả ngắn gọn về Hub..." className="input-field w-full h-[180px] resize-none" value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} />
                     </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Database size={18} className="text-slate-400 dark:text-slate-500" />
-                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Kết nối Database</h4>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="sm:col-span-2 space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Host</label>
-                      <input type="text" placeholder="localhost" className="input-field w-full" value={formData.db_host} onChange={e => setFormData(f => ({ ...f, db_host: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Port</label>
-                      <input type="text" placeholder="5432" className="input-field w-full" value={formData.db_port} onChange={e => setFormData(f => ({ ...f, db_port: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Name</label>
-                      <input type="text" placeholder="wiki_tamdao" className="input-field w-full" value={formData.db_name} onChange={e => setFormData(f => ({ ...f, db_name: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB User</label>
-                      <input type="text" placeholder="postgres" className="input-field w-full" value={formData.db_user} onChange={e => setFormData(f => ({ ...f, db_user: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Password</label>
-                      <input type="password" placeholder="••••••••" className="input-field w-full" value={formData.db_password} onChange={e => setFormData(f => ({ ...f, db_password: e.target.value }))} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Server size={18} className="text-slate-400 dark:text-slate-500" />
-                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white">ChromaDB</h4>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500 dark:text-slate-400">ChromaDB Collection</label>
-                    <input type="text" placeholder="col:tamdao" className="input-field w-full" value={formData.chroma_collection} onChange={e => setFormData(f => ({ ...f, chroma_collection: e.target.value }))} />
-                  </div>
-                </div>
-
-                <div className="mt-6 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleTestConnection}
-                      disabled={testStatus === 'testing'}
-                      className="btn-secondary"
-                    >
-                      {testStatus === 'testing' ? 'Đang kiểm tra...' : 'Test Kết Nối'}
-                    </button>
-                    {testStatus === 'success' && (
-                      <span className="text-xs font-medium text-success flex items-center gap-1">
-                        <Check size={14} /> Kết nối thành công
-                      </span>
-                    )}
-                    {testStatus === 'error' && (
-                      <span className="text-xs font-medium text-danger flex items-center gap-1">
-                        <X size={14} /> Kết nối thất bại
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -419,8 +338,8 @@ const HubRegistry = () => {
                 <button onClick={() => { setIsAddModalOpen(false); resetForm(); }} className="btn-ghost">Hủy</button>
                 <button
                   onClick={handleSaveHub}
-                  disabled={testStatus !== 'success' || saving}
-                  className={cn("btn-primary", testStatus !== 'success' && "opacity-50 cursor-not-allowed")}
+                  disabled={saving || !formData.name.trim() || !formData.code.trim()}
+                  className={cn("btn-primary", (saving || !formData.name.trim() || !formData.code.trim()) && "opacity-50 cursor-not-allowed")}
                 >
                   {saving ? 'Đang lưu...' : 'Lưu Hub'}
                 </button>
@@ -509,46 +428,19 @@ const HubRegistry = () => {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mã Hub</label>
-                      <input type="text" className="input-field w-full bg-slate-50 dark:bg-slate-800 cursor-not-allowed" value={formData.code} disabled />
+                      <input type="text" className="input-field w-full bg-slate-50 dark:bg-slate-800 cursor-not-allowed font-mono" value={formData.code} disabled />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Subdomain</label>
-                      <input type="text" className="input-field w-full bg-slate-50 dark:bg-slate-800 cursor-not-allowed" value={formData.subdomain} disabled />
+                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">URL Hub</label>
+                      <div className="input-field w-full bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono text-sm cursor-not-allowed">
+                        {getHubUrl(formData.code)}
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mô tả</label>
-                      <textarea placeholder="Mô tả ngắn gọn về Hub..." className="input-field w-full h-[124px] resize-none" value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-700">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Database size={18} className="text-slate-400 dark:text-slate-500" />
-                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Kết nối Database</h4>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="sm:col-span-2 space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Host</label>
-                      <input type="text" placeholder="localhost" className="input-field w-full" value={formData.db_host} onChange={e => setFormData(f => ({ ...f, db_host: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Port</label>
-                      <input type="text" placeholder="5432" className="input-field w-full" value={formData.db_port} onChange={e => setFormData(f => ({ ...f, db_port: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Name</label>
-                      <input type="text" placeholder="wiki_tamdao" className="input-field w-full" value={formData.db_name} onChange={e => setFormData(f => ({ ...f, db_name: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB User</label>
-                      <input type="text" placeholder="postgres" className="input-field w-full" value={formData.db_user} onChange={e => setFormData(f => ({ ...f, db_user: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">DB Password</label>
-                      <input type="password" placeholder="••••••••" className="input-field w-full" value={formData.db_password} onChange={e => setFormData(f => ({ ...f, db_password: e.target.value }))} />
+                      <textarea placeholder="Mô tả ngắn gọn về Hub..." className="input-field w-full h-[180px] resize-none" value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} />
                     </div>
                   </div>
                 </div>

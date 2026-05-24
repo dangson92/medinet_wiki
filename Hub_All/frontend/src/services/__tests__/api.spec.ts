@@ -39,18 +39,18 @@ describe('Phase 5 PROXY-02 — api.ts prefix detect', () => {
     delete (window as unknown as { __HUB_CONFIG__?: unknown }).__HUB_CONFIG__;
   });
 
-  it('Test 1: central root pathname `/` → PREFIX=null, API_BASE=/api, APP_BASE=empty, CURRENT_HUB=central', async () => {
+  it('Test 1: central root pathname `/` → PREFIX=null, API_BASE empty (path tự chứa /api), APP_BASE empty, CURRENT_HUB=central', async () => {
     const mod = await reimportApi({ pathname: '/' });
     expect(mod.PREFIX).toBeNull();
-    expect(mod.API_BASE).toBe('/api');
+    expect(mod.API_BASE).toBe('');
     expect(mod.APP_BASE).toBe('');
     expect(mod.CURRENT_HUB).toBe('central');
   });
 
-  it('Test 2: hub prefix `/yte/dashboard` → PREFIX=yte, API_BASE=/yte/api, APP_BASE=/yte, CURRENT_HUB=yte', async () => {
+  it('Test 2: hub prefix `/yte/dashboard` → PREFIX=yte, API_BASE=/yte (path tự chứa /api), APP_BASE=/yte, CURRENT_HUB=yte', async () => {
     const mod = await reimportApi({ pathname: '/yte/dashboard' });
     expect(mod.PREFIX).toBe('yte');
-    expect(mod.API_BASE).toBe('/yte/api');
+    expect(mod.API_BASE).toBe('/yte');
     expect(mod.APP_BASE).toBe('/yte');
     expect(mod.CURRENT_HUB).toBe('yte');
   });
@@ -64,7 +64,7 @@ describe('Phase 5 PROXY-02 — api.ts prefix detect', () => {
   it('Test 4: unknown hub `/unknown_hub/x` → PREFIX=null (T-5-02 fallback central — FE allowlist UX only)', async () => {
     const mod = await reimportApi({ pathname: '/unknown_hub/x' });
     expect(mod.PREFIX).toBeNull();
-    expect(mod.API_BASE).toBe('/api');
+    expect(mod.API_BASE).toBe('');
     expect(mod.CURRENT_HUB).toBe('central');
   });
 

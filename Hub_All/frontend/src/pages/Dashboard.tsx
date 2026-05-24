@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Hub, AuditLogEntry } from '../types';
-import { cn } from '../lib/utils';
+import { cn, getHubUrl } from '../lib/utils';
 import { motion } from 'motion/react';
 import {
   ArrowRight, ExternalLink, Clock, User, Activity, RefreshCw, Sparkles,
@@ -402,7 +402,7 @@ const Dashboard = () => {
                   </td>
                   <td className="px-5 py-4">
                     <span className={cn("text-xs font-mono", hub.status === 'inactive' ? "text-slate-400 dark:text-slate-500 line-through" : "text-accent")}>
-                      {hub.subdomain}
+                      {getHubUrl(hub.code)}
                     </span>
                   </td>
                   <td className="px-5 py-4">

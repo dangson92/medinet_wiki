@@ -53,9 +53,30 @@ def test_parse_empty() -> None:
 
 
 def test_parse_invalid_raises() -> None:
-    """`-x hub=invalid` → ValueError (T-01-03-01 Tampering mitigation)."""
+    """`-x hub=<invalid>` → ValueError (T-01-03-01 Tampering mitigation).
+
+    FACTOR-04 dynamic validation: regex ``^[a-z][a-z0-9_]{0,15}$`` + RESERVED
+    blacklist. Test 3 fail mode: uppercase (regex), reserved (blacklist),
+    hyphen (regex). Hub mới hợp lệ (vd "dmd", "phap_che") PASS — KHÔNG hardcode
+    whitelist 4 hub (`make hub-add` không phải sửa code).
+    """
     with pytest.raises(ValueError, match="không hợp lệ"):
-        parse_hub_x_arg(["hub=invalid"])
+        parse_hub_x_arg(["hub=Invalid"])  # uppercase reject regex
+    with pytest.raises(ValueError, match="không hợp lệ"):
+        parse_hub_x_arg(["hub=postgres"])  # reserved blacklist
+    with pytest.raises(ValueError, match="không hợp lệ"):
+        parse_hub_x_arg(["hub=phap-che"])  # hyphen reject regex
+
+
+def test_parse_dynamic_hub_accepted() -> None:
+    """FACTOR-04 dynamic hub name (vd 'dmd') PASS validation.
+
+    Gap fix 2026-05-23 — env.py trước hardcode 4 hub whitelist, block hub mới
+    qua `make hub-add`. Sau refactor dùng ``is_valid_hub_name`` helper từ
+    app.config (single source of truth FACTOR-04 Plan 02-05).
+    """
+    assert parse_hub_x_arg(["hub=dmd"]) == "dmd"
+    assert parse_hub_x_arg(["hub=phap_che"]) == "phap_che"
 
 
 # === resolve_env_database_url — 5 test (3 core + 2 W8) ===

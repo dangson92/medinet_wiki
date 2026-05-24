@@ -199,7 +199,11 @@ EOF
 fi
 
 # Append service block (sed substitute placeholder)
-sed "s/{{HUB}}/$HUB/g; s/{{PORT}}/$PORT/g" "$TEMPLATE_PATH" >> "$OVERRIDE_PATH"
+# Bug fix 2026-05-23: thiếu {{HUB_UPPER}} substitution → docker compose config FAIL
+# vì env HUB_ID parse `${HUB_{{HUB_UPPER}}_ID:?...}` literal placeholder. Compute
+# HUB_UPPER qua `tr` (portable hơn bash ${HUB^^} cần bash 4+).
+HUB_UPPER=$(echo "$HUB" | tr '[:lower:]' '[:upper:]')
+sed "s/{{HUB_UPPER}}/$HUB_UPPER/g; s/{{HUB}}/$HUB/g; s/{{PORT}}/$PORT/g" "$TEMPLATE_PATH" >> "$OVERRIDE_PATH"
 
 # Append volume declaration (cocoindex LMDB per-hub) neu chua co volumes: section
 if ! grep -q "^volumes:" "$OVERRIDE_PATH"; then

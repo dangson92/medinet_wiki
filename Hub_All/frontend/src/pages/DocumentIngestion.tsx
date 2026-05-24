@@ -161,7 +161,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
     setEditModalLoading(true);
     setEditModalOpen(true);
     try {
-      const res = await fetch(`${API_URL}/api/documents/${docId}/file`, {
+      const res = await fetch(`/api/documents/${docId}/file`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
       });
       if (!res.ok) {
@@ -244,7 +244,9 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
     setDiffDocId(null);
   };
 
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
+  // Phase 5 PROXY-02 fix: dùng absolute path /api/* — Caddy route → central.
+  // Endpoint documents/file là per-hub NHƯNG admin page chỉ access từ central context,
+  // dùng absolute /api/* để KHÔNG bị double-prefix bug (cũ: API_URL hardcode :8180).
 
   const handlePreview = async (doc: RAGDocument) => {
     setPreviewDoc(doc);
@@ -253,7 +255,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
     setPreviewLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(`${API_URL}/api/documents/${doc.id}/file`, {
+      const res = await fetch(`/api/documents/${doc.id}/file`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
@@ -284,7 +286,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
         if (active.length > 0 && !selectedHub) setSelectedHub(active[0].id);
       }
     });
-    fetch((import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`) + '/api/rag-config')
+    fetch('/api/rag-config')
       .then(r => r.json()).then(setRagConfig).catch(() => {});
   }, []);
 

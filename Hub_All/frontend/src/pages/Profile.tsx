@@ -11,7 +11,8 @@ import { useAuth } from '../contexts/AuthContext';
 // trong Settings → MCP Connector để override per-deployment; Profile fetch
 // giá trị đó, fallback về MCP_URL derived nếu admin chưa set.
 const MCP_URL = import.meta.env.VITE_MCP_URL || `http://${window.location.hostname}:8190`;
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
+// Phase 5 PROXY-02 fix: dùng absolute path /api/* — Caddy `/api/*` → central.
+// system-settings là central-only endpoint (strip ở hub con). KHÔNG dùng API_BASE prefix.
 
 export default function Profile() {
   const { refreshUser } = useAuth();
@@ -143,7 +144,7 @@ export default function Profile() {
     // Fetch song song: client per-user + admin MCP domain override.
     const token = localStorage.getItem('access_token');
     const settingsP = token
-      ? fetch(`${API_URL}/api/system-settings`, {
+      ? fetch('/api/system-settings', {
           headers: { Authorization: `Bearer ${token}` },
         })
           .then(r => (r.ok ? r.json() : null))

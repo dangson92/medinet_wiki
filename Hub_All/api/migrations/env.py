@@ -31,15 +31,16 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import models để Base.metadata pick up đủ 10 table TRƯỚC khi autogenerate run.
-from app.config import get_settings, resolve_database_url
+from app.config import get_settings, is_valid_hub_name, resolve_database_url
 from app.db.base import Base
 from app.models import *  # noqa: F401, F403 — register tất cả model vào metadata
 
 # === Pure helpers — unit testable (KHÔNG access alembic.context) ===
 
-# 4 hub hợp lệ — khớp Settings.hub_name Literal (Plan 02). Hub mới phải update
-# cả 2 nơi (Plan 05 hub-init.sh dynamic add sẽ centralize source of truth).
-_VALID_HUBS = {"central", "yte", "duoc", "hcns"}
+# FACTOR-04 dynamic hub validation — KHÔNG hardcode whitelist (Plan 02-05 single
+# source of truth at app.config.is_valid_hub_name). "central" + 3 sub-hub + bất kỳ
+# hub mới qua `make hub-add` (vd `dmd`, `phap_che`) đều pass nếu khớp regex
+# `^[a-z][a-z0-9_]{0,15}$` + KHÔNG reserved.
 
 # Plan 04-01 SYNC-05 — Per-hub-only migration registry (D-V3-Phase4-A2).
 # Revision được xác định "per-hub-only" → SKIP no-op khi apply trên DB central.
@@ -88,17 +89,20 @@ def parse_hub_x_arg(x_args: list[str]) -> str | None:
         Settings.hub_name khi caller dùng `resolve_env_database_url`).
 
     Raises:
-        ValueError: nếu ``hub=<name>`` không thuộc 4 hub hợp lệ
+        ValueError: nếu ``hub=<name>`` không khớp FACTOR-04 hub_name validation
             (T-01-03-01 Tampering mitigation — chống typo / malicious input).
+            Pattern enforced: ``^[a-z][a-z0-9_]{0,15}$`` + KHÔNG nằm trong
+            ``RESERVED_HUB_NAMES`` blacklist (sync ``Settings._validate_hub_name``).
     """
     for arg in x_args:
         if not arg.startswith("hub="):
             continue
         hub = arg.split("=", 1)[1].strip()
-        if hub not in _VALID_HUBS:
+        if not is_valid_hub_name(hub):
             raise ValueError(
                 f"alembic -x hub=<name>: {hub!r} không hợp lệ. "
-                f"Hợp lệ: {sorted(_VALID_HUBS)}."
+                f"Pattern: ^[a-z][a-z0-9_]{{0,15}}$ + KHÔNG reserved name "
+                f"(sync Settings.hub_name FACTOR-04 Plan 02-05)."
             )
         return hub
     return None

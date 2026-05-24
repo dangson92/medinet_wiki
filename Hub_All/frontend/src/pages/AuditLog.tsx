@@ -124,7 +124,6 @@ const AuditLog = () => {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
       const token = localStorage.getItem('access_token');
       const params = new URLSearchParams();
       if (appliedFilters.date_from) params.set('date_from', appliedFilters.date_from);
@@ -132,7 +131,9 @@ const AuditLog = () => {
       if (appliedFilters.action) params.set('action', appliedFilters.action);
       if (appliedFilters.hub_id) params.set('hub_id', appliedFilters.hub_id);
       const qs = params.toString();
-      const res = await fetch(`${API_URL}/api/audit-logs/export${qs ? '?' + qs : ''}`, {
+      // Absolute path /api/* — Caddy route central-only endpoint (audit-logs strip ở hub con).
+      // Pattern song song crossHubSearch — KHÔNG dùng API_BASE prefix.
+      const res = await fetch(`/api/audit-logs/export${qs ? '?' + qs : ''}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (res.ok) {

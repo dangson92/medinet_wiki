@@ -23,9 +23,9 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8180`;
-// URL gốc MCP Service — mặc định suy ra từ host thật đang chạy app (giống API_URL),
-// override qua VITE_MCP_URL khi build. Admin sửa lại được trong tab MCP Connector.
+// Phase 5 PROXY-02 fix: API fetch dùng absolute path /api/* — Caddy `/api/*` → central.
+// rag-config / system-settings là central-only endpoint (strip ở hub con).
+// MCP_URL CHỈ làm placeholder hint cho input field (line 648); admin custom sau qua tab MCP Connector.
 const MCP_URL = import.meta.env.VITE_MCP_URL || `http://${window.location.hostname}:8190`;
 
 // ─── Model metadata ───
@@ -180,7 +180,7 @@ export default function Settings() {
     const token = localStorage.getItem('access_token');
     if (!token) return;
     setLoadingCollections(true);
-    fetch(`${API_URL}/api/rag-config/collections`, {
+    fetch(`/api/rag-config/collections`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
@@ -202,7 +202,7 @@ export default function Settings() {
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
-    fetch(`${API_URL}/api/system-settings`, {
+    fetch(`/api/system-settings`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : null)
@@ -223,7 +223,7 @@ export default function Settings() {
 
   // Load current RAG config
   useEffect(() => {
-    fetch(`${API_URL}/api/rag-config`)
+    fetch(`/api/rag-config`)
       .then(r => r.json())
       .then(data => {
         if (data.embedding_provider) setRagEmbeddingProvider(data.embedding_provider);
@@ -259,7 +259,7 @@ export default function Settings() {
 
   const saveSystemSettings = async () => {
     const token = localStorage.getItem('access_token');
-    const res = await fetch(`${API_URL}/api/system-settings`, {
+    const res = await fetch(`/api/system-settings`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -282,7 +282,7 @@ export default function Settings() {
 
   const saveRAGConfig = async () => {
     const token = localStorage.getItem('access_token');
-    const res = await fetch(`${API_URL}/api/rag-config`, {
+    const res = await fetch(`/api/rag-config`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -343,7 +343,7 @@ export default function Settings() {
     setTesting(true);
     setResult(null);
     try {
-      const res = await fetch(`${API_URL}/api/rag-config/test?provider=${provider}`, {
+      const res = await fetch(`/api/rag-config/test?provider=${provider}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
       });
       setResult(res.ok ? 'success' : 'error');

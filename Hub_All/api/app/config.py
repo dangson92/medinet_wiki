@@ -35,6 +35,25 @@ RESERVED_HUB_NAMES = frozenset({
     "medinet",     # Postgres role name (M2 init-db.sh OWNER) — privilege confuse
 })
 
+# FACTOR-04 single source of truth — pattern + helper reuse bởi migrations/env.py +
+# app/rag/flow.py + Settings._validate_hub_name. Add hub mới qua `make hub-add` KHÔNG
+# cần sửa code 3 nơi nữa (trước Plan 02-05 ship miss 2 hardcode whitelist ở env.py +
+# flow.py — gap fix khi add hub `dmd` 2026-05-23).
+HUB_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,15}$")
+
+
+def is_valid_hub_name(name: str) -> bool:
+    """FACTOR-04 hub name validation — single source of truth.
+
+    Returns True nếu ``name`` khớp regex ``^[a-z][a-z0-9_]{0,15}$`` (lowercase a-z
+    first char + a-z0-9_ rest + max 16 char) VÀ KHÔNG nằm trong ``RESERVED_HUB_NAMES``
+    blacklist. Sync semantic với ``Settings._validate_hub_name`` validator.
+
+    Caller (env.py / flow.py) tự throw ValueError với message domain-specific khi
+    return False — helper này chỉ trả bool để compose dễ.
+    """
+    return bool(HUB_NAME_PATTERN.fullmatch(name)) and name not in RESERVED_HUB_NAMES
+
 
 class Settings(BaseSettings):
     """Tổng hợp config runtime của Medinet Wiki API."""
@@ -275,7 +294,7 @@ class Settings(BaseSettings):
         - T-02-05-02 Privilege confuse hub_name=medinet/postgres → blacklist reject
         - T-02-05-03 DoS hub_name 100-char → regex max 16 char reject
         """
-        if not re.fullmatch(r"^[a-z][a-z0-9_]{0,15}$", v):
+        if not HUB_NAME_PATTERN.fullmatch(v):
             raise ValueError(
                 f"hub_name invalid format: {v!r}. Pattern required: "
                 f"^[a-z][a-z0-9_]{{0,15}}$ (lowercase a-z first char, max 16 "

@@ -307,9 +307,6 @@ async def medinet_wiki_main() -> None:
 # Manual fallback (BLOCKER 4): user CHỦ Ý preserve M2 corpus state → set env
 # COCOINDEX_APP_NAME_LEGACY=<M2-legacy-name>. Phase 7 migrate xong remove override.
 
-_VALID_HUBS_FLOW = frozenset({"central", "yte", "duoc", "hcns"})
-
-
 def resolve_cocoindex_app_name(hub_name: str) -> str:
     """Resolve cocoindex App name theo hub.
 
@@ -321,19 +318,28 @@ def resolve_cocoindex_app_name(hub_name: str) -> str:
     trong resolve helper (helper deterministic theo hub_name input).
 
     Args:
-        hub_name: ``"central" | "yte" | "duoc" | "hcns"`` — phải khớp 4 giá trị
-            ``Settings.hub_name`` Literal.
+        hub_name: bất kỳ hub_name khớp FACTOR-04 validation (regex
+            ``^[a-z][a-z0-9_]{0,15}$`` + KHÔNG reserved). Bao gồm "central",
+            3 sub-hub seed (yte/duoc/hcns) + hub dynamic vd "dmd", "phap_che".
 
     Returns:
         App name string, vd ``"medinet_central_ingest"`` cho ``hub_name="central"``.
 
     Raises:
-        ValueError: ``hub_name`` không thuộc 4 hub hợp lệ (T-01-04-04 mitigation).
+        ValueError: ``hub_name`` KHÔNG khớp FACTOR-04 validation
+            (T-01-04-04 mitigation — chống typo / malicious input).
     """
-    if hub_name not in _VALID_HUBS_FLOW:
+    # Import inline để tránh circular import (flow.py được import bởi main.py +
+    # lifespan trước khi `_get_settings()` cache resolve — module-level import
+    # `from app.config import is_valid_hub_name` chỗ này KHÔNG đụng vì đã sau
+    # `_get_settings` import line 347 dưới, nhưng inline minh bạch dependency).
+    from app.config import is_valid_hub_name
+
+    if not is_valid_hub_name(hub_name):
         raise ValueError(
             f"hub_name={hub_name!r} không hợp lệ. "
-            f"Hợp lệ: {sorted(_VALID_HUBS_FLOW)}."
+            f"Pattern: ^[a-z][a-z0-9_]{{0,15}}$ + KHÔNG reserved name "
+            f"(sync Settings.hub_name FACTOR-04 Plan 02-05)."
         )
     return f"medinet_{hub_name}_ingest"
 

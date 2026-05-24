@@ -107,11 +107,32 @@ def test_resolve_cocoindex_app_name_valid(hub: str, expected: str) -> None:
 
 
 def test_resolve_cocoindex_app_name_invalid_raises() -> None:
-    """resolve_cocoindex_app_name raise ValueError voi hub khong hop le."""
+    """resolve_cocoindex_app_name raise ValueError voi hub khong hop le.
+
+    FACTOR-04 dynamic validation: regex ``^[a-z][a-z0-9_]{0,15}$`` + RESERVED
+    blacklist. Test 3 fail mode (uppercase regex / reserved blacklist / hyphen).
+    """
     from app.rag.flow import resolve_cocoindex_app_name
 
     with pytest.raises(ValueError, match="không hợp lệ"):
-        resolve_cocoindex_app_name("invalid")
+        resolve_cocoindex_app_name("Invalid")  # uppercase reject regex
+    with pytest.raises(ValueError, match="không hợp lệ"):
+        resolve_cocoindex_app_name("postgres")  # reserved blacklist
+    with pytest.raises(ValueError, match="không hợp lệ"):
+        resolve_cocoindex_app_name("phap-che")  # hyphen reject regex
+
+
+def test_resolve_cocoindex_app_name_dynamic_hub() -> None:
+    """FACTOR-04 dynamic hub name (vd 'dmd') resolve đúng app name.
+
+    Gap fix 2026-05-23 — flow.py trước hardcode 4 hub whitelist `_VALID_HUBS_FLOW`,
+    block hub mới qua `make hub-add`. Sau refactor dùng ``is_valid_hub_name`` helper
+    từ app.config (single source of truth FACTOR-04 Plan 02-05).
+    """
+    from app.rag.flow import resolve_cocoindex_app_name
+
+    assert resolve_cocoindex_app_name("dmd") == "medinet_dmd_ingest"
+    assert resolve_cocoindex_app_name("phap_che") == "medinet_phap_che_ingest"
 
 
 # ===== Module-level App instance smoke check =====
