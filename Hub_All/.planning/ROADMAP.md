@@ -22,8 +22,8 @@
 
 | # | Phase | Goal | Requirements | Success Criteria | Depends on |
 |---|---|---|---|---|---|
-| **1** | DB schema migration (ROLE) | Mở rộng `role_enum` thêm `hub_admin`; thêm column `user_hubs.role` per-hub; migration seed existing admins giữ super-admin | ROLE-01..04 (4) | 4 | v3.0 shipped — schema M2 `users.role` + `user_hubs` carry forward |
-| **2** | Backend RBAC enforcement (DEP) | Dependency `require_hub_admin_for(hub_id)`; refactor GET /api/hubs filter cả admin; users.py CRUD scope; hubs.py mutate super admin only; audit actor.scope | DEP-01..05 (5) | 5 | Phase 1 |
+| **1** | DB schema migration (ROLE) ✅ DONE 2026-05-23 | Mở rộng `role_enum` thêm `hub_admin`; thêm column `user_hubs.role` per-hub; migration seed existing admins giữ super-admin | ROLE-01..04 (4) | 4 | v3.0 shipped — schema M2 `users.role` + `user_hubs` carry forward |
+| **2** | Backend RBAC enforcement (DEP) ✅ DONE 2026-05-24 | Dependency `require_hub_admin_for(hub_id)`; refactor GET /api/hubs filter cả admin; users.py CRUD scope; hubs.py mutate super admin only; audit actor.scope | DEP-01..05 (5) | 5 | Phase 1 |
 | **3** | Frontend form refactor (FE) | UserManagement form 3 option; hub switcher hide central; edit modal disabled assign super; api.ts UserRole type extend | FE-01..04 (4) | 4 | Phase 2 |
 | **4** | Migration + smoke E2E (MIGRATE) | Migration idempotent + rollback; smoke E2E 4 scenario; closeout docs | MIGRATE-01..02 (2) | 2 | Phase 1-3 |
 
@@ -82,11 +82,11 @@ Plans:
 **Plans estimate:** 4-5 plans (BLOCKING Wave 1 dependency + Wave 2 endpoints parallel × 2 + Wave 3 audit + Wave 4 closeout).
 
 Plans:
-- [ ] 02-01-PLAN.md — require_hub_admin_for dependency + 5-case unit test + 403 envelope HUB_ADMIN_REQUIRED (DEP-01)
-- [ ] 02-02-PLAN.md — routers/hubs.py GET filter cả admin + routers/hubs.py mutate require_role("admin") preserve (DEP-02, DEP-04)
-- [ ] 02-03-PLAN.md — routers/users.py CRUD scope hub_admin + integration test 5 case (DEP-03)
-- [ ] 02-04-PLAN.md — Audit log payload actor_role + actor_hub_id nest + 3 service update (DEP-05)
-- [ ] 02-05-PLAN.md — Closeout — CLAUDE.md + STATE.md + REQUIREMENTS.md mark DEP-01..05 [x]
+- [x] 02-01-PLAN.md — require_hub_admin_for validator + 5-case unit test + 403 envelope HUB_ADMIN_REQUIRED (DEP-01) ✅ DONE 2026-05-24
+- [x] 02-02-PLAN.md — Integration test GET /api/hubs filter cả admin + POST hub_admin 403 verify + B2 iter 1 defensive AUTH_STATE_INCONSISTENT invariant guard (DEP-02 + DEP-04) ✅ DONE 2026-05-24
+- [x] 02-03-PLAN.md — routers/users.py 4 endpoint refactor scope + UserRole Literal extend + DELETE B1 iter 1 3-branch + 7 integration test (DEP-03) ✅ DONE 2026-05-24
+- [x] 02-04-PLAN.md — Audit payload actor_role + actor_hub_id nest 5 callsite + B7 iter 1 future-proof guard (DEP-05) ✅ DONE 2026-05-24
+- [x] 02-05-PLAN.md — Closeout STATE.md + REQUIREMENTS.md + ROADMAP.md + CLAUDE.md update ✅ DONE 2026-05-24
 
 ---
 
@@ -172,7 +172,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
 | v3.0 Multi-Hub Split | 7 | 38/38 | 30/30 | ✅ Shipped | 2026-05-23 |
-| **v3.1 RBAC hub_admin** | **4** | **3/~12** | **4/15** | 🚧 **Phase 1 DONE** | — |
+| **v3.1 RBAC hub_admin** | **4** | **8/~15** | **9/15** | 🚧 **Phase 2 DONE** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 

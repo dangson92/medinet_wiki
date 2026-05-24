@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: RBAC hub_admin
-status: "🚧 v3.1 STARTED 2026-05-23 — defining requirements + roadmap. Trigger: user bug report 2026-05-23 sau v3.0 close — tạo user gán hub `dmd` nhưng vẫn vào được central (gap thiết kế role-per-hub defer v4.0 trong M2). Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
-last_updated: "2026-05-24T09:30:00.000Z"
+status: "🚧 v3.1 STARTED 2026-05-23 — Phase 1 + 2 DONE. Phase 2 DEP backend RBAC enforcement ship 5 plan / 5 REQ-ID DEP-01..05 (11 unit + 12 integration test PASS). Trigger: user bug report 2026-05-23 sau v3.0 close — tạo user gán hub `dmd` nhưng vẫn vào được central (gap thiết kế role-per-hub defer v4.0 trong M2). Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
+last_updated: "2026-05-24T11:00:00.000Z"
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 15  # estimate ~12-15 plan (Phase 1 ship 3; Phase 2 plan 5 — total 8 plan ship/planned)
-  completed_plans: 3
-  percent: 20
+  completed_phases: 2
+  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 = 8 plan complete
+  completed_plans: 8
+  percent: 53
 milestone_status: "STARTED"
 milestone_start_date: "2026-05-23"
-phase_2_status: "PLANNED"
+phase_2_status: "DONE"
 phase_2_plan_count: 5
-phase_2_planned_date: "2026-05-24"
-next_action: "/gsd-execute-phase 2 — DEP backend RBAC enforcement (5 plan / 4 wave / DEP-01..05 coverage 100%, iter 2 plan-checker VERIFICATION PASSED)"
+phase_2_done_date: "2026-05-24"
+next_action: "/gsd-discuss-phase 3 — FE frontend form refactor (UserManagement form 3 option + hub switcher hide central + edit modal disabled assign super)"
 ---
 
 # State — MEDWIKI (v3.1)
@@ -27,12 +27,12 @@ next_action: "/gsd-execute-phase 2 — DEP backend RBAC enforcement (5 plan / 4 
 
 ## Current Position
 
-🚧 **v3.1 PHASE 2 PLANNED 2026-05-24** — Phase 1 DONE (3 plan / 4 REQ-ID); Phase 2 plan files ship đầy đủ (5 plan / 4 wave / DEP-01..05 coverage 100%). Iter 2 plan-checker VERIFICATION PASSED — 7 BLOCKER + 4 WARNING iter 1 fixed.
+🚧 **v3.1 PHASE 2 DONE 2026-05-24** — Phase 1 DONE (3 plan / 4 REQ-ID); Phase 2 DONE (5 plan / 5 REQ-ID DEP-01..05); 11 unit + 12 integration test PASS + 471/471 unit regression PASS.
 
-- **Phase:** 02-backend-rbac-enforcement (PLANNED — chưa execute)
-- **Plan:** 5 plan ship `.planning/phases/02-backend-rbac-enforcement/02-{01..05}-PLAN.md`
-- **Status:** Ready to execute — `/gsd-execute-phase 2` will run Wave 1 (02-01 BLOCKING assert_hub_admin_for + 5 unit test) → Wave 2 (02-02 + 02-03 parallel — hubs GET defensive AUTH_STATE_INCONSISTENT + users CRUD scope DEP-03 với DELETE 3-branch logic) → Wave 3 (02-04 audit payload nest actor_role + actor_hub_id) → Wave 4 (02-05 closeout 4 docs + W5 FE breakage operator broadcast note).
-- **Next Action:** `/gsd-execute-phase 2` — execute 5 plan với atomic commits per plan; expected ~12 file modified + ~25 test ship (5 unit + 20 integration); coverage ≥80% target trên auth/dependencies + routers/users + services/audit (D-V3.1-Phase2-F LOCKED).
+- **Phase:** 02-backend-rbac-enforcement (✅ DONE 2026-05-24)
+- **Plan:** 5 plan ship `.planning/phases/02-backend-rbac-enforcement/02-{01..05}-PLAN.md` + 5 SUMMARY.md.
+- **Status:** Phase 2 hoàn tất Wave 1 (02-01 assert_hub_admin_for + 5 unit test) → Wave 2 (02-02 hubs GET defensive AUTH_STATE_INCONSISTENT + 2 unit + 3 integration; 02-03 users CRUD scope DEP-03 với DELETE B1 iter 1 3-branch + 7 integration test runtime PASS) → Wave 3 (02-04 audit payload nest actor_role + actor_hub_id + 4 unit + 2 integration) → Wave 4 (02-05 closeout 4 docs + W5 FE breakage operator broadcast note).
+- **Next Action:** `/gsd-discuss-phase 3` — FE frontend form refactor (UserManagement 3 option radio + hub switcher hide central + edit modal disabled assign super + api.ts UserRole type extend).
 
 ## Phase 2 Planning Summary (PLANNED 2026-05-24)
 
@@ -76,7 +76,7 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 | Phase | Wave | Objective | REQ-ID | Plans (estimate) | Status |
 |-------|------|-----------|--------|------------------|--------|
 | 1 | DB schema | role_enum mở rộng + user_hubs.role column + helper + seed migration | ROLE-01..04 (4) | 3-4 | ✅ DONE 2026-05-23 (3 plan) |
-| 2 | Backend RBAC | require_hub_admin_for dep + GET /api/hubs filter + CRUD scope + audit | DEP-01..05 (5) | 4-5 | Not started |
+| 2 | Backend RBAC | require_hub_admin_for dep + GET /api/hubs filter + CRUD scope + audit | DEP-01..05 (5) | 4-5 | ✅ DONE 2026-05-24 (5 plan) |
 | 3 | Frontend | UserManagement form 3 option + hub switcher hide central + edit modal disabled | FE-01..04 (4) | 3-4 | Not started |
 | 4 | Migration + smoke | Idempotent + rollback + smoke E2E 4 scenario + closeout v3.1 | MIGRATE-01..02 (2) | 2-3 | Not started |
 
@@ -105,6 +105,46 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 - Module separation: `api/app/auth/role.py` business logic role thuần; `dependencies.py` FastAPI wrapper (Phase 2 sẽ extend).
 - Tên CHECK constraint introspect runtime (chống model/migration discrepancy `ck_users_role_enum` vs `role_enum`).
 - **Alembic integration test DSN injection pattern (Iter 1 fix I-01):** monkeypatch env `DATABASE_URL` + `get_settings.cache_clear()` thay vì `Config.set_main_option("sqlalchemy.url", ...)` — bypass env.py:185-191 runtime override. Áp dụng cho mọi integration test Alembic Phase 4+ MIGRATE-01.
+
+## Phase 2 Results Summary (DONE 2026-05-24)
+
+5 plan ship 5 REQ-ID DEP-01..05:
+
+- **Plan 02-01** (DEP-01): Validator function `assert_hub_admin_for(*, user, db, target_hub_id)` ở `api/app/auth/dependencies.py` — hybrid pattern D-V3.1-Phase2-D LOCKED (KHÔNG Depends factory vì hub_id ở body POST/PATCH). Import `get_effective_role` + `UserNotFoundError` từ Plan 01-02. 5 unit test PASS cover 5 case D-V3.1-Phase2-D (super admin bypass / hub_admin pass / hub_admin wrong hub / viewer / user_not_found defensive). Envelope `HUB_ADMIN_REQUIRED` mới (D-V3.1-Phase2-B LOCKED) — KHÔNG reuse FORBIDDEN để FE-01 switch UX rõ ràng.
+- **Plan 02-02** (DEP-02 + DEP-04): Integration test 3 scenario verify GET /api/hubs filter cả admin (D-V3.1-Phase2-A LOCKED — hub_admin với `users.role='editor'` rơi else branch line 78 → filter user_hubs → CHỈ thấy hub được assign). 5 endpoint mutate hubs.py (POST/PUT/PATCH/stats — line 94-218) GIỮ `Depends(require_role("admin"))` UNCHANGED (DEP-04 LOCKED). routers/hubs.py admin branch ADD B2 iter 1 defensive invariant guard SELECT COUNT(*) override → raise 500 `AUTH_STATE_INCONSISTENT` khi D-V3.1-01 invariant violated (admin global + per-hub override). 2 unit test pure Python mirror logic verify clean + broken state.
+- **Plan 02-03** (DEP-03): UserRole Literal extend 4 value (admin|hub_admin|editor|viewer) match Plan 01-01 migration 0006 CHECK. 4 endpoint routers/users.py refactor (POST create + PATCH role + GET list + DELETE B1 iter 1 3-branch) với assert_hub_admin_for inline sau body parse. T-02-02-E mitigation business logic block `req.role == "admin" and user.role != "admin"` (hub_admin KHÔNG được escalate). HUB_ID_REQUIRED guard cho GET list non-super-admin. DELETE handler branch single-hub (assert_hub_admin_for pass) vs cross-hub (`CROSS_HUB_USER_DELETE_DENIED` mới B1 iter 1) vs orphan (`HUB_ADMIN_REQUIRED`). 4 endpoint còn lại (PATCH status + GET single + PUT + reset-password) GIỮ require_role super-only (D-V3.1-Phase2-E LOCKED cross-hub op). 7 integration test PASS runtime cover scenario ROADMAP success criteria #2.
+- **Plan 02-04** (DEP-05): Helper `build_audit_payload(*, actor_role, actor_hub_id, extra)` ở audit_service.py — D-V3.1-Phase2-C LOCKED nest vào payload JSONB existing KHÔNG schema migration. 5 service callsite refactor (user_service.create + delete; hub_service.create + update + update_status) signature thêm actor_role + actor_hub_id keyword-only. 5 router callsite derive `actor_role = "admin" if user.role == "admin" else "hub_admin"` + `actor_hub_id = None if super else req.hub_id`. 4 unit test + 2 integration test PASS — verify `payload->>'actor_role'` + `payload->>'actor_hub_id'` queryable cho forensic. B7 iter 1 future-proof guard: api_key_service.py grep enqueue_audit count == 0 lock invariant + MANDATORY docstring note enforce.
+- **Plan 02-05** (closeout): STATE.md + REQUIREMENTS.md + ROADMAP.md + CLAUDE.md update atomic — Phase 2 DONE 100% 5 REQ-ID consumed. Smoke checkpoint runtime SKIP pre-resolved (carry forward v3.0 Plan 04-07 + 05-06 + 06-05 pattern + Plan 01-03 v3.1) — defer Phase 4 MIGRATE-02 full E2E live runtime.
+
+**Carry forward patterns:**
+- Hybrid validator function (KHÔNG Depends factory) cho hub_id body — D-V3.1-Phase2-D LOCKED; áp dụng cho future endpoint per-hub gate khi hub_id KHÔNG ở path param.
+- Envelope `HUB_ADMIN_REQUIRED` vs `FORBIDDEN` differentiation — frontend FE-01 sẽ switch UX (Phase 3).
+- Envelope `CROSS_HUB_USER_DELETE_DENIED` mới (B1 iter 1) phân biệt multi-hub user vs scope violation.
+- Envelope `AUTH_STATE_INCONSISTENT` (500) invariant guard (B2 iter 1) — KHÔNG silent bypass khi DB state inconsistent với D-V3.1-01 LOCKED.
+- Audit payload nest (KHÔNG schema migration audit_logs) — D-V3.1-Phase2-C LOCKED carry forward Phase 4 v3.0 D-V3-Phase4-C2 pattern.
+- Service signature `*` keyword-only + actor metadata params — Pattern G carry forward; force caller explicit pass tránh positional bug.
+- B5 iter 1 patch-style INSERT preserve Plan 02-02 + 02-03 ship lines (KHÔNG full handler rewrite) — pattern carry forward cho Phase n+ refactor incremental.
+- B7 iter 1 future-proof guard (grep == 0 invariant + MANDATORY docstring) — lock pattern cho future audit-emitter caller.
+- Integration test helper `_seed_hub_admin_user` + `seed_hubs_dmd_tdt` duplicate qua Plan 02-02 + 02-03 + 02-04 — Phase 4 MIGRATE-02 consolidate vào conftest.py nếu muốn DRY (defer).
+
+**R-V3.1-2 MEDIUM mitigation chain Phase 2:**
+- Backend filter authoritative GET /api/hubs (Plan 02-02 D-V3.1-Phase2-A LOCKED) — defense in depth, KHÔNG dựa FE.
+- assert_hub_admin_for inline check sau body parse (Plan 02-01 + 02-03) — production code path enforce per-hub gate.
+- T-02-02-E business logic block role escalation (Plan 02-03 PATCH role handler) — hub_admin KHÔNG được assign role='admin' cho user khác.
+- DELETE + PATCH status giữ require_role super-only (Plan 02-03 + D-V3.1-Phase2-E LOCKED) — cross-hub op KHÔNG cho hub_admin.
+- B2 iter 1 defensive AUTH_STATE_INCONSISTENT invariant guard — KHÔNG silent bypass khi D-V3.1-01 violated.
+- Audit forensic chain `payload->>'actor_role'` + `payload->>'actor_hub_id'` (Plan 02-04 DEP-05) — incident review filter scope hub_admin operation.
+- B7 iter 1 future-proof guard api_key_service grep == 0 + MANDATORY docstring — future audit-emitter BẮT BUỘC qua `build_audit_payload`.
+- Test coverage 23 test ship (5+2+3+7+4+2 = 11 unit + 12 integration) cover semantic DEP-01..05 — D-V3.1-Phase2-F LOCKED ≥ 80% satisfied (471/471 unit regression PASS).
+
+**Phase 2 backward incompat (W5 iter 1 acknowledgement):**
+- hub_admin gọi GET /api/users qua existing M2/v3.0 frontend (chưa pass hub_id query) sẽ thấy 400 HUB_ID_REQUIRED guard Plan 02-03 DEP-03.
+- Existing M2/v3.0 frontend chưa pass hub_id query → 1-2 ngày downtime trên user management page cho hub_admin role giữa Phase 2 ship và Phase 3 FE-04 ship (acceptable v3.1 timeline).
+- **Operator broadcast Slack/Email trước Phase 3 FE-04 ship:** thông báo hub_admin user về temporary breakage + ETA Phase 3 FE-04.
+- Phase 3 FE-04 sẽ pass hub_id query → resolve.
+- Breaking change tests cũ: `user_service.create(req=, created_by=)` + `delete(user_id=, deleted_by=)` + `hub_service.create/update/update_status` signature THÊM keyword-only `actor_role` (user_service required, hub_service default 'admin') + `actor_hub_id`. Existing tests M2 + v3.0 KHÔNG break (471/471 unit regression PASS) — chỉ caller router cần derive đúng (verified).
+
+**Next:** Phase 3 `/gsd-discuss-phase 3` FE frontend form refactor (UserManagement 3 option radio + hub switcher hide central + edit modal disabled assign super + api.ts UserRole type extend).
 
 ## Open Question (chốt ở /gsd-discuss-phase tương ứng)
 
