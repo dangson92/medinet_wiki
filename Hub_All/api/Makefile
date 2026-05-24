@@ -1,5 +1,5 @@
 # Medinet Wiki API — dev tasks
-.PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov clean \
+.PHONY: install dev keys keys-verify keys-verify-jwt lint test test-cov test-integration test-migration clean \
         migrate-up migrate-down migrate-check migrate-history cocoindex-setup \
         migrate-all migrate-status hub-init hub-add
 
@@ -36,6 +36,18 @@ test-cov:
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .venv
+
+# === Integration test (Phase 4 v3.1 MIGRATE-01 + MIGRATE-02) ===
+# Requires Docker Desktop running (testcontainers pgvector/pgvector:pg16 + redis).
+# Auto-spin Postgres + Redis containers — KHÔNG cần TEST_DATABASE_URL env set
+# nếu test dùng postgres_container fixture (recommended). Fallback TEST_DATABASE_URL
+# nếu chạy ad-hoc test_migration_0006_idempotent.py (Plan 01-03 pattern).
+
+test-integration:
+	$(UV) run pytest tests/integration -v -m integration --tb=short
+
+test-migration:
+	$(UV) run pytest tests/integration/test_migration_0006_idempotent.py tests/integration/test_migration_upgrade_downgrade.py -v --tb=short
 
 # === Alembic migration targets (Phase 2 Plan 05) ===
 # Tien dieu kien: docker compose up -d postgres (Phase 1 Plan 02) + .env file day DSN.
