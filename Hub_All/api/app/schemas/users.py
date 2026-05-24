@@ -16,8 +16,10 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-# Role enum — match users.role CHECK constraint `role_enum`.
-UserRole = Literal["admin", "editor", "viewer"]
+# Role enum — 4 value match Plan 01-01 migration 0006 CHECK constraint (D-V3.1-01 LOCKED).
+# Phase 2 Plan 02-03 DEP-03 — extend 'hub_admin' match migration 0006 CHECK constraint
+# 4 value (admin|hub_admin|editor|viewer); body validation cho PATCH role escalation.
+UserRole = Literal["admin", "hub_admin", "editor", "viewer"]
 # Status enum — match users.status CHECK constraint `user_status_enum`.
 UserStatus = Literal["active", "disabled"]
 
