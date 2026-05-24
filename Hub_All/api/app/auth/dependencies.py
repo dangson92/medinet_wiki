@@ -27,6 +27,9 @@ from app.auth.service import AuthService
 from app.db.session import get_session
 from app.models.auth import User
 
+# Phase 2 Plan 02-01 DEP-01 — get_effective_role helper từ Plan 01-02 ROLE-04.
+from app.auth.role import UserNotFoundError, get_effective_role
+
 logger = logging.getLogger(__name__)
 
 # auto_error=False → 401 với code cụ thể qua HTTPException, KHÔNG để FastAPI
@@ -331,6 +334,98 @@ def require_role(
         return user
 
     return _dependency
+
+
+async def assert_hub_admin_for(
+    *,
+    user: User,
+    db: AsyncSession,
+    target_hub_id: str,
+) -> None:
+    """Phase 2 Plan 02-01 DEP-01 (D-V3.1-Phase2-D LOCKED) — Inline validator function.
+
+    Pure async function (KHÔNG phải FastAPI dependency factory). Gọi INLINE
+    trong handler SAU khi parse body — vì hub_id nằm trong BODY POST/PATCH
+    (KHÔNG path param), pattern Depends factory `require_role(*roles)` không
+    khả thi (FastAPI Depends inject TRƯỚC body parse).
+
+    Logic 5 case (D-V3.1-Phase2-D LOCKED):
+    1. Super admin (`user.role == 'admin'`) → bypass (no DB call, return None).
+    2. Hub_admin của hub đúng (`get_effective_role == 'hub_admin'`) → return None.
+    3. Hub_admin của hub khác (`get_effective_role` trả về role khác) → raise 403.
+    4. Viewer / editor không phải hub_admin → raise 403.
+    5. User KHÔNG tồn tại (UserNotFoundError) → catch + raise 403 (KHÔNG leak 404).
+
+    Args:
+        user: User ORM object (đã verify JWT qua `get_current_user`).
+        db: AsyncSession đang mở (caller manage lifecycle qua Depends(get_session)).
+        target_hub_id: hub_id ở body request (POST/PATCH) — UNTRUSTED user input,
+            nhưng KHÔNG dùng làm SQL value trực tiếp (qua get_effective_role
+            named bind params — T-01-02-01 mitigation Plan 01-02 carry forward).
+
+    Returns:
+        None nếu pass (super admin bypass HOẶC hub_admin của hub đúng).
+
+    Raises:
+        HTTPException(403): với envelope D6 `detail={"code": "HUB_ADMIN_REQUIRED",
+            "message": "..."}` cho mọi case fail (D-V3.1-Phase2-B LOCKED).
+
+    Usage (Plan 02-03 sẽ refactor 5 router endpoint):
+        @router.post("")
+        async def create_user(
+            req: CreateUserRequest,
+            request: Request,
+            user: User = Depends(get_current_user),
+            db: AsyncSession = Depends(get_session),
+            service: UserService = Depends(get_user_service),
+        ) -> JSONResponse:
+            # DEP-03 — inline scope check sau body parse.
+            await assert_hub_admin_for(user=user, db=db, target_hub_id=req.hub_id)
+            # ... rest of handler
+
+    Threat model:
+        - T-02-01-E Elevation: hub_admin tạo hub mới → KHÔNG mitigated ở dep này
+          (DEP-04 require_role("admin") giữ NGUYÊN cho hubs.py mutate endpoints).
+        - T-02-02-E Elevation: hub_admin gán role='admin' cho user khác → MỘT PHẦN
+          mitigated ở dep này; Plan 02-03 sẽ add business logic block role transition
+          'admin' khi caller KHÔNG phải super admin.
+        - T-02-05-T Tampering: stale JWT hub_admin sau bị demote → mitigated bởi
+          `get_effective_role` query DB live mỗi request (KHÔNG cache role trong JWT).
+    """
+    # CASE 1 — Super admin bypass (cross-hub by design, D-V3.1-01 LOCKED).
+    if user.role == "admin":
+        return
+
+    # CASE 2-5 — Hub_admin gate qua get_effective_role per-hub override.
+    try:
+        effective = await get_effective_role(db, user.id, target_hub_id)
+    except UserNotFoundError as e:
+        # CASE 5 — Defensive: stale JWT user_id → reject như hub_admin fail.
+        # KHÔNG leak existence của user_id (KHÔNG raise 404).
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "HUB_ADMIN_REQUIRED",
+                "message": (
+                    "Token user không tồn tại — vui lòng đăng nhập lại "
+                    "(stale JWT defensive guard)."
+                ),
+            },
+        ) from e
+
+    if effective != "hub_admin":
+        # CASE 3-4 — Hub_admin của hub khác / viewer / editor → reject.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "HUB_ADMIN_REQUIRED",
+                "message": (
+                    f"Yêu cầu hub_admin của hub {target_hub_id!r} — "
+                    f"effective role hiện tại: {effective!r}"
+                ),
+            },
+        )
+    # CASE 2 — hub_admin đúng → pass (return None implicit).
 
 
 class UserWithHubs:
