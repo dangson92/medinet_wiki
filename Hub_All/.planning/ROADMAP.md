@@ -107,7 +107,7 @@ Plans:
 - Backward compat existing UserManagement.tsx — currentUser.role check (frontend AuthContext có role không, hay cần fetch /api/profile)?
 - Mock data update — `mockData.ts` thêm hub_admin user sample cho dev test (carry forward Phase 5 vitest pattern).
 
-**Plans estimate:** 3-4 plans (Wave 1 type + api.ts + Wave 2 UserManagement parallel + Wave 3 HubSwitcher + closeout).
+**Plans:** 4 plans (Wave 1 BLOCKING Plan 03-01 type+mock foundation + Wave 2 sequential Plan 03-02 form FE-01 → Plan 03-03 hub switcher FE-02 + Manage modal FE-03 cùng file UserManagement.tsx + Wave 3 BLOCKING Plan 03-04 closeout 3 vitest test + 4 docs).
 
 Plans:
 - [ ] 03-01-PLAN.md — api.ts UserRole type extend + mockData.ts hub_admin sample + AuthContext currentUser.role verify (FE-04)
