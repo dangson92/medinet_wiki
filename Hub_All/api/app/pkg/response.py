@@ -111,9 +111,18 @@ def not_found(
     return _error(code, message, status.HTTP_404_NOT_FOUND)
 
 
-def conflict(message: str, code: str = "CONFLICT") -> JSONResponse:
-    """409 Conflict — duplicate (unique constraint, state machine vi phạm)."""
-    return _error(code, message, status.HTTP_409_CONFLICT)
+def conflict(
+    message: str,
+    code: str = "CONFLICT",
+    details: dict[str, Any] | None = None,
+) -> JSONResponse:
+    """409 Conflict — duplicate (unique constraint, state machine vi phạm).
+
+    `details` cho phép trả thêm metadata (vd EMAIL_CONFLICT trả `hub_codes`
+    user existing đã thuộc + `in_target_hub` flag để FE hiển thị message
+    actionable thay vì generic "đã tồn tại").
+    """
+    return _error(code, message, status.HTTP_409_CONFLICT, details)
 
 
 def unsupported_format(

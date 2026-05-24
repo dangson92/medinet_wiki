@@ -30,15 +30,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from redis.asyncio import Redis
 from sqlalchemy import text  # B1 iter 1 — query user_hubs membership trong DELETE handler.
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import (
-    assert_hub_admin_for,   # Phase 2 Plan 02-01 — DEP-01 validator function (D-V3.1-Phase2-B).
-    get_current_user,       # Phase 2 Plan 02-03 — replace require_role cho 4 endpoint scope hub_admin.
-    get_redis,
-    require_role,           # GIỮ — vẫn dùng cho PATCH status + reset-password + GET single + PUT.
+    assert_hub_admin_for,  # Phase 2 Plan 02-01 — DEP-01 validator function (D-V3.1-Phase2-B).
+    get_current_user,  # Phase 2 Plan 02-03 — replace require_role cho 4 endpoint scope hub_admin.
+    require_role,  # GIỮ — vẫn dùng cho PATCH status + reset-password + GET single + PUT.
 )
 from app.db.session import get_session
 from app.models.auth import User
@@ -147,7 +145,33 @@ async def create_user(
             request_id=request_id,
         )
     except UserConflictError as e:
-        return resp.conflict(message=str(e), code="EMAIL_CONFLICT")
+        # Enrich 409 với info user existing để FE hiển thị actionable message
+        # (fix bug: admin tạo trùng email với user ở hub khác → filter hub_id
+        # ở GET list giấu user → "đã tồn tại nhưng không thấy"). Hub_admin
+        # scope mask hub khác — chỉ trả flag `in_target_hub` + `exists`
+        # (KHÔNG leak hub code khác hub_admin được phép thấy).
+        details: dict[str, object] | None = None
+        if e.existing_user_id is not None:
+            in_target_hub = req.hub_id in e.existing_hub_ids
+            if user.role == "admin":
+                details = {
+                    "existing_user_id": e.existing_user_id,
+                    "existing_hub_codes": e.existing_hub_codes,
+                    "in_target_hub": in_target_hub,
+                }
+            else:
+                # hub_admin — KHÔNG leak hub code khác (T-02-02 carry forward).
+                # Chỉ expose flag in_target_hub + exists_in_other_hub.
+                details = {
+                    "in_target_hub": in_target_hub,
+                    "exists_in_other_hub": (
+                        not in_target_hub
+                        and len(e.existing_hub_ids) > 0
+                    ),
+                }
+        return resp.conflict(
+            message=str(e), code="EMAIL_CONFLICT", details=details
+        )
     return resp.created(data=result.model_dump(mode="json"))
 
 
@@ -383,16 +407,18 @@ async def delete_user(
 @router.post("/{user_id}/reset-password")
 async def reset_user_password(
     user_id: str,
-    redis: Redis | None = Depends(get_redis),  # noqa: B008
+    request: Request,
     user: User = Depends(require_role("admin")),  # noqa: B008
     service: UserService = Depends(get_user_service),  # noqa: B008
 ) -> JSONResponse:
-    """POST /api/users/:id/reset-password — sinh reset token (USER-02), admin-only.
+    """POST /api/users/:id/reset-password — sinh password tạm + return 1 lần.
 
-    Token CHỈ log console (M2 — email defer v4.0). KHÔNG trả token trong
-    response body (T-05-04-04 — tránh leak qua API cho phép account takeover).
+    Super-only (Phase 2 DEP-03 LOCKED — cross-hub op; hub_admin defer mở
+    quyền per-hub v4.0). v3.x KHÔNG có SMTP (memory project_no_smtp_v4) →
+    admin copy password plaintext gửi user qua kênh nội bộ; mất → reset lại.
+
+    Bảo mật: password CHỈ trả 1 lần qua response; KHÔNG audit/log plaintext.
     """
-    _ = user
     try:
         user_uuid = UUID(user_id)
     except ValueError:
@@ -400,13 +426,24 @@ async def reset_user_password(
             message=f"user_id không hợp lệ: {user_id!r}",
             code="INVALID_USER_ID",
         )
-    token = await service.reset_password(user_id=user_uuid, redis=redis)
-    if token is None:
+    request_id = getattr(request.state, "request_id", None)
+    new_password = await service.reset_password(
+        user_id=user_uuid,
+        reset_by=user.id,
+        actor_role="admin",
+        actor_hub_id=None,
+        request_id=request_id,
+    )
+    if new_password is None:
         return resp.not_found(
             message=f"User {user_id} không tồn tại", code="NOT_FOUND"
         )
     return resp.ok(
         data={
-            "message": "Token reset đã sinh (xem console log — email defer v4.0)"
+            "password": new_password,
+            "message": (
+                "Password tạm đã sinh — copy + gửi user qua kênh nội bộ "
+                "(Zalo/gặp trực tiếp). Đóng modal = mất mật khẩu, phải reset lại."
+            ),
         }
     )

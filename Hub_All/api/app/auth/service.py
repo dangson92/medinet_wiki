@@ -66,6 +66,7 @@ def _build_user_with_roles(
             department=user.department,
             avatar_url=user.avatar_url,
             status=user.status,  # DB CHECK enum
+            role=user.role,  # 2026-05-24 fix — Plan 03-01 v3.1 FE-04 contract
             failed_login_count=0,
             created_at=user.created_at,
             updated_at=user.updated_at,

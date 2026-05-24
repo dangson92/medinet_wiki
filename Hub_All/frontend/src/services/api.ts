@@ -51,7 +51,7 @@ const API_URL = API_BASE;
 interface APIResponse<T> {
   success: boolean;
   data?: T;
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; details?: Record<string, unknown> };
   meta?: { page: number; per_page: number; total: number; total_pages: number };
 }
 
@@ -372,6 +372,12 @@ class APIClient {
 
   async deleteUser(id: string) {
     return this.request<{ message: string }>('DELETE', `/api/users/${id}`);
+  }
+
+  async resetUserPassword(id: string) {
+    return this.request<{ password: string; message: string }>(
+      'POST', `/api/users/${id}/reset-password`,
+    );
   }
 
   // ─── Profile ───

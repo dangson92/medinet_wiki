@@ -50,7 +50,26 @@ class UserConflictError(Exception):
     """Email trùng — unique constraint `users.email` vi phạm (T-05-04-07).
 
     Router catch → resp.conflict 409 EMAIL_CONFLICT.
+
+    `existing_user_id` + `existing_hub_codes` đính kèm để router có thể trả
+    metadata về user đã tồn tại (FE hiển thị "user đã thuộc hub X, Y" thay
+    vì generic "đã tồn tại" — bug fix khi user tạo trùng email với user ở
+    hub khác mà filter `hub_id` giấu khỏi danh sách). Hub_admin scope sẽ
+    được router mask để KHÔNG leak hub code khác.
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        existing_user_id: str | None = None,
+        existing_hub_ids: list[str] | None = None,
+        existing_hub_codes: list[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.existing_user_id = existing_user_id
+        self.existing_hub_ids = existing_hub_ids or []
+        self.existing_hub_codes = existing_hub_codes or []
 
 
 class LastAdminError(Exception):
@@ -97,6 +116,7 @@ class UserService:
         if row is None:
             return None
 
+        default_role = str(row[9])
         user = UserResponse(
             id=str(row[0]),
             email=row[1],
@@ -105,16 +125,23 @@ class UserService:
             department=row[4],
             avatar_url=row[5],
             status=row[6],
+            role=default_role,  # 2026-05-24 fix — Plan 03-01 v3.1 FE-04 contract
             failed_login_count=0,
             created_at=row[7],
             updated_at=row[8],
         )
-        default_role = str(row[9])
 
+        # SELECT cả user_hubs.role (per-hub override migration 0006 Phase 1
+        # v3.1) — NULL fallback về users.role global qua get_effective_role
+        # semantic Phase 1 ROLE-04. Bug fix 2026-05-24: phiên bản cũ chỉ
+        # SELECT hub_id + dùng default_role cho mọi assignment → per-hub
+        # hub_admin override KHÔNG bao giờ trả ra FE → FE Hub badge KHÔNG
+        # phân biệt được hub có hub_admin override, column "Quyền" luôn show
+        # users.role global cho dù admin đã đổi role qua Manage modal.
         hub_rows = (
             await self.db.execute(
                 text(
-                    "SELECT hub_id FROM user_hubs WHERE user_id = :uid "
+                    "SELECT hub_id, role FROM user_hubs WHERE user_id = :uid "
                     "ORDER BY assigned_at"
                 ),
                 {"uid": str(user_id)},
@@ -124,7 +151,7 @@ class UserService:
             RoleAssignment(
                 user_id=str(user_id),
                 hub_id=str(hr[0]),
-                role=default_role,
+                role=str(hr[1]) if hr[1] is not None else default_role,
             )
             for hr in hub_rows
         ]
@@ -154,6 +181,36 @@ class UserService:
         """
         user_id = uuid4()
         password_hash = hash_password(req.password)
+        # Pre-check email tồn tại để enrich 409 với hub_codes — nếu trùng,
+        # raise UserConflictError với hub_codes user đã thuộc (FE hiển thị
+        # actionable message thay vì generic "đã tồn tại"). Pre-check thay
+        # vì catch IntegrityError + SAVEPOINT vì sau IntegrityError session
+        # rơi vào aborted state, query tiếp sẽ fail InFailedSQLTransaction.
+        existing = (
+            await self.db.execute(
+                text(
+                    "SELECT u.id, COALESCE("
+                    "ARRAY_AGG(h.id::text) FILTER (WHERE h.id IS NOT NULL),"
+                    " ARRAY[]::text[]), COALESCE("
+                    "ARRAY_AGG(h.code) FILTER (WHERE h.code IS NOT NULL),"
+                    " ARRAY[]::text[]) "
+                    "FROM users u "
+                    "LEFT JOIN user_hubs uh ON uh.user_id = u.id "
+                    "LEFT JOIN hubs h ON h.id = uh.hub_id "
+                    "WHERE u.email = :email "
+                    "GROUP BY u.id"
+                ),
+                {"email": req.email},
+            )
+        ).fetchone()
+        if existing is not None:
+            raise UserConflictError(
+                f"User với email {req.email!r} đã tồn tại",
+                existing_user_id=str(existing[0]),
+                existing_hub_ids=[str(h) for h in (existing[1] or [])],
+                existing_hub_codes=[str(c) for c in (existing[2] or [])],
+            )
+
         try:
             await self.db.execute(
                 text(
@@ -174,7 +231,9 @@ class UserService:
                 },
             )
         except IntegrityError as e:
-            # unique constraint `users.email` vi phạm (T-05-04-07).
+            # Race: 2 admin tạo cùng email đồng thời sau pre-check. Hiếm khi
+            # xảy ra trong M2 nhưng vẫn cover; KHÔNG query thêm (session đã
+            # aborted) — chỉ raise generic message.
             raise UserConflictError(
                 f"User với email {req.email!r} đã tồn tại"
             ) from e
@@ -361,31 +420,66 @@ class UserService:
         hub_id: str,
         role: str,
     ) -> bool:
-        """PATCH role user (D-07). UPDATE users.role + upsert user_hubs.
+        """PATCH role user — v3.1 RBAC semantics (Phase 1 migration 0006 +
+        get_effective_role Phase 1 ROLE-04).
 
-        Returns True nếu user tồn tại (UPDATE 1 row), False nếu không.
+        - `hub_admin` = PER-HUB override → UPSERT `user_hubs.role='hub_admin'`
+          cho `hub_id` chỉ định, KHÔNG đụng `users.role` (giữ default global).
+          get_effective_role(user, hub) sẽ ưu tiên user_hubs.role non-NULL.
+        - `admin` / `editor` / `viewer` = GLOBAL → UPDATE `users.role` + CLEAR
+          `user_hubs.role = NULL` cho hub_id chỉ định (fallthrough về global).
+          Các hub khác user thuộc về vẫn giữ override cũ (KHÔNG broad-clear,
+          tránh side effect ngoài scope hub_id caller truyền).
+
+        Returns True nếu user tồn tại, False nếu không.
+
+        Fix bug 2026-05-24: phiên bản cũ UPDATE users.role GLOBAL + INSERT
+        user_hubs ON CONFLICT DO NOTHING → set role='hub_admin' biến user
+        thành hub_admin TOÀN BỘ hub thuộc về (vi phạm per-hub override
+        D-V3.1-01 LOCKED Phase 1).
         """
-        row = (
+        exists = (
+            await self.db.execute(
+                text("SELECT 1 FROM users WHERE id = :id"),
+                {"id": str(user_id)},
+            )
+        ).fetchone()
+        if exists is None:
+            return False
+
+        if role == "hub_admin":
+            # PER-HUB override — UPSERT user_hubs.role + đảm bảo membership.
+            await self.db.execute(
+                text(
+                    "INSERT INTO user_hubs (user_id, hub_id, role, assigned_at) "
+                    "VALUES (:uid, :hid, :role, NOW()) "
+                    "ON CONFLICT (user_id, hub_id) DO UPDATE "
+                    "SET role = EXCLUDED.role"
+                ),
+                {
+                    "uid": str(user_id),
+                    "hid": hub_id,
+                    "role": role,
+                },
+            )
+        else:
+            # GLOBAL role — UPDATE users.role + clear override hub_id chỉ định.
             await self.db.execute(
                 text(
                     "UPDATE users SET role = :role, updated_at = NOW() "
-                    "WHERE id = :id RETURNING id"
+                    "WHERE id = :id"
                 ),
                 {"role": role, "id": str(user_id)},
             )
-        ).fetchone()
-        if row is None:
-            return False
-
-        # Upsert hub assignment — đảm bảo user gắn hub_id chỉ định.
-        await self.db.execute(
-            text(
-                "INSERT INTO user_hubs (user_id, hub_id, assigned_at) "
-                "VALUES (:uid, :hid, NOW()) "
-                "ON CONFLICT (user_id, hub_id) DO NOTHING"
-            ),
-            {"uid": str(user_id), "hid": hub_id},
-        )
+            await self.db.execute(
+                text(
+                    "INSERT INTO user_hubs (user_id, hub_id, role, assigned_at) "
+                    "VALUES (:uid, :hid, NULL, NOW()) "
+                    "ON CONFLICT (user_id, hub_id) DO UPDATE "
+                    "SET role = NULL"
+                ),
+                {"uid": str(user_id), "hid": hub_id},
+            )
         logger.info(
             "user_role_changed: id=%s role=%s hub=%s",
             user_id,
@@ -523,32 +617,69 @@ class UserService:
         self,
         *,
         user_id: UUID,
-        redis: Any,
+        reset_by: UUID,
+        actor_role: str,
+        actor_hub_id: str | None = None,
+        request_id: str | None = None,
     ) -> str | None:
-        """USER-02 — sinh reset token TTL 1h. None nếu user không tồn tại.
+        """USER-02 reset password — sinh password tạm + UPDATE password_hash +
+        audit + return plaintext 1 lần. None nếu user không tồn tại.
 
-        Token lưu Redis `reset:{token}` ex=3600. CHỈ log console (M2 —
-        email defer v4.0). Token KHÔNG trả qua API response (T-05-04-04).
+        v3.x KHÔNG có SMTP (memory project_no_smtp_v4) → admin copy password
+        plaintext + gửi user qua kênh nội bộ (Zalo/gặp trực tiếp), giống flow
+        create user (UI-SPEC §"Show password 1 lần"). Phiên bản cũ sinh reset
+        token Redis chỉ log console là dead code (FE không có UI gắn token).
+
+        Bảo mật:
+        - Password sinh qua `secrets.choice` (CSPRNG — KHÔNG `random.choice`).
+        - 14 char bộ ký tự loại trừ 0/O/1/I/l dễ nhầm — ~83 bits entropy.
+        - Hash argon2 NGAY, KHÔNG lưu/log plaintext (T-05-04-03 mitigation).
+        - Audit non-blocking — payload chỉ email (KHÔNG password).
         """
-        exists = (
+        row = (
             await self.db.execute(
-                text("SELECT 1 FROM users WHERE id = :id"),
+                text("SELECT email FROM users WHERE id = :id"),
                 {"id": str(user_id)},
             )
         ).fetchone()
-        if exists is None:
+        if row is None:
             return None
+        email = str(row[0])
 
-        token = secrets.token_urlsafe(32)
-        if redis is not None:
-            await redis.set(f"reset:{token}", str(user_id), ex=3600)
-        logger.info(
-            "user_reset_password_token: user_id=%s token=%s "
-            "(M2 log-only, email defer v4.0)",
-            user_id,
-            token,
+        charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+        new_password = "".join(secrets.choice(charset) for _ in range(14))
+        new_hash = hash_password(new_password)
+
+        await self.db.execute(
+            text(
+                "UPDATE users SET password_hash = :hash, updated_at = NOW() "
+                "WHERE id = :id"
+            ),
+            {"hash": new_hash, "id": str(user_id)},
         )
-        return token
+
+        enqueue_audit(
+            AuditEntry(
+                action="user.password_reset",
+                user_id=str(reset_by),
+                target_type="user",
+                target_id=str(user_id),
+                hub_id=actor_hub_id,
+                payload=build_audit_payload(
+                    actor_role=actor_role,
+                    actor_hub_id=actor_hub_id,
+                    extra={"reset_email": email},
+                ),
+                request_id=request_id,
+            )
+        )
+        logger.info(
+            "user_password_reset: user_id=%s email=%s by=%s",
+            user_id,
+            email,
+            reset_by,
+        )
+        return new_password
 
     async def change_password_self(
         self,

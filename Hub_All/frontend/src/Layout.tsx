@@ -179,6 +179,12 @@ const Layout = () => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
+  // Root-only menu hidden cho user không phải super-admin (role !== 'admin').
+  // Reason: D-V3.1-01 LOCKED 'admin' = global super-admin; hub_admin/editor/viewer
+  // KHÔNG có quyền truy cập Hub Registry, Quản lý API Key, hoặc nhóm Hệ thống
+  // (Audit Log + Token Usage + Cài đặt). FE filter là defense in depth — backend
+  // endpoint tương ứng đã enforce require_role("admin") (FACTOR-02 central-only mount).
+  const isRoot = user?.user.role === 'admin';
   const menuItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { type: 'group', groupLabel: 'Tri thức' },
@@ -187,13 +193,13 @@ const Layout = () => {
     { to: '/sync', icon: RefreshCw, label: 'Hàng đợi Sync', badge: '3' },
     { type: 'group', groupLabel: 'Quản trị' },
     { to: '/users', icon: Users, label: 'Quản lý User' },
-    { to: '/registry', icon: Database, label: 'Hub Registry' },
-    { to: '/api-keys', icon: Key, label: 'Quản lý API Key' },
-    { type: 'group', groupLabel: 'Hệ thống' },
-    { to: '/logs', icon: History, label: 'Audit Log' },
-    { to: '/usage', icon: Zap, label: 'Token & API Usage' },
-    { to: '/settings', icon: SettingsIcon, label: 'Cài đặt hệ thống' },
-  ];
+    { to: '/registry', icon: Database, label: 'Hub Registry', rootOnly: true },
+    { to: '/api-keys', icon: Key, label: 'Quản lý API Key', rootOnly: true },
+    { type: 'group', groupLabel: 'Hệ thống', rootOnly: true },
+    { to: '/logs', icon: History, label: 'Audit Log', rootOnly: true },
+    { to: '/usage', icon: Zap, label: 'Token & API Usage', rootOnly: true },
+    { to: '/settings', icon: SettingsIcon, label: 'Cài đặt hệ thống', rootOnly: true },
+  ].filter((item) => isRoot || !item.rootOnly);
 
   const getBreadcrumb = () => {
     const path = location.pathname;

@@ -87,6 +87,14 @@ class UserResponse(BaseModel):
 
     `name` map từ cột `full_name`. `failed_login_count` hằng 0 (M2 defer).
     KHÔNG có field `password_hash` (T-05-04-03 Information Disclosure).
+
+    Bug fix 2026-05-24: thêm `role` field. Plan 03-01 v3.1 Phase 3 FE-04
+    đã ship FE `UserAPI.role: UserRole` mirror BE Literal (api.ts:499) +
+    sửa migration 0006 CHECK constraint 4 value (admin|hub_admin|editor|
+    viewer), NHƯNG BE Pydantic UserResponse chưa được mở rộng tương ứng
+    → /api/users + /api/auth/me trả về JSON KHÔNG có field role → FE
+    `currentUser.user.role` luôn undefined → `isSuperAdmin` false → menu
+    Cấp lại mật khẩu + filter hub super admin all KHÔNG hoạt động đúng.
     """
 
     id: str  # UUID string
@@ -96,6 +104,7 @@ class UserResponse(BaseModel):
     department: str | None
     avatar_url: str | None
     status: UserStatus
+    role: UserRole  # 2026-05-24 fix — mirror FE UserAPI.role (Plan 03-01 v3.1).
     failed_login_count: int = 0
     created_at: datetime
     updated_at: datetime | None

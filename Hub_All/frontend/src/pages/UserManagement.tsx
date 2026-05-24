@@ -1,17 +1,54 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, HubAPI, UserWithRolesAPI } from '../services/api';
 import type { UserRole } from '../services/api';
-import { User } from '../types';
 import { cn, getHubUrl } from '../lib/utils';
-import { Search, Plus, Shield, UserX, UserCheck, X, CheckCircle2, MoreVertical, Loader2, Building2, Info, KeyRound, Copy, Check, AlertTriangle, Trash2 } from 'lucide-react';
+import { Search, Plus, Shield, UserX, UserCheck, X, CheckCircle2, MoreVertical, Loader2, Building2, Info, KeyRound, Copy, Check, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Pagination from '../components/Pagination';
 import { useAuth } from '../contexts/AuthContext';
 
+// Local row state — KHÔNG dùng types.ts User.hubId vì giờ list view show all hub
+// user thuộc (bỏ tab per-hub 2026-05-24). Giữ types.ts không touch để KHÔNG đụng
+// 11 trang React khác consume User single-hub semantics.
+interface UserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;                                    // 4 value users.role global (BE Phase 3 FE-04 ship)
+  perHubRoles: { hubId: string; role: string }[];   // per-hub override migration 0006 (NULL = inherit global)
+  hubIds: string[];                                  // hub membership từ user_hubs join
+  createdAt: string;
+  lastLogin: string;
+  status: 'active' | 'disabled';
+}
+
+// Rank order admin > hub_admin > editor > viewer — dùng tính effective role cao
+// nhất khi user có per-hub override (column "Quyền" reflect max thay vì luôn
+// hiển thị users.role global, tránh confusion "đã đổi sang hub_admin nhưng vẫn
+// thấy viewer" 2026-05-24).
+const ROLE_RANK: Record<string, number> = { admin: 4, hub_admin: 3, editor: 2, viewer: 1 };
+
+function effectiveRoleOf(row: UserRow): UserRole {
+  const candidates = [row.role, ...row.perHubRoles.map(r => r.role)];
+  let best: UserRole = 'viewer';
+  let bestRank = 0;
+  for (const c of candidates) {
+    const r = ROLE_RANK[c] ?? 0;
+    if (r > bestRank) {
+      bestRank = r;
+      best = c as UserRole;
+    }
+  }
+  return best;
+}
+
 const UserManagement = () => {
   const { user: currentUser } = useAuth();
   const [hubs, setHubs] = useState<HubAPI[]>([]);
-  const [activeTab, setActiveTab] = useState('');
+  // hubFilter state — thay activeTab tab navigation (2026-05-24 UI redesign).
+  // Super admin: 'all' default, có thể lọc theo từng hub. Hub_admin: BE 400
+  // HUB_ID_REQUIRED nếu thiếu hub_id query → mặc định first managed hub.
+  const [hubFilter, setHubFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -25,7 +62,19 @@ const UserManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const [users, setUsers] = useState<User[]>([]);
+  // Reset password modal state — show password tạm 1 lần sau khi BE sinh
+  // (M2/v3 KHÔNG có SMTP, admin copy + gửi user qua kênh nội bộ).
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetTargetUser, setResetTargetUser] = useState<UserRow | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetCredentials, setResetCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+  } | null>(null);
+  const [resetPasswordCopied, setResetPasswordCopied] = useState(false);
+
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -60,16 +109,30 @@ const UserManagement = () => {
 
   const activeHubs = hubs.filter(h => h.status === 'active');
 
-  // Fetch hubs on mount
+  // Super admin = users.role='admin' global → bypass hub scope; còn lại
+  // hub_admin/editor/viewer scope theo user_hubs membership.
+  const isSuperAdmin = currentUser?.user.role === 'admin';
+  const myHubIds = currentUser?.roles?.map(r => r.hub_id) ?? [];
+  // Hub options available for filter dropdown — super sees all, hub_admin
+  // chỉ thấy hub mình được gán quyền (Layout HubSwitcher pattern Plan 03-03).
+  const filterableHubs = isSuperAdmin
+    ? activeHubs
+    : activeHubs.filter(h => myHubIds.includes(h.id));
+
+  // Fetch hubs on mount + set default hubFilter cho hub_admin (BE 400
+  // HUB_ID_REQUIRED nếu non-super-admin thiếu hub_id query — Plan 02-03).
   useEffect(() => {
     const fetchHubs = async () => {
       try {
         const res = await api.getHubs();
         if (res.success && res.data) {
-          const activeHubs = res.data.filter(h => h.status === 'active');
           setHubs(res.data);
-          if (activeHubs.length > 0 && !activeTab) {
-            setActiveTab(activeHubs[0].id);
+          // Default cho hub_admin: pick first managed hub. Super admin giữ 'all'.
+          if (currentUser && currentUser.user.role !== 'admin' && hubFilter === 'all') {
+            const myFirstHub = res.data.find(
+              h => h.status === 'active' && (currentUser.roles?.some(r => r.hub_id === h.id) ?? false),
+            );
+            if (myFirstHub) setHubFilter(myFirstHub.id);
           }
         }
       } catch (err) {
@@ -77,39 +140,45 @@ const UserManagement = () => {
       }
     };
     fetchHubs();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.user.id]);
 
-  // Map API user to FE User type
-  const mapUser = useCallback((item: UserWithRolesAPI, hubId: string): User => {
-    const matchingRole = item.roles.find(r => r.hub_id === hubId);
+  // Map API user → UserRow. Role lấy từ users.role global (BE Phase 3 ship
+  // UserAPI.role 4 value — KHÔNG còn clamp về 'admin' | 'viewer' như cũ).
+  // hubIds + perHubRoles trả về full list từ user_hubs join để render cột Hub.
+  const mapUser = useCallback((item: UserWithRolesAPI): UserRow => {
     return {
       id: item.user.id,
       name: item.user.name,
       email: item.user.email,
-      role: (matchingRole?.role === 'admin' ? 'admin' : 'viewer') as 'admin' | 'viewer',
-      hubId: hubId,
+      role: (item.user.role ?? 'viewer') as UserRole,
+      perHubRoles: item.roles.map(r => ({ hubId: r.hub_id, role: r.role })),
+      hubIds: item.roles.map(r => r.hub_id),
       createdAt: new Date(item.user.created_at).toLocaleDateString('vi-VN'),
       lastLogin: item.user.updated_at ? new Date(item.user.updated_at).toLocaleDateString('vi-VN') : 'Chưa đăng nhập',
       status: item.user.status as 'active' | 'disabled',
     };
   }, []);
 
-  // Fetch users when tab/search/filter/page changes
+  // Fetch users — hub filter logic (2026-05-24 UI redesign bỏ tab):
+  // - Super admin + hubFilter='all' → KHÔNG truyền hub_id (BE list any).
+  // - hubFilter='<hubId>' → truyền hub_id query (BE filter user_hubs join).
+  // - Hub_admin + hubFilter='all' (edge case, default đã set first managed
+  //   hub ở fetchHubs) → BE return 400 HUB_ID_REQUIRED.
   const fetchUsers = useCallback(async () => {
-    if (!activeTab) return;
     setLoading(true);
     try {
       const params: any = {
-        hub_id: activeTab,
         page: currentPage,
         per_page: itemsPerPage,
       };
+      if (hubFilter !== 'all') params.hub_id = hubFilter;
       if (searchQuery) params.search = searchQuery;
       if (roleFilter !== 'all') params.role = roleFilter;
 
       const res = await api.getUsers(params);
       if (res.success && res.data) {
-        setUsers(res.data.map(u => mapUser(u, activeTab)));
+        setUsers(res.data.map(u => mapUser(u)));
         if (res.meta) {
           setTotalItems(res.meta.total);
           setTotalPages(res.meta.total_pages);
@@ -117,13 +186,17 @@ const UserManagement = () => {
           setTotalItems(res.data.length);
           setTotalPages(Math.ceil(res.data.length / itemsPerPage));
         }
+      } else {
+        setUsers([]);
+        setTotalItems(0);
+        setTotalPages(1);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
     } finally {
       setLoading(false);
     }
-  }, [activeTab, searchQuery, roleFilter, currentPage, mapUser]);
+  }, [hubFilter, searchQuery, roleFilter, currentPage, mapUser]);
 
   useEffect(() => {
     fetchUsers();
@@ -139,14 +212,14 @@ const UserManagement = () => {
     setCurrentPage(1);
   };
 
-  const handleTabChange = (hubId: string) => {
-    setActiveTab(hubId);
+  const handleHubFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setHubFilter(e.target.value);
     setCurrentPage(1);
   };
 
   // Mở modal "Quản lý hub & quyền" — fetch full user detail (cần roles[] đầy đủ
   // vì bảng list chỉ map role trong hub đang xem, không có hub thành viên khác).
-  const handleOpenManageHub = async (user: User) => {
+  const handleOpenManageHub = async (user: UserRow) => {
     if (manageLoading) return;
     setActionMenuId(null);
     setSelectedUser(user);
@@ -160,9 +233,26 @@ const UserManagement = () => {
         setManageDetail(res.data);
         const existingHubIds = new Set(res.data.roles.map(r => r.hub_id));
         setManageHubIds(existingHubIds);
-        // Role global = role bất kỳ assignment đầu tiên (M2: tất cả assignment cùng 1 role).
-        const firstRole = res.data.roles[0]?.role;
-        setManageRole(firstRole === 'admin' ? 'admin' : 'viewer');
+        // Bug fix 2026-05-24: phiên bản cũ clamp role về 'admin' | 'viewer' →
+        // sau khi BE fix _build_user_with_roles trả per-hub override, role
+        // thực 'hub_admin'/'editor' rơi vào fallback 'viewer' (radio sai).
+        // Pick effective max rank: per-hub override (`roles[].role` đã coalesce
+        // qua users.role global) OR users.role global trực tiếp. Match thứ tự
+        // ROLE_RANK admin > hub_admin > editor > viewer.
+        const candidates = [
+          res.data.user.role,
+          ...res.data.roles.map(r => r.role),
+        ];
+        let bestRole: UserRole = 'viewer';
+        let bestRank = 0;
+        for (const c of candidates) {
+          const r = ROLE_RANK[c] ?? 0;
+          if (r > bestRank) {
+            bestRank = r;
+            bestRole = c as UserRole;
+          }
+        }
+        setManageRole(bestRole);
       } else {
         setManageError(res.error?.message ?? 'Không tải được thông tin user');
       }
@@ -178,7 +268,22 @@ const UserManagement = () => {
     if (!manageDetail || actionLoading) return;
     const existingHubIds = new Set(manageDetail.roles.map(r => r.hub_id));
     const toAddHubIds = Array.from(manageHubIds).filter(h => !existingHubIds.has(h));
-    const currentRole = manageDetail.roles[0]?.role === 'admin' ? 'admin' : 'viewer';
+    // Bug fix 2026-05-24: tính effective role hiện tại (max rank) thay vì
+    // clamp 'admin' | 'viewer'. Đặt user 'hub_admin' rồi mở lại modal phải
+    // detect chính xác role hiện tại để biết có cần PATCH /role hay không.
+    const currentCandidates = [
+      manageDetail.user.role,
+      ...manageDetail.roles.map(r => r.role),
+    ];
+    let currentRole: UserRole = 'viewer';
+    let currentRank = 0;
+    for (const c of currentCandidates) {
+      const r = ROLE_RANK[c] ?? 0;
+      if (r > currentRank) {
+        currentRank = r;
+        currentRole = c as UserRole;
+      }
+    }
     const roleChanged = manageRole !== currentRole;
 
     if (!roleChanged && toAddHubIds.length === 0) {
@@ -251,7 +356,7 @@ const UserManagement = () => {
     }
   };
 
-  const handleOpenDelete = (user: User) => {
+  const handleOpenDelete = (user: UserRow) => {
     setActionMenuId(null);
     setSelectedUser(user);
     setDeleteConfirmEmail('');
@@ -293,7 +398,7 @@ const UserManagement = () => {
     }
   };
 
-  const handleEnableUser = async (user: User) => {
+  const handleEnableUser = async (user: UserRow) => {
     if (actionLoading) return;
     setActionLoading(true);
     try {
@@ -304,6 +409,51 @@ const UserManagement = () => {
       }
     } catch (err) {
       console.error('Failed to enable user:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reset password — mở dialog confirm + POST /api/users/:id/reset-password.
+  // BE sinh password tạm 14 char ~83 bits entropy + UPDATE users.password_hash
+  // argon2 + audit non-blocking + trả plaintext 1 lần. v3.x KHÔNG có SMTP →
+  // admin copy + gửi user qua kênh nội bộ. Đóng modal = mất password, phải reset
+  // lại (BE KHÔNG lưu plaintext anywhere).
+  const handleOpenReset = (user: UserRow) => {
+    setActionMenuId(null);
+    setResetTargetUser(user);
+    setResetError(null);
+    setResetCredentials(null);
+    setResetPasswordCopied(false);
+    setIsResetDialogOpen(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetTargetUser || actionLoading) return;
+    setActionLoading(true);
+    setResetError(null);
+    try {
+      const res = await api.resetUserPassword(resetTargetUser.id);
+      if (res.success && res.data?.password) {
+        setResetCredentials({
+          name: resetTargetUser.name,
+          email: resetTargetUser.email,
+          password: res.data.password,
+        });
+        setIsResetDialogOpen(false);
+      } else {
+        const code = res.error?.code;
+        let msg = res.error?.message ?? 'Reset mật khẩu thất bại.';
+        if (code === 'FORBIDDEN') {
+          msg = 'Bạn không có quyền reset mật khẩu (chỉ Super Admin).';
+        } else if (code === 'NOT_FOUND') {
+          msg = 'User không tồn tại — có thể đã bị xoá.';
+        }
+        setResetError(msg);
+      }
+    } catch (err) {
+      console.error('Failed to reset password:', err);
+      setResetError('Lỗi kết nối — vui lòng thử lại.');
     } finally {
       setActionLoading(false);
     }
@@ -341,10 +491,12 @@ const UserManagement = () => {
     setAddError(null);
   };
 
-  // Prefill hub đang xem khi mở modal — admin thường tạo user cho hub hiện tại.
+  // Prefill hub đang lọc khi mở modal (admin thường tạo user cho hub đang xem).
+  // Nếu filter 'all' (super admin) → để rỗng, admin tự chọn checkbox; nếu filter
+  // theo 1 hub cụ thể → prefill hub đó.
   const handleOpenAddModal = () => {
     resetAddModal();
-    setNewUserHubIds(activeTab ? new Set([activeTab]) : new Set());
+    setNewUserHubIds(hubFilter !== 'all' ? new Set([hubFilter]) : new Set());
     setIsAddModalOpen(true);
   };
 
@@ -407,6 +559,37 @@ const UserManagement = () => {
           case 'FORBIDDEN':
             msg = 'Bạn không có quyền thực hiện thao tác này.';
             break;
+          case 'EMAIL_CONFLICT': {
+            // Backend enrich 409 với details để FE biết user đã thuộc hub nào
+            // (bug fix: tạo trùng email với user ở hub khác → filter hub_id
+            // giấu user khỏi danh sách → admin bối rối "đã có nhưng không thấy").
+            const details = createRes.error?.details as
+              | {
+                  existing_hub_codes?: string[];
+                  in_target_hub?: boolean;
+                  exists_in_other_hub?: boolean;
+                }
+              | undefined;
+            const targetHubName = hubs.find(h => h.id === hubIds[0])?.name ?? 'hub này';
+            if (details?.in_target_hub) {
+              msg = `Email ${submittedEmail} đã tồn tại trong ${targetHubName}.`;
+            } else if (Array.isArray(details?.existing_hub_codes) && details.existing_hub_codes.length > 0) {
+              // Super admin scope — show hub codes user đang thuộc.
+              const hubNames = details.existing_hub_codes
+                .map(code => hubs.find(h => h.code === code)?.name ?? code)
+                .join(', ');
+              msg = `Email ${submittedEmail} đã tồn tại ở hub: ${hubNames}. Mở trang Users của hub đó để dùng "Quản lý hub & quyền" gán thêm ${targetHubName}.`;
+            } else if (details?.existing_hub_codes?.length === 0) {
+              // Super admin — user orphan (KHÔNG thuộc hub nào).
+              msg = `Email ${submittedEmail} đã tồn tại nhưng KHÔNG thuộc hub nào (orphan). Liên hệ DBA hoặc xoá user qua psql.`;
+            } else if (details?.exists_in_other_hub) {
+              // Hub_admin scope — KHÔNG biết hub nào (masked).
+              msg = `Email ${submittedEmail} đã tồn tại ở hub khác. Liên hệ Super Admin để gán vào ${targetHubName}.`;
+            } else {
+              msg = `Email ${submittedEmail} đã tồn tại.`;
+            }
+            break;
+          }
         }
         setAddError(msg);
         return;
@@ -454,31 +637,12 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar scroll-smooth">
-        <div className="flex min-w-max">
-          {hubs.filter(h => h.status === 'active').map((hub) => (
-            <button
-              key={hub.id}
-              onClick={() => handleTabChange(hub.id)}
-              className={cn(
-                "px-4 sm:px-6 py-3 text-xs sm:text-sm font-medium transition-all relative",
-                activeTab === hub.id ? "text-accent" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-              )}
-            >
-              {hub.name}
-              {activeTab === hub.id && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent"
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* 2026-05-24 UI redesign — bỏ tab navigation per-hub, gộp all hub vào 1
+          màn hình + filter dropdown + cột Hub trong bảng. Trước đây mỗi hub 1 tab
+          force admin click qua-lại; với user thuộc nhiều hub trùng email gây
+          confusion "đã tồn tại nhưng không thấy". */}
       <div className="flex flex-col lg:flex-row justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-3xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-4xl">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
             <input
@@ -490,12 +654,28 @@ const UserManagement = () => {
             />
           </div>
           <select
+            value={hubFilter}
+            onChange={handleHubFilterChange}
+            className="input-field min-w-[160px]"
+            aria-label="Lọc theo hub"
+          >
+            {/* Super admin được chọn 'Tất cả hub'; hub_admin BUỘC chọn 1 hub
+                (BE 400 HUB_ID_REQUIRED — Plan 02-03 DEP-03). */}
+            {isSuperAdmin && <option value="all">Tất cả hub</option>}
+            {filterableHubs.map(hub => (
+              <option key={hub.id} value={hub.id}>{hub.name}</option>
+            ))}
+          </select>
+          <select
             value={roleFilter}
             onChange={handleRoleFilterChange}
             className="input-field min-w-[140px]"
+            aria-label="Lọc theo quyền"
           >
             <option value="all">Tất cả quyền</option>
             <option value="admin">Admin</option>
+            <option value="hub_admin">Hub Admin</option>
+            <option value="editor">Editor</option>
             <option value="viewer">Viewer</option>
           </select>
         </div>
@@ -514,12 +694,13 @@ const UserManagement = () => {
               <Loader2 className="animate-spin text-accent" size={28} />
             </div>
           ) : (
-          <table className="w-full text-left border-collapse min-w-[700px]">
+          <table className="w-full text-left border-collapse min-w-[860px]">
             <thead>
               <tr className="bg-slate-50/50 dark:bg-slate-800/50">
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Tên</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Email</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Quyền</th>
+                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Hub thành viên</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Ngày tạo</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Đăng nhập cuối</th>
                 <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trạng thái</th>
@@ -527,19 +708,77 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {users.map((user) => (
+              {users.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+                    Không có user phù hợp với bộ lọc.
+                  </td>
+                </tr>
+              )}
+              {users.map((user) => {
+                const effective = effectiveRoleOf(user);
+                const hasPerHubOverride = user.perHubRoles.some(r => r.role !== user.role);
+                return (
                 <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors group">
                   <td className="px-5 py-4">
                     <span className="font-semibold text-sm text-slate-900 dark:text-white">{user.name}</span>
                   </td>
                   <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{user.email}</td>
                   <td className="px-5 py-4">
-                    <span className={cn(
-                      "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                      user.role === 'admin' ? "bg-slate-800 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                    )}>
-                      {user.role}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span
+                        title={
+                          hasPerHubOverride
+                            ? `Quyền cao nhất (mặc định ${user.role} + override per-hub). Chi tiết xem cột Hub.`
+                            : `Quyền: ${effective}`
+                        }
+                        className={cn(
+                          "inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap w-fit",
+                          effective === 'admin' && "bg-slate-800 text-white",
+                          effective === 'hub_admin' && "bg-brand-indigo/10 text-brand-indigo dark:text-brand-indigo/90 border border-brand-indigo/30",
+                          effective === 'editor' && "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
+                          effective === 'viewer' && "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+                        )}
+                      >
+                        {effective === 'hub_admin' ? 'hub admin' : effective}
+                      </span>
+                      {hasPerHubOverride && (
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">
+                          mặc định: {user.role === 'hub_admin' ? 'hub admin' : user.role}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    {/* Render badge mỗi hub user thuộc về. Nếu user có per-hub override
+                        role='hub_admin' khác users.role global, hiển thị icon shield bên cạnh
+                        hub name. */}
+                    <div className="flex flex-wrap gap-1 max-w-[260px]">
+                      {user.hubIds.length === 0 ? (
+                        <span className="text-[10px] text-slate-400 italic">orphan</span>
+                      ) : (
+                        user.hubIds.map(hId => {
+                          const hub = hubs.find(h => h.id === hId);
+                          const override = user.perHubRoles.find(r => r.hubId === hId);
+                          const isHubAdminHere = override?.role === 'hub_admin';
+                          return (
+                            <span
+                              key={hId}
+                              className={cn(
+                                "inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
+                                isHubAdminHere
+                                  ? "bg-brand-indigo/10 text-brand-indigo dark:text-brand-indigo/90 border border-brand-indigo/30"
+                                  : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+                              )}
+                              title={isHubAdminHere ? `Hub admin tại ${hub?.name ?? hId}` : hub?.name ?? hId}
+                            >
+                              {isHubAdminHere && <Shield size={10} />}
+                              {hub?.name ?? hId.slice(0, 8)}
+                            </span>
+                          );
+                        })
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{user.createdAt}</td>
                   <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{user.lastLogin}</td>
@@ -602,6 +841,18 @@ const UserManagement = () => {
                                   Kích hoạt lại
                                 </button>
                               )}
+                              {/* Reset password — chỉ super admin (BE require_role
+                                  'admin' Plan 02-03). FE hide button cho hub_admin
+                                  thay vì cho click rồi BE 403 — UX cleaner. */}
+                              {isSuperAdmin && currentUser?.user.id !== user.id && (
+                                <button
+                                  onClick={() => handleOpenReset(user)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                                >
+                                  <RotateCcw size={14} />
+                                  Cấp lại mật khẩu
+                                </button>
+                              )}
                               {currentUser?.user.id !== user.id && (
                                 <>
                                   <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
@@ -621,7 +872,8 @@ const UserManagement = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           )}
@@ -1189,6 +1441,163 @@ const UserManagement = () => {
                 <button onClick={handleSubmitManageHub} disabled={actionLoading || manageLoading || !manageDetail} className="btn-primary">
                   {actionLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : null}
                   Lưu thay đổi
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Reset password confirm dialog — admin xác nhận trước khi BE sinh
+            password mới (irreversible: password cũ bị hash mới ghi đè + user
+            phải re-login). */}
+        {isResetDialogOpen && resetTargetUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+              onClick={() => !actionLoading && setIsResetDialogOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
+                  <RotateCcw size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold">Cấp lại mật khẩu?</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{resetTargetUser.email}</p>
+                </div>
+              </div>
+              <div className="p-6 space-y-3">
+                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 px-3 py-2.5 rounded-lg">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">Hành động không thể hoàn tác</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      <li>Mật khẩu cũ của <b>{resetTargetUser.name}</b> mất hiệu lực ngay</li>
+                      <li>Hệ thống sinh mật khẩu mới + hiển thị 1 lần cho admin copy</li>
+                      <li>Hệ thống <b>chưa có SMTP</b> — admin gửi user qua Zalo / gặp trực tiếp</li>
+                    </ul>
+                  </div>
+                </div>
+                {resetError && (
+                  <p className="text-xs text-danger bg-danger/10 px-3 py-2 rounded-lg">{resetError}</p>
+                )}
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                <button
+                  onClick={() => setIsResetDialogOpen(false)}
+                  disabled={actionLoading}
+                  className="btn-ghost"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleResetPassword}
+                  disabled={actionLoading}
+                  className="btn-primary !bg-amber-600 !shadow-none hover:!bg-amber-700"
+                >
+                  {actionLoading ? <Loader2 size={16} className="animate-spin mr-1" /> : <RotateCcw size={14} className="mr-1" />}
+                  Sinh mật khẩu mới
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Show-password-one-time modal sau khi reset thành công — pattern same
+            với create user (M2/v3 KHÔNG có SMTP). Đóng modal → password biến mất
+            khỏi state FE, BE KHÔNG lưu plaintext anywhere. */}
+        {resetCredentials && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center text-success shrink-0">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold">Mật khẩu mới đã sinh</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{resetCredentials.email}</p>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 px-3 py-2.5 rounded-lg">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">Mật khẩu CHỈ hiện 1 lần</p>
+                    <p>Hệ thống chưa gửi email tự động (defer v4.0). Hãy copy và gửi user qua kênh nội bộ. Đóng modal này = mất mật khẩu, phải reset lại.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">User</label>
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{resetCredentials.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{resetCredentials.email}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <KeyRound size={12} /> Mật khẩu mới
+                  </label>
+                  <div className="flex items-stretch gap-2">
+                    <code className="flex-1 px-3 py-2.5 rounded-lg bg-slate-900 dark:bg-slate-950 text-emerald-300 font-mono text-sm tracking-wider select-all break-all">
+                      {resetCredentials.password}
+                    </code>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(resetCredentials.password);
+                          setResetPasswordCopied(true);
+                          setTimeout(() => setResetPasswordCopied(false), 2000);
+                        } catch (err) {
+                          console.error('Clipboard copy failed:', err);
+                        }
+                      }}
+                      className={cn(
+                        'shrink-0 px-3 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
+                        resetPasswordCopied
+                          ? 'bg-success/10 text-success border border-success/30'
+                          : 'bg-brand-indigo text-white hover:bg-brand-indigo/90',
+                      )}
+                    >
+                      {resetPasswordCopied ? <Check size={16} /> : <Copy size={16} />}
+                      {resetPasswordCopied ? 'Đã copy' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                    Đăng nhập tại {getHubUrl(hubs.find(h => resetTargetUser?.hubIds.includes(h.id))?.code)}
+                  </p>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                <button
+                  onClick={() => {
+                    setResetCredentials(null);
+                    setResetTargetUser(null);
+                    setResetPasswordCopied(false);
+                  }}
+                  className="btn-primary"
+                >
+                  Đã ghi nhận, đóng
                 </button>
               </div>
             </motion.div>
