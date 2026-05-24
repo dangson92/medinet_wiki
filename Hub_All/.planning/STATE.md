@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: RBAC hub_admin
 status: "🚧 v3.1 STARTED 2026-05-23 — Phase 1 + 2 DONE. Phase 2 DEP backend RBAC enforcement ship 5 plan / 5 REQ-ID DEP-01..05 (11 unit + 12 integration test PASS). Trigger: user bug report 2026-05-23 sau v3.0 close — tạo user gán hub `dmd` nhưng vẫn vào được central (gap thiết kế role-per-hub defer v4.0 trong M2). Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
-last_updated: "2026-05-24T12:30:00.000Z"
+last_updated: "2026-05-24T13:30:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 2
@@ -17,7 +17,12 @@ phase_2_plan_count: 5
 phase_2_done_date: "2026-05-24"
 phase_3_context_status: "GATHERED"
 phase_3_context_date: "2026-05-24"
-next_action: "/gsd-ui-phase 3 — sinh UI-SPEC contract cho 3 component touch (UserManagement form 3 option + Layout hub switcher + Manage modal disabled); rồi /gsd-plan-phase 3"
+phase_3_ui_spec_status: "APPROVED"
+phase_3_ui_spec_date: "2026-05-24"
+phase_3_plan_status: "READY_TO_EXECUTE"
+phase_3_plan_count: 4
+phase_3_plan_date: "2026-05-24"
+next_action: "/gsd-execute-phase 3 --auto — execute 4 plan Wave 1 BLOCKING → Wave 2 sequential (03-02 → 03-03 cùng UserManagement.tsx) → Wave 3 closeout"
 ---
 
 # State — MEDWIKI (v3.1)
