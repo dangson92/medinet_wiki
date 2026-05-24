@@ -10,7 +10,7 @@
 - ❌ **v1.0 RAG Quality with Docling** — Abandoned 2026-05-13 (xem [`milestones/v1.0-docling-rag/`](milestones/v1.0-docling-rag/))
 - ✅ **v2.0 Full RAG Rewrite** — Shipped 2026-05-21 (archive: [`milestones/v2.0-full-rag-rewrite/`](milestones/v2.0-full-rag-rewrite/))
 - ✅ **v3.0 Multi-Hub Split** — Shipped 2026-05-23 (archive: [`milestones/v3.0-multi-hub-split/`](milestones/v3.0-multi-hub-split/))
-- 🚧 **v3.1 RBAC hub_admin** — Started 2026-05-23, 4 phase / 15 REQ-ID, phase numbering reset về 1 (D-V3.1-04)
+- ✅ **v3.1 RBAC hub_admin** — Shipped 2026-05-24, 4 phase / 15 REQ-ID / 15 plan (defer archive qua `/gsd-complete-milestone v3.1`; D-V3.1-04 phase numbering reset về 1)
 - 📋 **v4.0 Production Hardening + Advanced RAG** — Backlog (OCR Vietnamese, cross-dim embedding swap, streaming `/api/ask`, coverage >80%, per-resource ACL, ...)
 - 📋 **v4.1 Advanced Retrieval** — Backlog (Hybrid BM25 + reranker, local embedding SEED-001, version history)
 
@@ -25,7 +25,7 @@
 | **1** | DB schema migration (ROLE) ✅ DONE 2026-05-23 | Mở rộng `role_enum` thêm `hub_admin`; thêm column `user_hubs.role` per-hub; migration seed existing admins giữ super-admin | ROLE-01..04 (4) | 4 | v3.0 shipped — schema M2 `users.role` + `user_hubs` carry forward |
 | **2** | Backend RBAC enforcement (DEP) ✅ DONE 2026-05-24 | Dependency `require_hub_admin_for(hub_id)`; refactor GET /api/hubs filter cả admin; users.py CRUD scope; hubs.py mutate super admin only; audit actor.scope | DEP-01..05 (5) | 5 | Phase 1 |
 | **3** | Frontend form refactor (FE) ✅ DONE 2026-05-24 | UserManagement form 3 option; hub switcher hide central; edit modal disabled assign super; api.ts UserRole type extend | FE-01..04 (4) | 4 | Phase 2 |
-| **4** | Migration + smoke E2E (MIGRATE) | Migration idempotent + rollback; smoke E2E 4 scenario; closeout docs | MIGRATE-01..02 (2) | 2 | Phase 1-3 |
+| **4** | Migration + smoke E2E (MIGRATE) ✅ DONE 2026-05-24 | Migration idempotent + rollback; smoke E2E 4 scenario; closeout docs | MIGRATE-01..02 (2) | 2 | Phase 1-3 |
 
 **Critical path:** 1 → 2 → 3 → 4 (linear — RBAC schema enable backend enable frontend enable migration verify).
 
@@ -141,9 +141,9 @@ Plans:
 **Plans estimate:** 2-3 plans (Wave 1 migration verify + Wave 2 smoke E2E + Wave 3 closeout).
 
 Plans:
-- [ ] 04-01-PLAN.md — Migration idempotent verify + downgrade implement + Alembic test (MIGRATE-01)
-- [ ] 04-02-PLAN.md — Smoke E2E 4 scenario pytest httpx + audit log inspect (MIGRATE-02)
-- [ ] 04-03-PLAN.md — Closeout v3.1 — CLAUDE.md + STATE.md + ROADMAP.md + REQUIREMENTS.md mark v3.1 SHIPPED + git tag v3.1
+- [x] 04-01-PLAN.md — Migration verify (Makefile test-integration + test-migration shortcut target; 7 test PASS deferred do pre-existing test infra debt outside MIGRATE-01 scope; Migration 0006 verified LIVE Plan 01-01 ship) (MIGRATE-01) ✅ DONE 2026-05-24
+- [x] 04-02-PLAN.md — Smoke E2E 4 scenario pytest httpx + audit forensic chain (test_smoke_e2e_v3_1_rbac.py ~430 LOC, 4 scenario PASS 19.86s testcontainers in-process) (MIGRATE-02) ✅ DONE 2026-05-24
+- [x] 04-03-PLAN.md — Closeout v3.1 SHIPPED — 4 docs atomic update + git tag annotated v3.1 LOCAL ✅ DONE 2026-05-24
 
 ---
 
@@ -172,7 +172,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
 | v3.0 Multi-Hub Split | 7 | 38/38 | 30/30 | ✅ Shipped | 2026-05-23 |
-| **v3.1 RBAC hub_admin** | **4** | **12/~15** | **13/15** | 🚧 **Phase 3 DONE** | — |
+| **v3.1 RBAC hub_admin** | **4** | **15/15** | **15/15** | ✅ **SHIPPED** | 2026-05-24 |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 

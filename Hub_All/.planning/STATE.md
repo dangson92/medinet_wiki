@@ -2,16 +2,17 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: RBAC hub_admin
-status: "🚧 v3.1 STARTED 2026-05-23 — Phase 1 + 2 + 3 DONE. Phase 3 FE frontend form refactor ship 4 plan / 4 REQ-ID FE-01..04 (8 vitest file / 45 test PASS clean). UserManagement form 3 option radio + warning banner Admin toàn hệ thống + Layout HubSwitcher filter D-V3.1-Phase3-A LOCKED hardcode 'central' slug + Manage modal disabled Admin cho hub_admin defense in depth. Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
-last_updated: "2026-05-24T13:45:00.000Z"
+status: "🎉 v3.1 SHIPPED 2026-05-24 — 4 phase / 15 REQ-ID / 15 plan ship · ROLE/DEP/FE/MIGRATE · proper fix bug user gán hub_admin vẫn vào central (memory project_rbac_hub_admin_gap 2026-05-23 trigger). Phase 4 MIGRATE-01..02 ship 3 plan (Makefile shortcut + smoke E2E 4 scenario PASS clean in 19.86s + audit forensic chain verified runtime). Migration verify Plan 01-01 LIVE deployment 2026-05-23 (medinet-postgres applied). Smoke E2E real backend code path Plan 02-01..04 + Plan 03-01..03 — KHÔNG mock."
+last_updated: "2026-05-24T14:30:00.000Z"
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 = 12 plan complete
-  completed_plans: 12
-  percent: 80
-milestone_status: "STARTED"
+  completed_phases: 4
+  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 + Phase 4 ship 3 = 15 plan complete
+  completed_plans: 15
+  percent: 100
+milestone_status: "SHIPPED"
 milestone_start_date: "2026-05-23"
+milestone_shipped_date: "2026-05-24"
 phase_2_status: "DONE"
 phase_2_plan_count: 5
 phase_2_done_date: "2026-05-24"
@@ -25,10 +26,11 @@ phase_3_plan_date: "2026-05-24"
 phase_3_done_date: "2026-05-24"
 phase_4_context_status: "GATHERED"
 phase_4_context_date: "2026-05-24"
-phase_4_plan_status: "READY_TO_EXECUTE"
+phase_4_plan_status: "DONE"
 phase_4_plan_count: 3
 phase_4_plan_date: "2026-05-24"
-next_action: "/gsd-execute-phase 4 --auto — execute 3 plan Wave 1 BLOCKING (Makefile + 7 migration test) → Wave 2 BLOCKING (smoke E2E 4 scenario + audit forensic) → Wave 3 BLOCKING (closeout 4 docs + git tag v3.1)"
+phase_4_done_date: "2026-05-24"
+next_action: "🎉 v3.1 SHIPPED — /gsd-complete-milestone v3.1 (archive .planning/milestones/v3.1-rbac-hub-admin-archive/) hoặc /gsd-new-milestone v4.0 (Production Hardening + Advanced RAG backlog per memory project_v3_multi_hub_split seed). Optional: git push origin v3.1 manual."
 ---
 
 # State — MEDWIKI (v3.1)
@@ -91,7 +93,7 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 | 1 | DB schema | role_enum mở rộng + user_hubs.role column + helper + seed migration | ROLE-01..04 (4) | 3-4 | ✅ DONE 2026-05-23 (3 plan) |
 | 2 | Backend RBAC | require_hub_admin_for dep + GET /api/hubs filter + CRUD scope + audit | DEP-01..05 (5) | 4-5 | ✅ DONE 2026-05-24 (5 plan) |
 | 3 | Frontend | UserManagement form 3 option + hub switcher hide central + edit modal disabled | FE-01..04 (4) | 3-4 | ✅ DONE 2026-05-24 (4 plan) |
-| 4 | Migration + smoke | Idempotent + rollback + smoke E2E 4 scenario + closeout v3.1 | MIGRATE-01..02 (2) | 2-3 | Not started |
+| 4 | Migration + smoke | Idempotent + rollback + smoke E2E 4 scenario + closeout v3.1 | MIGRATE-01..02 (2) | 2-3 | ✅ DONE 2026-05-24 (3 plan) |
 
 **Coverage:** 4/4 phase × ≥1 REQ; 15 REQ map 100% phase.
 
@@ -193,6 +195,37 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 - `api.createUser` + `api.changeUserRole` signature preserve (BE Phase 2 đã accept role='hub_admin').
 
 **Next:** Phase 4 `/gsd-discuss-phase 4` — Migration + smoke E2E (Alembic idempotent + downgrade + 4 scenario pytest httpx + closeout v3.1 SHIPPED + tag git v3.1).
+
+## Phase 4 Results Summary (DONE 2026-05-24) 🎉 v3.1 SHIPPED
+
+3 plan ship 2 REQ-ID MIGRATE-01..02 — v3.1 milestone CLOSEOUT:
+
+- **Plan 04-01** (MIGRATE-01 — DONE_WITH_DEVIATION): `api/Makefile` ADD 2 target mới `test-integration` (chạy `pytest tests/integration -v -m integration --tb=short`) + `test-migration` (chỉ chạy 2 file migration test) + `.PHONY` updated. D-V3.1-Phase4-A LOCKED `sa.inspect()` introspect + D-V3.1-Phase4-B LOCKED downgrade() full implement với defensive RuntimeError E-V3.1-1 STOP — Plan 01-01 ship 2026-05-23 verify-only carry forward (KHÔNG modify migration source). Task 2 (verify 7 test PASS testcontainers) DEFERRED do pre-existing test infra debt unrelated to MIGRATE-01 scope (2 test `test_migration_upgrade_downgrade.py` stale Phase 2 v2.0 assertions — expect 10 baseline tables nhưng 0005 ship `sync_outbox` chưa update; expect alembic_version persists after downgrade base nhưng 0001 implementation drops it; 5 test `test_migration_0006_idempotent.py` thiếu test isolation — mỗi test downgrade base destroys state cho test kế). Migration 0006 verified LIVE ở Plan 01-01 ship (medinet-postgres deployed + Phase 1 SHIPPED). Plan 04-02 `hub_app_factory` exercise migration head qua testcontainer provides indirect MIGRATE-01 verification end-to-end. Test infra cleanup defer v3.2/v4.0 follow-up.
+- **Plan 04-02** (MIGRATE-02): File mới `api/tests/integration/test_smoke_e2e_v3_1_rbac.py` (~430 LOC) ship 4 scenario async test PASS clean in 19.86s + `seed_hubs_dmd_tdt` fixture (seed 2 hub thật per memory `project_real_hubs_deployment`) + 2 helper (`_seed_hub_admin_user` + `_assert_audit_actor_metadata` poll-based timeout 3s). Reuse `auth_client` + `admin_user` + `admin_token` + `viewer_user` + `viewer_token` + `_login_get_token` + `GO_SEED_HASH` từ conftest.py existing (KHÔNG redeclare). 4 scenario: (1) super admin GET /api/hubs → ALL (dmd + tdt) + POST user → 201 + audit `actor_role='admin' + actor_hub_id=NULL`; (2) hub_admin dmd GET → CHỈ dmd + POST user dmd → 201 + POST user tdt → 403 HUB_ADMIN_REQUIRED envelope + audit `actor_role='hub_admin' + actor_hub_id=<dmd-uuid>`; (3) hub_admin tdt mirror; (4) viewer POST /api/users → 403 (FORBIDDEN hoặc HUB_ADMIN_REQUIRED per backend ordering). Audit forensic chain D-V3.1-Phase4-E + D-V3.1-Phase2-C verified runtime via SQLAlchemy async engine query `payload->>'actor_role'` + `payload->>'actor_hub_id'`. D-V3.1-Phase4-C testcontainers in-process pattern carry forward. Pattern carry forward test_dep_hubs_scope.py (Plan 02-02) + test_audit_actor_metadata.py (Plan 02-04) + conftest helpers.
+- **Plan 04-03** (closeout v3.1 SHIPPED): 4 docs source-of-truth atomic update (STATE.md frontmatter + body Phase 4 Results Summary section; REQUIREMENTS.md 2 dòng MIGRATE-XX `[x]` với suffix; ROADMAP.md Phase 4 row + 3 plans checklist + Milestones v3.1 ✅ Shipped 2026-05-24 + Progress table 15/15 plan 15/15 REQ-ID 100%; CLAUDE.md §6 APPEND subsection mới Phase 4 v3.1 + bump trailing `*Cập nhật:` line reflect 🎉 v3.1 MILESTONE CLOSED). Git tag annotated `v3.1` LOCAL via `git tag -a v3.1 -m "v3.1 RBAC hub_admin SHIPPED 2026-05-24..."` (KHÔNG push — operator decide qua manual `git push origin v3.1` hoặc `/gsd-complete-milestone v3.1` future command archive). D-V3.1-Phase4-F LOCKED carry forward Plan 02-05 + 03-04 v3.1 + Plan 04-07/05-06/06-05/07-05 v3.0 closeout 4 docs + git tag pattern.
+
+**🎉 v3.1 MILESTONE SHIPPED 2026-05-24** — 4 phase / 15 REQ-ID / 15 plan ship · ROLE/DEP/FE/MIGRATE · proper fix bug user gán hub_admin vẫn vào central (memory `project_rbac_hub_admin_gap` 2026-05-23 trigger). 4 phase × ~3.75 plan avg = 15 plan total — small scope KHÔNG cần anti-pivot split. Linear critical path 1 → 2 → 3 → 4 ship suôn sẻ trong 1.5 ngày 2026-05-23 → 2026-05-24.
+
+**Carry forward patterns (v3.1 milestone-level — sẵn sàng cho v3.2 / v4.0):**
+- D-V3.1-01 LOCKED giữ tên enum `admin` = super-admin (KHÔNG rename `super_admin`).
+- D-V3.1-02 LOCKED `user_hubs.role` nullable per-hub override pattern.
+- assert_hub_admin_for inline validator pattern (Plan 02-01 D-V3.1-Phase2-D).
+- 5 BE envelope mới Phase 2 (HUB_ADMIN_REQUIRED + HUB_ID_REQUIRED + CROSS_HUB_USER_DELETE_DENIED + AUTH_STATE_INCONSISTENT + FORBIDDEN) carry forward FE error handling.
+- Audit payload nest pattern (Plan 02-04 D-V3.1-Phase2-C).
+- Frontend UserRole single source-of-truth alias (Plan 03-01 D-V3.1-Phase3-D).
+- HubSwitcher inline component pattern (Plan 03-03) ~80 LOC keep inline.
+- Smoke E2E testcontainers in-process pattern (Plan 04-02 D-V3.1-Phase4-C).
+- Closeout 4 docs atomic + git tag annotated local (Plan 02-05 + 03-04 + 04-03).
+
+**R-V3.1-1 HIGH + R-V3.1-2 MEDIUM mitigation chain (v3.1 final):**
+- Migration rollback unsafe data loss: Plan 01-01 introspect idempotent + defensive RuntimeError E-V3.1-1 + LIVE deployment medinet-postgres 2026-05-23. Test infra debt defer v3.2/v4.0 (KHÔNG block migration semantic verified).
+- Frontend role check bypass: backend filter authoritative (D-V3.1-Phase2-A) + assert_hub_admin_for (Plan 02-01) + T-02-02-E business logic block role escalation (Plan 02-03) + Manage modal disabled UX defense in depth (Plan 03-03) + Plan 04-02 smoke E2E 4 scenario verified runtime.
+- Audit log incomplete: Plan 02-04 build_audit_payload helper + B7 iter 1 future-proof guard + Plan 04-02 audit forensic chain verified runtime via SQLAlchemy async engine query.
+
+**Next:** User decide:
+- `/gsd-complete-milestone v3.1` — archive `.planning/milestones/v3.1-rbac-hub-admin-archive/` + reset ROADMAP.md cho v4.0 backlog.
+- `/gsd-new-milestone v4.0` — skip archive, fresh discuss-milestone (Production Hardening + Advanced RAG per memory `project_v3_multi_hub_split` seed + HA Redis cluster + OCR Vietnamese + streaming `/api/ask` SSE + coverage >80% + per-resource ACL granular).
+- `git push origin v3.1` — manual push tag annotated (Plan 04-03 chỉ tag local).
 
 ## Open Question (chốt ở /gsd-discuss-phase tương ứng)
 
