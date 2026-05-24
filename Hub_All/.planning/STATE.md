@@ -23,7 +23,9 @@ phase_3_plan_status: "DONE"
 phase_3_plan_count: 4
 phase_3_plan_date: "2026-05-24"
 phase_3_done_date: "2026-05-24"
-next_action: "/gsd-discuss-phase 4 — Migration + smoke E2E (Alembic idempotent + downgrade + 4 scenario pytest httpx + closeout v3.1)"
+phase_4_context_status: "GATHERED"
+phase_4_context_date: "2026-05-24"
+next_action: "/gsd-plan-phase 4 — sinh 3 plan (Wave 1 migration verify + Wave 2 smoke E2E 4 scenario + Wave 3 closeout v3.1 SHIPPED + git tag v3.1)"
 ---
 
 # State — MEDWIKI (v3.1)
