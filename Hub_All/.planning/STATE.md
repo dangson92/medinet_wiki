@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: RBAC hub_admin
-status: "🚧 v3.1 STARTED 2026-05-23 — Phase 1 + 2 DONE. Phase 2 DEP backend RBAC enforcement ship 5 plan / 5 REQ-ID DEP-01..05 (11 unit + 12 integration test PASS). Trigger: user bug report 2026-05-23 sau v3.0 close — tạo user gán hub `dmd` nhưng vẫn vào được central (gap thiết kế role-per-hub defer v4.0 trong M2). Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
-last_updated: "2026-05-24T13:30:00.000Z"
+status: "🚧 v3.1 STARTED 2026-05-23 — Phase 1 + 2 + 3 DONE. Phase 3 FE frontend form refactor ship 4 plan / 4 REQ-ID FE-01..04 (8 vitest file / 45 test PASS clean). UserManagement form 3 option radio + warning banner Admin toàn hệ thống + Layout HubSwitcher filter D-V3.1-Phase3-A LOCKED hardcode 'central' slug + Manage modal disabled Admin cho hub_admin defense in depth. Scope: 4 phase / 15 REQ-ID / phase numbering reset về 1 (D-V3.1-04). Memory reference: project_rbac_hub_admin_gap."
+last_updated: "2026-05-24T13:45:00.000Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 = 8 plan complete
-  completed_plans: 8
-  percent: 53
+  completed_phases: 3
+  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 = 12 plan complete
+  completed_plans: 12
+  percent: 80
 milestone_status: "STARTED"
 milestone_start_date: "2026-05-23"
 phase_2_status: "DONE"
@@ -19,10 +19,11 @@ phase_3_context_status: "GATHERED"
 phase_3_context_date: "2026-05-24"
 phase_3_ui_spec_status: "APPROVED"
 phase_3_ui_spec_date: "2026-05-24"
-phase_3_plan_status: "READY_TO_EXECUTE"
+phase_3_plan_status: "DONE"
 phase_3_plan_count: 4
 phase_3_plan_date: "2026-05-24"
-next_action: "/gsd-execute-phase 3 --auto — execute 4 plan Wave 1 BLOCKING → Wave 2 sequential (03-02 → 03-03 cùng UserManagement.tsx) → Wave 3 closeout"
+phase_3_done_date: "2026-05-24"
+next_action: "/gsd-discuss-phase 4 — Migration + smoke E2E (Alembic idempotent + downgrade + 4 scenario pytest httpx + closeout v3.1)"
 ---
 
 # State — MEDWIKI (v3.1)
@@ -84,7 +85,7 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 |-------|------|-----------|--------|------------------|--------|
 | 1 | DB schema | role_enum mở rộng + user_hubs.role column + helper + seed migration | ROLE-01..04 (4) | 3-4 | ✅ DONE 2026-05-23 (3 plan) |
 | 2 | Backend RBAC | require_hub_admin_for dep + GET /api/hubs filter + CRUD scope + audit | DEP-01..05 (5) | 4-5 | ✅ DONE 2026-05-24 (5 plan) |
-| 3 | Frontend | UserManagement form 3 option + hub switcher hide central + edit modal disabled | FE-01..04 (4) | 3-4 | Not started |
+| 3 | Frontend | UserManagement form 3 option + hub switcher hide central + edit modal disabled | FE-01..04 (4) | 3-4 | ✅ DONE 2026-05-24 (4 plan) |
 | 4 | Migration + smoke | Idempotent + rollback + smoke E2E 4 scenario + closeout v3.1 | MIGRATE-01..02 (2) | 2-3 | Not started |
 
 **Coverage:** 4/4 phase × ≥1 REQ; 15 REQ map 100% phase.
@@ -152,6 +153,41 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 - Breaking change tests cũ: `user_service.create(req=, created_by=)` + `delete(user_id=, deleted_by=)` + `hub_service.create/update/update_status` signature THÊM keyword-only `actor_role` (user_service required, hub_service default 'admin') + `actor_hub_id`. Existing tests M2 + v3.0 KHÔNG break (471/471 unit regression PASS) — chỉ caller router cần derive đúng (verified).
 
 **Next:** Phase 3 `/gsd-discuss-phase 3` FE frontend form refactor (UserManagement 3 option radio + hub switcher hide central + edit modal disabled assign super + api.ts UserRole type extend).
+
+## Phase 3 Results Summary (DONE 2026-05-24)
+
+4 plan ship 4 REQ-ID FE-01..04:
+
+- **Plan 03-01** (FE-04): Type alias `UserRole = 'admin' | 'hub_admin' | 'editor' | 'viewer'` export ở `frontend/src/services/api.ts` mirror BE Pydantic Literal (Plan 02-03) + Phase 1 migration 0006 CHECK constraint (D-V3.1-Phase3-D LOCKED single source-of-truth). `UserAPI` interface ADD `role: UserRole` field (BE Phase 2 đã trả qua /api/auth/me — D-V3.1-Phase3-B LOCKED). `types.ts` `User.role` extend từ 2 → 4 value tương thích mockData hub_admin fixture. `mockData.ts` ADD MOCK_HUBS entry `tdt` (Thuốc Dân Tộc — phát hiện thiếu trong audit 2026-05-24) + APPEND 2 hub_admin user fixture (1 dmd + 1 tdt — D-V3.1-Phase3-C LOCKED, real hubs per memory `project_real_hubs_deployment`). AuthContext.tsx VERIFY ONLY (KHÔNG code change). TypeScript + ESLint + Vitest baseline PASS clean.
+- **Plan 03-02** (FE-01): `UserManagement.tsx` Add User form refactor radio group 2 → 3 option ("Admin toàn hệ thống" + "Quản lý hub này" + "Viewer") với ARIA `<fieldset role="radiogroup">` + `<legend>` + `aria-describedby` link description + warning banner conditional `{newUserRole === 'admin' && <div role="alert" aria-live="polite" class="bg-yellow-50 ...">⚠ Quyền cao nhất — quản lý toàn bộ hệ thống</div>}`. State `newUserRole` + `manageRole` extend type UserRole. `handleCreateUser` error.code switch ADD 4 BE envelope mới Phase 2 (HUB_ADMIN_REQUIRED + HUB_ID_REQUIRED + AUTH_STATE_INCONSISTENT + FORBIDDEN) với toast tiếng Việt exact UI-SPEC §7.4. KHÔNG đụng Manage modal (Plan 03-03 scope).
+- **Plan 03-03** (FE-02 + FE-03): `Layout.tsx` ADD HubSwitcher inline component (~80 LOC keep inline borderline OK <80 LOC threshold per Claude discretion) render ABOVE sidebar nav với filter logic D-V3.1-Phase3-A LOCKED `h.code !== 'central' && userHubIds.includes(h.id)` cho non-super-admin. userHubIds derive từ `user?.roles?.map(r => r.hub_id) ?? []` (Option A LOCKED per PATTERNS.md — less invasive, KHÔNG extend UserAPI.hub_ids). Loading skeleton `aria-busy` + empty state "Bạn chưa được gán hub nào — liên hệ admin." `role="status"` + active hub compare `h.code === CURRENT_HUB`. `UserManagement.tsx` Manage modal block REPLACE 2 → 3 option button-style (preserve existing CheckCircle2 indicator) với "Admin toàn hệ thống" DISABLED khi `currentRole !== 'admin'` (defense in depth — backend Plan 02-03 T-02-02-E authoritative) + tooltip native `title="Cần Admin toàn hệ thống"` + `aria-disabled="true"` + `aria-describedby` link sr-only helper "Tùy chọn này yêu cầu quyền Admin toàn hệ thống." + Tailwind `opacity-50 cursor-not-allowed`. `handleSubmitManageHub` error switch handle 3 envelope Manage context (HUB_ADMIN_REQUIRED "Bạn không có quyền gán role này" + CROSS_HUB_USER_DELETE_DENIED + FORBIDDEN). Bonus regression fix: Layout.spec.tsx mock api.getHubs tránh unhandled fetch jsdom.
+- **Plan 03-04** (closeout): 3 vitest test file MỚI ship `frontend/src/pages/__tests__/UserManagement.form-3-option.spec.tsx` (FE-01 — 3 test) + `frontend/src/__tests__/Layout.hub-switcher.spec.tsx` (FE-02 — 3 test) + `frontend/src/pages/__tests__/UserManagement.manage-modal-disabled.spec.tsx` (FE-03 — 2 test smoke) — RTL render + vi.doMock pattern carry forward Phase 5 Plan 05-02 vitest infrastructure (vi.resetModules + AuthContext mock + ThemeContext mock + GeminiAssistant noop + api mock spread `importActual`). 5 baseline + 3 mới = **8 test file / 45 test PASS clean**. 4 docs source-of-truth update atomic (STATE.md + REQUIREMENTS.md + ROADMAP.md + CLAUDE.md). Smoke checkpoint runtime SKIP pre-resolved (auto-fallback `--chain` mode active per Plan 04-07 + 05-06 + 06-05 v3.0 + Plan 01-03 + 02-05 v3.1).
+
+**Carry forward patterns:**
+- UserRole type alias centralize FE — drift FE/BE/migration 0006 → 422 reject runtime; centralize export ở services/api.ts; consumer `import type { UserRole } from '../services/api'`.
+- HubSwitcher inline ~80 LOC keep inline (<80 LOC Claude discretion borderline). Extract `frontend/src/components/HubSwitcher.tsx` riêng nếu future Phase v3.2+ scope phình lên (multi-select / search / icon hub).
+- Option A userHubIds derive từ `roles: RoleAPI[]` — less invasive carry forward future per-hub permission UI. UserAPI.hub_ids extend chỉ khi BE schema thay đổi (defer v4.0 per-resource ACL).
+- Error envelope code switch FE consume 5 BE envelope mới Phase 2 (HUB_ADMIN_REQUIRED + HUB_ID_REQUIRED + CROSS_HUB_USER_DELETE_DENIED + AUTH_STATE_INCONSISTENT + FORBIDDEN) — pattern carry forward future Phase per-resource granular endpoint.
+- Vitest pattern Phase 5 Plan 05-02 baseline: jsdom env + vi.doMock context pattern + RTL render + jest-dom matchers. Phase 3 Plan 03-04 add 3 test file → 8 file total (Phase 5 baseline 5 + Phase 3 mới 3).
+- Defense in depth UX layer (FE filter + disabled) + BE authoritative (Plan 02-02 GET /api/hubs filter + Plan 02-03 T-02-02-E business logic block) — pattern carry forward FE/BE 2-tier RBAC.
+- Layout.spec.tsx pattern: khi component touch (vd HubSwitcher add fetch call) → existing test mock spread `importActual` cho service module để tránh unhandled fetch jsdom.
+
+**R-V3.1-2 MEDIUM mitigation chain Phase 3 (FE side):**
+- Hub switcher filter D-V3.1-Phase3-A LOCKED hardcode 'central' slug (Plan 03-03 Layout.tsx).
+- Manage modal disabled UX cho hub_admin (Plan 03-03 UserManagement.tsx) — UX layer defense in depth.
+- Error envelope handle 4 BE code mới (Plan 03-02 + 03-03) — toast tiếng Việt exact UI-SPEC §7.4 cho hub_admin user khi BE reject.
+- mockData hub_admin fixture (Plan 03-01) — dev test + vitest scenario coverage; KHÔNG bundle prod (Vite tree-shake `import.meta.env.DEV`).
+- 3 vitest test file (Plan 03-04) cover semantic 3 component scenario — verify regression future Phase.
+
+**Phase 3 backward compat (KHÔNG break v3.0 + v3.1 Phase 1+2):**
+- 11 trang React M2/v3.0 KHÔNG touch (R-V3-2 minimal scope carry forward Phase 5 UI-SPEC §11.2).
+- M2 LocalStorage same-origin pattern preserve (Phase 5 D-V3-Phase5-C2 carry forward).
+- M2 envelope shape `{success, data, error, meta}` LOCKED — chỉ extend error code consume.
+- types.ts User.role extend additive (TypeScript widening accept 2 value cũ trong superset 4 value).
+- AuthContext.tsx UNCHANGED (Plan 03-01 verify only).
+- `api.createUser` + `api.changeUserRole` signature preserve (BE Phase 2 đã accept role='hub_admin').
+
+**Next:** Phase 4 `/gsd-discuss-phase 4` — Migration + smoke E2E (Alembic idempotent + downgrade + 4 scenario pytest httpx + closeout v3.1 SHIPPED + tag git v3.1).
 
 ## Open Question (chốt ở /gsd-discuss-phase tương ứng)
 

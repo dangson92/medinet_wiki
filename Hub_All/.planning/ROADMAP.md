@@ -24,7 +24,7 @@
 |---|---|---|---|---|---|
 | **1** | DB schema migration (ROLE) ✅ DONE 2026-05-23 | Mở rộng `role_enum` thêm `hub_admin`; thêm column `user_hubs.role` per-hub; migration seed existing admins giữ super-admin | ROLE-01..04 (4) | 4 | v3.0 shipped — schema M2 `users.role` + `user_hubs` carry forward |
 | **2** | Backend RBAC enforcement (DEP) ✅ DONE 2026-05-24 | Dependency `require_hub_admin_for(hub_id)`; refactor GET /api/hubs filter cả admin; users.py CRUD scope; hubs.py mutate super admin only; audit actor.scope | DEP-01..05 (5) | 5 | Phase 1 |
-| **3** | Frontend form refactor (FE) | UserManagement form 3 option; hub switcher hide central; edit modal disabled assign super; api.ts UserRole type extend | FE-01..04 (4) | 4 | Phase 2 |
+| **3** | Frontend form refactor (FE) ✅ DONE 2026-05-24 | UserManagement form 3 option; hub switcher hide central; edit modal disabled assign super; api.ts UserRole type extend | FE-01..04 (4) | 4 | Phase 2 |
 | **4** | Migration + smoke E2E (MIGRATE) | Migration idempotent + rollback; smoke E2E 4 scenario; closeout docs | MIGRATE-01..02 (2) | 2 | Phase 1-3 |
 
 **Critical path:** 1 → 2 → 3 → 4 (linear — RBAC schema enable backend enable frontend enable migration verify).
@@ -110,10 +110,10 @@ Plans:
 **Plans:** 4 plans (Wave 1 BLOCKING Plan 03-01 type+mock foundation + Wave 2 sequential Plan 03-02 form FE-01 → Plan 03-03 hub switcher FE-02 + Manage modal FE-03 cùng file UserManagement.tsx + Wave 3 BLOCKING Plan 03-04 closeout 3 vitest test + 4 docs).
 
 Plans:
-- [ ] 03-01-PLAN.md — api.ts UserRole type extend + mockData.ts hub_admin sample + AuthContext currentUser.role verify (FE-04)
-- [ ] 03-02-PLAN.md — UserManagement.tsx form 3 option radio + warning banner + handleCreateUser update (FE-01)
-- [ ] 03-03-PLAN.md — Hub switcher filter central + Manage modal disabled assign super (FE-02, FE-03)
-- [ ] 03-04-PLAN.md — Closeout — vitest test + CLAUDE.md + STATE.md + REQUIREMENTS.md FE-01..04 [x]
+- [x] 03-01-PLAN.md — api.ts UserRole type extend + mockData.ts hub_admin sample + AuthContext currentUser.role verify (FE-04) ✅ DONE 2026-05-24
+- [x] 03-02-PLAN.md — UserManagement.tsx form 3 option radio + warning banner + handleCreateUser update (FE-01) ✅ DONE 2026-05-24
+- [x] 03-03-PLAN.md — Hub switcher filter central + Manage modal disabled assign super (FE-02, FE-03) ✅ DONE 2026-05-24
+- [x] 03-04-PLAN.md — Closeout — vitest test (3 file mới / 8 file total 45 test PASS) + CLAUDE.md + STATE.md + REQUIREMENTS.md FE-01..04 [x] ✅ DONE 2026-05-24
 
 ---
 
@@ -172,7 +172,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
 | v3.0 Multi-Hub Split | 7 | 38/38 | 30/30 | ✅ Shipped | 2026-05-23 |
-| **v3.1 RBAC hub_admin** | **4** | **8/~15** | **9/15** | 🚧 **Phase 2 DONE** | — |
+| **v3.1 RBAC hub_admin** | **4** | **12/~15** | **13/15** | 🚧 **Phase 3 DONE** | — |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 

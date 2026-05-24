@@ -27,10 +27,10 @@
 
 ### FE — Frontend form refactor (4 REQ)
 
-- [ ] **FE-01** Phase 3: `pages/UserManagement.tsx` form tạo user — radio group "Quyền" tách 3 option (KHÔNG còn "Admin Hub" mơ hồ): "Admin toàn hệ thống" (role='admin', cảnh báo bằng warning banner màu vàng), "Quản lý hub này" (role='hub_admin', áp scope chỉ hub được chọn), "Viewer" (role='viewer'). Description ngắn dưới mỗi option giải thích quyền.
-- [ ] **FE-02** Phase 3: Hub switcher (sidebar Layout.tsx hoặc HubSwitcher component) — dùng `currentUser.role + currentUser.hub_ids` filter danh sách hubs. Nếu non-super-admin (role != 'admin'): ẩn hub `central` (special slug check); chỉ show hubs trong `currentUser.hub_ids`. Super admin thấy tất cả + chỉ định active.
-- [ ] **FE-03** Phase 3: Edit modal "Quản lý hub & quyền" (handleOpenManageHub) — KHÔNG cho phép hub_admin assign "Admin toàn hệ thống" cho user khác (option disabled với tooltip "Cần Admin toàn hệ thống"). Hub_admin chỉ assign hub_admin/viewer cho hub được gán quyền.
-- [ ] **FE-04** Phase 3: API types update — `frontend/src/services/api.ts` UserRole type thêm `'hub_admin'`; UserManagement state + form component update accept role mới. `mockData.ts` thêm sample hub_admin user cho dev test.
+- [x] **FE-01** Phase 3: `pages/UserManagement.tsx` form tạo user — radio group "Quyền" tách 3 option (KHÔNG còn "Admin Hub" mơ hồ): "Admin toàn hệ thống" (role='admin', cảnh báo bằng warning banner màu vàng), "Quản lý hub này" (role='hub_admin', áp scope chỉ hub được chọn), "Viewer" (role='viewer'). Description ngắn dưới mỗi option giải thích quyền. (DONE 2026-05-24 — Plan 03-02)
+- [x] **FE-02** Phase 3: Hub switcher (sidebar Layout.tsx hoặc HubSwitcher component) — dùng `currentUser.role + currentUser.hub_ids` filter danh sách hubs. Nếu non-super-admin (role != 'admin'): ẩn hub `central` (special slug check); chỉ show hubs trong `currentUser.hub_ids`. Super admin thấy tất cả + chỉ định active. (DONE 2026-05-24 — Plan 03-03)
+- [x] **FE-03** Phase 3: Edit modal "Quản lý hub & quyền" (handleOpenManageHub) — KHÔNG cho phép hub_admin assign "Admin toàn hệ thống" cho user khác (option disabled với tooltip "Cần Admin toàn hệ thống"). Hub_admin chỉ assign hub_admin/viewer cho hub được gán quyền. (DONE 2026-05-24 — Plan 03-03)
+- [x] **FE-04** Phase 3: API types update — `frontend/src/services/api.ts` UserRole type thêm `'hub_admin'`; UserManagement state + form component update accept role mới. `mockData.ts` thêm sample hub_admin user cho dev test. (DONE 2026-05-24 — Plan 03-01)
 
 ### MIGRATE — Migration + smoke E2E (2 REQ)
 
