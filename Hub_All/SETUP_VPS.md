@@ -4,7 +4,7 @@
 >
 > Yêu cầu VPS: **4 vCPU · 8 GB RAM · 50 GB SSD · IP public tĩnh**.
 >
-> Cần chuẩn bị trước: SSH access root, domain `wiki.medinet.vn` đã trỏ A record về IP VPS, OpenAI API key.
+> Cần chuẩn bị trước: SSH access root, domain `wiki.medinet.work` đã trỏ A record về IP VPS, OpenAI API key.
 
 ---
 
@@ -38,7 +38,8 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
 apt update
 apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-docker compose version     # verify v2.x
+docker --version           # verify Docker Engine từ download.docker.com (v27+ hoặc mới hơn — Docker Inc đẩy major nhanh)
+docker compose version     # verify plugin từ cùng repo chính thức (KHÔNG snap, KHÔNG universe)
 ```
 
 ---
@@ -46,7 +47,11 @@ docker compose version     # verify v2.x
 ## Step 3 — Cài tooling phụ
 
 ```bash
-apt install -y git make jq openssl postgresql-client-16 build-essential python3 python3-pip
+apt install -y git make jq openssl build-essential python3 python3-pip
+
+# Lưu ý: KHÔNG cài postgresql-client-16 trên host (Ubuntu 22.04 default repo chỉ có client-14).
+# Mọi lệnh psql/pg_dump trong setup này đều chạy QUA `docker compose exec postgres ...`
+# nên client native trên host KHÔNG cần thiết.
 
 # Node 20 LTS qua nvm (cài cho root)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
@@ -94,8 +99,8 @@ LOG_LEVEL=info
 POSTGRES_PASSWORD=${PG_PWD}
 SETTINGS_PROXY_SECRET=${SP_SECRET}
 
-WIKI_PUBLIC_DOMAIN=wiki.medinet.vn
-MCP_OAUTH_ISSUER_URL=https://wiki.medinet.vn/mcp
+WIKI_PUBLIC_DOMAIN=wiki.medinet.work
+MCP_OAUTH_ISSUER_URL=https://wiki.medinet.work/mcp
 
 HUBS_ALLOWLIST=dmd,tdt
 HUBS_ALLOWLIST_REGEX=dmd|tdt
@@ -130,7 +135,7 @@ OPENAI_API_KEY=sk-<paid-key>
 GEMINI_API_KEY=<fallback-key>
 AES_KEY=<AES ở Step 5>
 SETTINGS_PROXY_SECRET=<SP_SECRET ở Step 5>
-CORS_ALLOWED_ORIGINS=https://wiki.medinet.vn
+CORS_ALLOWED_ORIGINS=https://wiki.medinet.work
 APP_ENV=production
 RAG_EMBEDDING_MODEL=text-embedding-3-large
 ```
@@ -161,7 +166,7 @@ nano mcp_service/.env
 
 ```ini
 MCP_API_BASE_URL=http://python-api-central:8080
-MCP_OAUTH_ISSUER_URL=https://wiki.medinet.vn/mcp
+MCP_OAUTH_ISSUER_URL=https://wiki.medinet.work/mcp
 MCP_PATH_PREFIX=mcp
 MCP_INTERNAL_TOKEN=<openssl rand -hex 32>
 ```
@@ -275,13 +280,13 @@ docker compose ps       # tất cả service healthy
 
 ```bash
 docker compose logs -f caddy
-# Đợi dòng "certificate obtained successfully" cho wiki.medinet.vn (~30s)
+# Đợi dòng "certificate obtained successfully" cho wiki.medinet.work (~30s)
 # Ctrl+C khi thấy
 
 # Verify HTTPS
-curl -I https://wiki.medinet.vn/api/health        # 200 + strict-transport-security header
-curl https://wiki.medinet.vn/dmd/api/health       # 200
-curl https://wiki.medinet.vn/tdt/api/health       # 200
+curl -I https://wiki.medinet.work/api/health        # 200 + strict-transport-security header
+curl https://wiki.medinet.work/dmd/api/health       # 200
+curl https://wiki.medinet.work/tdt/api/health       # 200
 ```
 
 ---
@@ -302,17 +307,17 @@ async def main():
     conn = await asyncpg.connect(dsn)
     await conn.execute("""
         INSERT INTO users (email, full_name, password_hash, role, status)
-        VALUES ('admin@medinet.vn', 'Super Admin', $1, 'admin', 'active')
+        VALUES ('admin@medinetgroup.vn', 'Super Admin', $1, 'admin', 'active')
         ON CONFLICT (email) DO NOTHING
     """, pwd_hash)
     await conn.close()
-    print("Super admin: admin@medinet.vn / ChangeMe@123")
+    print("Super admin: admin@medinetgroup.vn / ChangeMe@123")
 
 asyncio.run(main())
 PY
 ```
 
-Vào `https://wiki.medinet.vn/` → login `admin@medinet.vn` / `ChangeMe@123` → **đổi password ngay** (Settings → Profile).
+Vào `https://wiki.medinet.work/` → login `admin@medinetgroup.vn` / `ChangeMe@123` → **đổi password ngay** (Settings → Profile).
 
 ---
 
@@ -320,8 +325,8 @@ Vào `https://wiki.medinet.vn/` → login `admin@medinet.vn` / `ChangeMe@123` �
 
 ```bash
 cd /opt/medinet/wiki/Hub_All
-export WIKI_URL=https://wiki.medinet.vn
-export ADMIN_EMAIL=admin@medinet.vn
+export WIKI_URL=https://wiki.medinet.work
+export ADMIN_EMAIL=admin@medinetgroup.vn
 export ADMIN_PASSWORD=<password vừa đổi ở Step 17>
 
 bash scripts/migrate/05-smoke-e2e.sh
@@ -330,7 +335,7 @@ bash scripts/migrate/05-smoke-e2e.sh
 
 ---
 
-## Done — Stack live tại `https://wiki.medinet.vn`
+## Done — Stack live tại `https://wiki.medinet.work`
 
 ### Update code thường ngày
 
@@ -356,7 +361,7 @@ echo "HUB_MARKETING_ID=${HUB_MARKETING_ID}" >> .env
 
 docker compose up -d python-api-marketing
 docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
-curl https://wiki.medinet.vn/marketing/api/health
+curl https://wiki.medinet.work/marketing/api/health
 ```
 
 ### Backup daily Postgres
