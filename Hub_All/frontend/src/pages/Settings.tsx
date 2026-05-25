@@ -6,8 +6,8 @@ import {
   RefreshCw,
   Lock,
   Eye,
+  EyeOff,
   Mail,
-  Smartphone,
   Info,
   CheckCircle2,
   Database,
@@ -128,7 +128,6 @@ export default function Settings() {
 
   // ─── Notifications settings state ───
   const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifyTelegram, setNotifyTelegram] = useState(false);
 
   // ─── SMTP settings state (tab Thông báo § SMTP) ───
   // Backend mask SMTP_PASSWORD → "********" khi đã set, "" khi chưa cấu hình.
@@ -143,6 +142,8 @@ export default function Settings() {
   const [smtpFromEmail, setSmtpFromEmail] = useState('');
   const [smtpFromName, setSmtpFromName] = useState('Medinet Wiki');
   const [smtpUseTls, setSmtpUseTls] = useState(true);
+  // Cho phép user xem password vừa nhập để xác nhận đã gõ đúng (UX feedback).
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
 
   // ─── MCP domain state (admin set chung cho cả deployment) ───
   // Mặc định suy từ host thật của app (MCP_URL); giá trị admin đã lưu trong
@@ -213,6 +214,30 @@ export default function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, ragEmbeddingProvider, ragEmbeddingModel, saveSuccess]);
 
+  // Apply settings từ API response (GET hoặc PUT) vào state.
+  // PUT trả về snapshot DB hiện tại — gọi helper này sau save để xác nhận
+  // server đã persist đúng giá trị. Boolean toggle dùng `!== undefined` để
+  // chắc chắn KHÔNG bỏ qua giá trị "false" (string "false" tuy truthy nhưng
+  // nhất quán cách so sánh tránh regress khi mở rộng).
+  const applySystemSettingsData = (data: Record<string, string>) => {
+    if (data.SYSTEM_NAME !== undefined)              setSystemName(data.SYSTEM_NAME);
+    if (data.SYSTEM_URL !== undefined)               setSystemUrl(data.SYSTEM_URL);
+    if (data.ADMIN_EMAIL !== undefined)              setAdminEmail(data.ADMIN_EMAIL);
+    if (data.SYSTEM_LANGUAGE !== undefined)          setSystemLanguage(data.SYSTEM_LANGUAGE);
+    if (data.SECURITY_2FA_ENABLED !== undefined)     setSecurity2FA(data.SECURITY_2FA_ENABLED === 'true');
+    if (data.SECURITY_SESSION_TIMEOUT !== undefined) setSecurityTimeout(data.SECURITY_SESSION_TIMEOUT);
+    if (data.NOTIFY_EMAIL_ENABLED !== undefined)     setNotifyEmail(data.NOTIFY_EMAIL_ENABLED === 'true');
+    if (data.MCP_PUBLIC_URL !== undefined)           setMcpPublicUrl(data.MCP_PUBLIC_URL);
+    // SMTP — load value plain + mask password (BE trả "********" nếu đã set, "" nếu chưa).
+    if (data.SMTP_HOST !== undefined)        setSmtpHost(data.SMTP_HOST);
+    if (data.SMTP_PORT !== undefined)        setSmtpPort(data.SMTP_PORT);
+    if (data.SMTP_USERNAME !== undefined)    setSmtpUsername(data.SMTP_USERNAME);
+    if (data.SMTP_PASSWORD !== undefined)    setSmtpPasswordMask(data.SMTP_PASSWORD);
+    if (data.SMTP_FROM_EMAIL !== undefined)  setSmtpFromEmail(data.SMTP_FROM_EMAIL);
+    if (data.SMTP_FROM_NAME !== undefined)   setSmtpFromName(data.SMTP_FROM_NAME);
+    if (data.SMTP_USE_TLS !== undefined)     setSmtpUseTls(data.SMTP_USE_TLS === 'true');
+  };
+
   // Load general / security / notification settings
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -223,23 +248,7 @@ export default function Settings() {
       .then(r => r.ok ? r.json() : null)
       .then((data: Record<string, string> | null) => {
         if (!data) return;
-        if (data.SYSTEM_NAME)              setSystemName(data.SYSTEM_NAME);
-        if (data.SYSTEM_URL)               setSystemUrl(data.SYSTEM_URL);
-        if (data.ADMIN_EMAIL)              setAdminEmail(data.ADMIN_EMAIL);
-        if (data.SYSTEM_LANGUAGE)          setSystemLanguage(data.SYSTEM_LANGUAGE);
-        if (data.SECURITY_2FA_ENABLED)     setSecurity2FA(data.SECURITY_2FA_ENABLED === 'true');
-        if (data.SECURITY_SESSION_TIMEOUT) setSecurityTimeout(data.SECURITY_SESSION_TIMEOUT);
-        if (data.NOTIFY_EMAIL_ENABLED)     setNotifyEmail(data.NOTIFY_EMAIL_ENABLED === 'true');
-        if (data.NOTIFY_TELEGRAM_ENABLED)  setNotifyTelegram(data.NOTIFY_TELEGRAM_ENABLED === 'true');
-        if (data.MCP_PUBLIC_URL)           setMcpPublicUrl(data.MCP_PUBLIC_URL);
-        // SMTP — load value plain + mask password (BE trả "********" nếu đã set, "" nếu chưa).
-        if (data.SMTP_HOST !== undefined)        setSmtpHost(data.SMTP_HOST);
-        if (data.SMTP_PORT)                      setSmtpPort(data.SMTP_PORT);
-        if (data.SMTP_USERNAME !== undefined)    setSmtpUsername(data.SMTP_USERNAME);
-        if (data.SMTP_PASSWORD !== undefined)    setSmtpPasswordMask(data.SMTP_PASSWORD);
-        if (data.SMTP_FROM_EMAIL !== undefined)  setSmtpFromEmail(data.SMTP_FROM_EMAIL);
-        if (data.SMTP_FROM_NAME)                 setSmtpFromName(data.SMTP_FROM_NAME);
-        if (data.SMTP_USE_TLS)                   setSmtpUseTls(data.SMTP_USE_TLS === 'true');
+        applySystemSettingsData(data);
       })
       .catch(() => {});
   }, []);
@@ -296,7 +305,6 @@ export default function Settings() {
         SECURITY_2FA_ENABLED:     String(security2FA),
         SECURITY_SESSION_TIMEOUT: securityTimeout,
         NOTIFY_EMAIL_ENABLED:     String(notifyEmail),
-        NOTIFY_TELEGRAM_ENABLED:  String(notifyTelegram),
         MCP_PUBLIC_URL:           mcpPublicUrl,
         // SMTP — password rỗng → BE preserve-on-empty giữ cũ; non-empty plain → ghi đè.
         SMTP_HOST:                smtpHost,
@@ -352,11 +360,20 @@ export default function Settings() {
       } else {
         // general / security / notifications all share the same system-settings endpoint
         res = await saveSystemSettings();
-        if (res.ok && smtpPassword) {
-          // Password vừa được ghi đè → refresh mask + clear plain + exit edit mode.
-          setSmtpPasswordMask('********');
-          setSmtpPassword('');
-          setEditingSmtpPassword(false);
+        if (res.ok) {
+          // PUT trả về snapshot settings hiện tại trong DB — apply lại để
+          // user thấy NGAY giá trị server đã persist (KHÔNG cần reload).
+          // Nếu toggle revert ở đây tức server fail persist thật sự.
+          try {
+            const data = await res.clone().json();
+            if (data && typeof data === 'object') applySystemSettingsData(data);
+          } catch { /* response không phải JSON — bỏ qua */ }
+          if (smtpPassword) {
+            // Password vừa được ghi đè → clear plain + exit edit mode + ẩn show.
+            setSmtpPassword('');
+            setEditingSmtpPassword(false);
+            setShowSmtpPassword(false);
+          }
         }
       }
       if (res.ok) {
@@ -615,13 +632,6 @@ export default function Settings() {
                         active: notifyEmail,
                         toggle: () => setNotifyEmail(v => !v),
                       },
-                      {
-                        label: 'Thông báo Telegram',
-                        desc: 'Gửi thông báo tức thời khi có lỗi Hub',
-                        icon: Smartphone,
-                        active: notifyTelegram,
-                        toggle: () => setNotifyTelegram(v => !v),
-                      },
                     ] as const).map((item, i) => (
                       <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
                         <div className="flex items-center gap-4">
@@ -711,7 +721,7 @@ export default function Settings() {
                         <div className="flex-1 min-w-0">
                           {editingSmtpPassword ? (
                             <input
-                              type="password"
+                              type={showSmtpPassword ? 'text' : 'password'}
                               autoFocus
                               value={smtpPassword}
                               onChange={e => setSmtpPassword(e.target.value)}
@@ -729,10 +739,20 @@ export default function Settings() {
                             </div>
                           )}
                         </div>
+                        {editingSmtpPassword && (
+                          <button
+                            type="button"
+                            onClick={() => setShowSmtpPassword(v => !v)}
+                            title={showSmtpPassword ? 'Ẩn password' : 'Hiện password để kiểm tra'}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
+                          >
+                            {showSmtpPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        )}
                         {editingSmtpPassword ? (
                           <button
                             type="button"
-                            onClick={() => { setEditingSmtpPassword(false); setSmtpPassword(''); }}
+                            onClick={() => { setEditingSmtpPassword(false); setSmtpPassword(''); setShowSmtpPassword(false); }}
                             title="Hủy"
                             className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
                           >
@@ -749,9 +769,28 @@ export default function Settings() {
                           </button>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Để trống khi lưu sẽ <strong>giữ password cũ</strong>.
-                      </p>
+                      {/* Trạng thái input — feedback rõ cho user biết đã gõ chưa.
+                          Khi đang edit: hiển thị số ký tự đã nhập + gợi ý.
+                          Khi không edit: vẫn giữ hint preserve-on-empty. */}
+                      {editingSmtpPassword ? (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                          {smtpPassword ? (
+                            <>
+                              <Check size={12} className="text-success" />
+                              <span className="text-success font-medium">
+                                Đã nhập {smtpPassword.length} ký tự
+                              </span>
+                              <span className="text-slate-400">— bấm Lưu thay đổi để cập nhật.</span>
+                            </>
+                          ) : (
+                            <span className="italic">Chưa nhập ký tự nào — để trống khi lưu sẽ giữ password cũ.</span>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Để trống khi lưu sẽ <strong>giữ password cũ</strong>.
+                        </p>
+                      )}
                     </div>
                     {/* SMTP from email */}
                     <div className="space-y-2">
