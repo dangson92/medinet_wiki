@@ -107,7 +107,7 @@ hub-init:
 
 hub-add:
 	@if [ -z "$(HUB)" ]; then echo "Usage: make hub-add HUB=<name> [PORT=<port>]"; exit 2; fi
-	@bash Hub_All/api/scripts/hub-add.sh $(HUB) $(PORT)
+	$(MAKE) -C api hub-add HUB=$(HUB) PORT=$(PORT)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Phase 9 Eval Framework (EVAL-02 + EVAL-04)
