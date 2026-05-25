@@ -511,6 +511,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: C901 — init 
                 central_url=settings.central_url,
                 redis=app.state.redis,
                 hub_name=settings.hub_name,
+                internal_auth_secret=settings.settings_proxy_secret,
                 ttl=settings.settings_cache_ttl_hub_registry,
             )
             apikey_client = ApiKeyVerifyClient(

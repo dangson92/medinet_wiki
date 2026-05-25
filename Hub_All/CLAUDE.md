@@ -583,6 +583,38 @@ Reference: `.planning/phases/02-hub-con-codebase-factor/02-05-PLAN.md`.
 - `/gsd-new-milestone v4.0` — fresh milestone start skip archive (defer archive future cleanup).
 - `git push origin v3.1` — manual push tag annotated cho remote reference (Plan 04-03 chỉ tag local).
 
+### Hot-fix 2026-05-25 — Phase 6 HubRegistryClient X-Internal-Auth (post-v3.1)
+
+Sau v3.1 SHIPPED, deploy thật trên VPS phát hiện **Phase 6 design gap** (memory `project_phase6_internal_auth_gap`): `HubRegistryClient.fetch_initial()` ([client.py:238](api/app/settings_sync/client.py#L238)) gọi `GET /api/hubs` KHÔNG header auth → central trả 401 (endpoint cũ yêu cầu JWT/X-API-Key) → hub-con boot fail-loud → uvicorn exit 1 → upload tài liệu downstream fail.
+
+Phase 6 chỉ thêm `X-Internal-Auth` cho `ApiKeyVerifyClient` (`/api/api-keys/verify`), QUÊN cho `HubRegistryClient`. Phase 6 test bằng in-process asgi_lifespan với escape hatch `SETTINGS_SKIP_FETCH=1` nên runtime fetch_initial KHÔNG chạy → bug không lộ. Chỉ runtime live HTTP cross-container production mới hit.
+
+**Fix scope (4 file change):**
+- [api/app/settings_sync/client.py](api/app/settings_sync/client.py) — `HubRegistryClient.__init__` thêm `internal_auth_secret: str` required + `_fetch_and_cache` gửi header `X-Internal-Auth` + endpoint đổi `/api/hubs` → `/api/hubs/_internal` + defensive unwrap envelope `{success, data: [...]}` shape.
+- [api/app/routers/hubs.py](api/app/routers/hubs.py) — thêm endpoint `GET /api/hubs/_internal` gate qua `require_internal_auth` (Plan 06-03 pattern carry forward) + trả raw `list[dict]` (KHÔNG envelope) cho client consumer parse trực tiếp + `include_in_schema=False` ẩn khỏi OpenAPI + đặt TRƯỚC `/{hub_id}` GET (route order ưu tiên static path).
+- [api/app/main.py](api/app/main.py) — lifespan instantiate `HubRegistryClient` pass `internal_auth_secret=settings.settings_proxy_secret` (đã có sẵn từ Plan 06-04, KHÔNG đụng Settings).
+- `RagConfigClient` KHÔNG cần fix — `GET /api/rag-config` đã PUBLIC (router KHÔNG có auth dep) → fetch_initial PASS.
+
+**Test coverage (8 test ship):**
+- `tests/unit/test_settings_sync_client.py` — 3 test cũ HubRegistryClient updated với `internal_auth_secret` constructor param + 2 test mới: `test_hub_registry_client_fetch_initial_sends_x_internal_auth_header` (verify endpoint `/api/hubs/_internal` + header sent) + `test_hub_registry_client_unwraps_envelope_data_field` (defensive unwrap M2 envelope shape). 13/13 PASS.
+- `tests/integration/test_hubs_internal_endpoint.py` MỚI — 3 case: header đúng → 200 raw list / header sai → 401 INTERNAL_AUTH_FAIL envelope / thiếu header → 401 (KHÔNG fallback JWT). 3/3 PASS testcontainers in-process.
+- Regression: 6/6 `test_settings_sync_lifespan_integration.py` + 3/3 `test_dep_hubs_scope.py` PASS — KHÔNG break Phase 6 lifespan + Phase 2 RBAC scope.
+
+**Operator action (VPS deploy):**
+1. `git pull origin main` để lấy hot-fix commit.
+2. `docker compose build python-api-dmd python-api-tdt` rebuild image với code mới.
+3. Nếu trước đó đã đặt `SETTINGS_SKIP_FETCH=1` ở `api/.env` workaround → BỎ dòng đó (hết cần thiết).
+4. `docker compose up -d --force-recreate python-api-dmd python-api-tdt` recreate container.
+5. Verify `docker logs medinet-api-dmd 2>&1 | grep -i settings_sync_ready` → expected `lifespan_settings_sync_ready: hub=dmd`.
+
+[SETUP_VPS.md](SETUP_VPS.md) update Step 8 thêm gap 12 (file_store chown) + Step 15 thêm gap 13 (verify API key) + gap 14 hot-fix note.
+
+**Decision (post-v3.1 hot-fix vs phase mới):** Ship direct commit vào main, document trong CLAUDE.md §6 + memory `phase6-internal-auth-gap`. Lý do: scope nhỏ (4 file + 8 test), urgent (production deploy block), KHÔNG cần full GSD ceremony cho 1 bug fix narrow scope. v3.1 milestone vẫn CLOSED 2026-05-24 (KHÔNG re-open) — hot-fix log riêng trong CLAUDE.md.
+
+---
+
+*Cập nhật: 2026-05-25 (Hot-fix Phase 6 HubRegistryClient X-Internal-Auth — fix VPS upload 500 chain bug 2/3 sau v3.1 SHIPPED; bug 1 file_store chown + bug 3 cocoindex zero chunks fixed qua SETUP_VPS.md gap 12+13. 4 file change + 8 test ship + 12 regression PASS. Memory `project_vps_upload_500_debug` + `project_phase6_internal_auth_gap` + `feedback_surface_error_message` document chi tiết.)*
+
 ---
 
 *Cập nhật: 2026-05-24 (v3.1 Phase 4 DONE — MIGRATE-01..02 ship 3 plan; api/Makefile 2 target mới test-integration + test-migration + Plan 04-01 migration verify deferred do pre-existing test infra debt outside MIGRATE-01 scope + smoke E2E test mới test_smoke_e2e_v3_1_rbac.py 4 scenario PASS clean in 19.86s + audit forensic chain payload->>'actor_role' + payload->>'actor_hub_id' verified runtime + closeout 4 docs atomic + git tag annotated v3.1 local. **🎉 v3.1 MILESTONE CLOSED 2026-05-24** — 4 phase / 15 REQ-ID / 15 plan ship · ROLE/DEP/FE/MIGRATE · proper fix bug user gán hub_admin vẫn vào central (memory project_rbac_hub_admin_gap). Project: MEDWIKI. v3.0 MILESTONE CLOSED 2026-05-23 (38/38 plan · 30/30 REQ-ID). M2 v2.0 closeout 2026-05-21 archived. Next: /gsd-complete-milestone v3.1 (archive .planning/milestones/v3.1-rbac-hub-admin-archive/) hoặc /gsd-new-milestone v4.0 (Production Hardening + Advanced RAG backlog per project_v3_multi_hub_split seed + HA Redis cluster + OCR Vietnamese + streaming /api/ask SSE + coverage >80% + per-resource ACL granular).*

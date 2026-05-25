@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import get_api_key_or_jwt, require_role
+from app.auth.dependencies import get_api_key_or_jwt, require_internal_auth, require_role
 from app.db.session import get_session
 from app.models.auth import User, UserHub
 from app.pkg import response as resp
@@ -119,6 +119,30 @@ async def list_hubs(
         per_page=capped_per_page,
         total=total,
     )
+
+
+@router.get("/_internal", include_in_schema=False)
+async def list_hubs_internal(
+    _: None = Depends(require_internal_auth),  # noqa: B008
+    service: HubService = Depends(get_hub_service),  # noqa: B008
+) -> list[dict]:
+    """Hot-fix 2026-05-25 — internal endpoint cho HubRegistryClient hub-con boot.
+
+    Phase 6 Plan 06-02 ship `HubRegistryClient.fetch_initial()` gọi `/api/hubs`
+    KHÔNG header auth → central trả 401 (endpoint cũ yêu cầu JWT/X-API-Key) →
+    hub-con boot fail-loud (memory `project_phase6_internal_auth_gap`).
+
+    Endpoint mới gate qua `require_internal_auth` (header `X-Internal-Auth:
+    <settings_proxy_secret>` constant-time compare — Plan 06-03 pattern). Trả
+    raw list (KHÔNG envelope) cho client consumer parse trực tiếp. Mount path
+    `/_internal` đặt TRƯỚC `/{hub_id}` GET (route order ưu tiên static path).
+    `include_in_schema=False` ẩn khỏi /docs OpenAPI (KHÔNG public-facing).
+
+    Trả TẤT CẢ hub (page=1, per_page=1000) vì hub_registry cache singleton ở
+    hub-con KHÔNG paginate (D-V3-Phase6-B LOCKED — rare-change config).
+    """
+    items, _total = await service.list(page=1, per_page=1000)
+    return [i.model_dump(mode="json") for i in items]
 
 
 @router.post("")

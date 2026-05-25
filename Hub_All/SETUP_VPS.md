@@ -249,6 +249,15 @@ cd ..
 chown 1000:1000 api/keys/private.pem api/keys/public.pem
 ls -la api/keys/                       # owner phải là 1000 (hoặc tên user host trùng uid)
 
+# GAP 12 (fix 2026-05-25 chiều) — tạo + chown file_store TRƯỚC khi docker compose up.
+# Docker bind-mount `./file_store:/file_store` (docker-compose.yml line 34) tạo
+# dir owner root:root nếu chưa tồn tại → container apiuser uid=1000 KHÔNG write
+# được → upload tài liệu trả 500 "Lỗi máy chủ nội bộ" (PermissionError ở
+# api/app/services/file_store.py::FileStore.save line 48).
+mkdir -p file_store
+chown 1000:1000 file_store
+ls -la file_store/                     # owner phải là 1000
+
 # BACKUP api/keys/private.pem offline NGAY (mất file = invalidate toàn bộ refresh token)
 scp api/keys/private.pem <user>@<local-machine>:~/backup/medinet-jwt-private.pem
 ```
@@ -420,6 +429,17 @@ grep -E '^(HUB_.*_ID|CHECKSUM_HUB_DSNS_JSON)=' .env
 ## Step 15 — Boot 2 hub con + MCP + Caddy
 
 ```bash
+# GAP 13 (fix 2026-05-25 chiều) — VERIFY 2 API key đã paste, KHÔNG còn placeholder.
+# Nếu vẫn `sk-CHANGE-ME-PASTE-PAID-KEY` → cocoindex pipeline ingest sẽ trả 0 chunks
+# silent fail → upload tài liệu hiện status "Lỗi - Không rõ nguyên nhân" trong UI
+# (frontend chưa surface documents.error_message — memory project_vps_upload_500_debug).
+grep -E '^(OPENAI_API_KEY|GEMINI_API_KEY)=' api/.env
+# Expected: KHÔNG có dòng nào chứa "CHANGE-ME". Nếu thấy → quay lại Step 7 paste key thật.
+if grep -q "CHANGE-ME" api/.env; then
+  echo "❌ FATAL: api/.env vẫn còn placeholder CHANGE-ME — paste key thật TRƯỚC khi boot hub-con!"
+  exit 1
+fi
+
 # Restart central pickup CHECKSUM_HUB_DSNS_JSON
 docker compose up -d --force-recreate python-api-central
 
@@ -431,6 +451,8 @@ docker compose up -d mcp_service caddy
 
 docker compose ps       # tất cả service healthy
 ```
+
+> **Gap 14 (hot-fix 2026-05-25)** — Trước hot-fix `HubRegistryClient` (commit cùng ngày), hub-con boot fail-loud 401 vì gọi `GET /api/hubs` không header auth. Pulled latest code đã có endpoint `/api/hubs/_internal` + X-Internal-Auth header tự động → KHÔNG cần workaround `SETTINGS_SKIP_FETCH=1`. Nếu vẫn 401 ở log hub-con (`hub_registry_client_fetch_initial_failed`), kiểm tra: (1) `git log --oneline -5` xem có commit hot-fix chưa; (2) `docker compose build python-api-dmd python-api-tdt` rebuild image với code mới.
 
 ---
 
@@ -547,3 +569,4 @@ chmod +x /etc/cron.daily/medinet-backup
 
 *Quick setup cho v3.1 SHIPPED 2026-05-24. Chạy bằng user root VPS.*
 *Cập nhật 2026-05-25 (fix 5 gap deploy thật trên VPS): CHECKSUM_HUB_DSNS_JSON bootstrap `{}` (Step 6) + verify CORS_ALLOWED_ORIGINS prod (Step 7) + Makefile target `keys` + chown 1000:1000 JWT keys (Step 8) + migrate medinet_central trước Step 14 (Step 11.3 mới) + sed bỏ single quote wrap CHECKSUM JSON (Step 14).*
+*Cập nhật 2026-05-25 chiều (fix 3 gap upload tài liệu thất bại): GAP 12 mkdir+chown 1000:1000 file_store (Step 8 — fix 500 PermissionError) + GAP 13 verify OPENAI/GEMINI key TRƯỚC boot hub-con (Step 15 — fix cocoindex zero chunks silent fail) + GAP 14 hot-fix `/api/hubs/_internal` X-Internal-Auth header (Step 15 note — fix HubRegistryClient 401 boot fail-loud).*

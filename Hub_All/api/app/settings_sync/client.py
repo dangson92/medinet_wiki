@@ -179,6 +179,12 @@ class HubRegistryClient:
     Singleton cache key `settings:hub_registry` (HUB_REGISTRY_KEY Plan 06-01)
     — KHÔNG per-hub vì hub_registry là global config (operator add hub qua
     `make hub-add` rare-change). TTL 300s (5 phút) D-V3-Phase6-B LOCKED.
+
+    Hot-fix 2026-05-25: gửi header `X-Internal-Auth: <settings_proxy_secret>`
+    để central authenticate request internal (Plan 06-03 pattern). Trước hot-fix,
+    HubRegistryClient gọi `GET /api/hubs` KHÔNG header → central trả 401 (endpoint
+    yêu cầu JWT/X-API-Key) → hub-con boot fail-loud. Central /api/hubs giờ accept
+    X-Internal-Auth alternative qua dep `get_internal_auth_or_jwt_or_apikey`.
     """
 
     def __init__(
@@ -187,14 +193,20 @@ class HubRegistryClient:
         central_url: str,
         redis: Any,
         hub_name: str,
+        internal_auth_secret: str,
         ttl: int = 300,
     ) -> None:
         self._central_url = central_url.rstrip("/")
         self._redis = redis
         self._hub_name = hub_name
+        self._internal_auth_secret = internal_auth_secret
         self._ttl = ttl
         self._cache_key = HUB_REGISTRY_KEY  # singleton, KHÔNG per-hub
-        self._endpoint = "/api/hubs"
+        # Hot-fix 2026-05-25: dùng endpoint internal-only `/api/hubs/_internal`
+        # (Plan 06-03 pattern). Endpoint cũ `/api/hubs` yêu cầu JWT/X-API-Key →
+        # hub-con boot fail-loud 401. Internal endpoint gate qua require_internal_auth
+        # + trả raw list (KHÔNG envelope unwrap cần thiết — defensive vẫn handle).
+        self._endpoint = "/api/hubs/_internal"
 
     async def fetch_initial(self) -> None:
         """Blocking fetch — raise SettingsUnavailableError on fail (boot fail-loud)."""
@@ -234,10 +246,17 @@ class HubRegistryClient:
         self, *, timeout: httpx.Timeout
     ) -> list[dict[str, Any]]:
         start = time.monotonic()
+        # Hot-fix 2026-05-25: gửi X-Internal-Auth header để central authenticate.
+        # /api/hubs trả envelope `{success, data: [items], meta}` (resp.paginated)
+        # — unwrap `data` field; fallback raw nếu shape khác (legacy/test mock).
+        headers = {"X-Internal-Auth": self._internal_auth_secret}
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(f"{self._central_url}{self._endpoint}")
+            resp = await client.get(
+                f"{self._central_url}{self._endpoint}", headers=headers
+            )
             resp.raise_for_status()
-            data = resp.json()
+            raw = resp.json()
+        data = raw["data"] if isinstance(raw, dict) and "data" in raw else raw
         latency = time.monotonic() - start
         SETTINGS_PULL_LATENCY_SECONDS.labels(
             hub_name=self._hub_name, endpoint=self._endpoint

@@ -203,6 +203,7 @@ async def test_hub_registry_client_fetch_initial_happy_singleton_key() -> None:
         central_url="http://central:8080",
         redis=redis,
         hub_name="yte",
+        internal_auth_secret="test-secret-32-char-min-padding-padding",
         ttl=300,
     )
     with patch("app.settings_sync.client.httpx.AsyncClient") as mock_cls:
@@ -227,6 +228,7 @@ async def test_hub_registry_client_list_hubs_cache_hit_returns_parsed_list() -> 
         central_url="http://central:8080",
         redis=redis,
         hub_name="yte",
+        internal_auth_secret="test-secret-32-char-min-padding-padding",
     )
     with patch("app.settings_sync.client.httpx.AsyncClient") as mock_cls:
         result = await client.list_hubs()
@@ -243,6 +245,7 @@ async def test_hub_registry_client_fetch_initial_401_raises_settings_unavailable
         central_url="http://central:8080",
         redis=redis,
         hub_name="yte",
+        internal_auth_secret="test-secret-32-char-min-padding-padding",
     )
     with patch("app.settings_sync.client.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value = _make_mock_httpx_get(
@@ -250,6 +253,58 @@ async def test_hub_registry_client_fetch_initial_401_raises_settings_unavailable
         )
         with pytest.raises(SettingsUnavailableError):
             await client.fetch_initial()
+
+
+async def test_hub_registry_client_fetch_initial_sends_x_internal_auth_header() -> None:
+    """Hot-fix 2026-05-25 — fetch_initial gửi X-Internal-Auth header + endpoint _internal."""
+    from app.settings_sync.client import HubRegistryClient
+
+    secret = "hot-fix-secret-2026-05-25-padding-padding"
+    redis = _make_mock_redis()
+    client = HubRegistryClient(
+        central_url="http://central:8080",
+        redis=redis,
+        hub_name="dmd",
+        internal_auth_secret=secret,
+    )
+    with patch("app.settings_sync.client.httpx.AsyncClient") as mock_cls:
+        mock_client = _make_mock_httpx_get([])
+        mock_cls.return_value = mock_client
+        await client.fetch_initial()
+    # Verify endpoint path là /api/hubs/_internal (KHÔNG /api/hubs cũ)
+    call_args = mock_client.get.call_args
+    url = call_args.args[0]
+    assert url == "http://central:8080/api/hubs/_internal", (
+        f"Hot-fix: endpoint phải là /api/hubs/_internal, got {url!r}"
+    )
+    # Verify X-Internal-Auth header gửi đúng secret
+    headers = call_args.kwargs.get("headers", {})
+    assert headers.get("X-Internal-Auth") == secret, (
+        f"Hot-fix: header X-Internal-Auth phải = secret, got {headers!r}"
+    )
+
+
+async def test_hub_registry_client_unwraps_envelope_data_field() -> None:
+    """Hot-fix 2026-05-25 — defensive unwrap envelope `{success, data: [...]}` shape."""
+    from app.settings_sync.client import HubRegistryClient
+
+    hubs_list = [{"id": "u-1", "name": "dmd"}, {"id": "u-2", "name": "tdt"}]
+    envelope = {"success": True, "data": hubs_list, "meta": {"total": 2}}
+    redis = _make_mock_redis()
+    client = HubRegistryClient(
+        central_url="http://central:8080",
+        redis=redis,
+        hub_name="dmd",
+        internal_auth_secret="test-secret-32-char-min-padding-padding",
+    )
+    with patch("app.settings_sync.client.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value = _make_mock_httpx_get(envelope)
+        await client.fetch_initial()
+    # Cache phải lưu list (unwrap data field), KHÔNG nguyên envelope dict
+    cached = json.loads(redis.setex.call_args.args[2])
+    assert cached == hubs_list, (
+        f"Hot-fix: phải unwrap envelope.data, got cached={cached!r}"
+    )
 
 
 # ────────────────────────────────────────────────────────────────────
