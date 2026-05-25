@@ -63,13 +63,38 @@ _SENSITIVE_KEYS = frozenset({"SMTP_PASSWORD"})
 
 
 def _parse_jsonb(raw: Any) -> Any:
-    """Raw JSONB column (text() query trả JSON string) → Python value."""
+    """Raw JSONB column → Python value.
+
+    asyncpg codec JSONB mặc định đã parse sẵn (JSONB string `"true"` → Python
+    str `'true'`). Nhưng phòng trường hợp driver/codec trả raw JSON text
+    (`'"true"'`), ta thử `json.loads` MỘT lần — và CHỈ accept kết quả nếu
+    nó vẫn là str/dict/list (giữ nguyên semantic). KHÔNG accept primitive
+    bool/int/None (over-parse bug: JSON literal `true` → Python `True` →
+    `str(True)` = `'True'` chữ hoa, frontend compare `=== 'true'` fail →
+    toggle reset OFF sau khi save).
+    """
     if isinstance(raw, str):
         try:
-            return json.loads(raw)
+            parsed = json.loads(raw)
+            if isinstance(parsed, (str, dict, list)):
+                return parsed
         except (ValueError, TypeError):
-            return raw
+            pass
     return raw
+
+
+def _coerce_to_str(value: Any) -> str:
+    """Normalize JSONB value → string for frontend.
+
+    Cẩn thận với bool: `str(True)` = `'True'` (chữ hoa) nhưng frontend lưu/đọc
+    lowercase `'true'`/`'false'`. KHÔNG để asymmetry này lọt ra GET response —
+    nguyên nhân bug toggle revert sau khi save (2026-05-25).
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
 
 
 class SystemSettingsService:
@@ -85,7 +110,7 @@ class SystemSettingsService:
         ).fetchall()
         stored = {row[0]: _parse_jsonb(row[1]) for row in rows}
         return {
-            key: str(stored.get(key, default))
+            key: _coerce_to_str(stored.get(key, default))
             for key, default in _DEFAULTS.items()
         }
 
