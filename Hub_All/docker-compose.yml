@@ -38,6 +38,18 @@ x-api-template: &api-template
       condition: service_healthy
     redis:
       condition: service_healthy
+  # Override HEALTHCHECK trong api/Dockerfile (start_period=15s/retries=3 → ~45s
+  # mark unhealthy) — central cần ~50-60s để boot xong (Alembic upgrade head +
+  # cocoindex SETUP + lifespan init central_sync_pool + JWKS publish + checksum
+  # scheduler). 2026-05-25 rebuild thấy compose timeout ở 52.3s vì mcp_service
+  # depends_on python-api-central condition: service_healthy. Nới start_period
+  # 90s + retries 5 đủ margin cho slow VPS + container restart.
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+    interval: 10s
+    timeout: 5s
+    start_period: 90s
+    retries: 5
   networks: [medinet_net]
 
 services:
