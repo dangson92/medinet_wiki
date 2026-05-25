@@ -60,7 +60,16 @@ class Settings(BaseSettings):
     # MCP gửi `Authorization: Bearer <oauth_internal_token>`; API verify match
     # env `MCP_INTERNAL_TOKEN`. Rỗng = tắt fallback API → pre-registered client
     # không hoạt động (chỉ còn DCR), bind cứng cũng bị skip.
-    oauth_internal_token: str = ""
+    #
+    # `validation_alias` ép pydantic-settings đọc đúng env `MCP_INTERNAL_TOKEN`
+    # thay vì auto-derive từ `env_prefix=MCP_` + field name (sẽ ra
+    # `MCP_OAUTH_INTERNAL_TOKEN` — lệch với env phía API service + SETUP_VPS.md
+    # + mcp_service/.env.example). Cùng tên env hai chiều giúp operator chỉ
+    # cần set 1 biến cho cả 2 container (xem docker-compose.yml).
+    oauth_internal_token: str = Field(
+        default="",
+        validation_alias="MCP_INTERNAL_TOKEN",
+    )
 
     # Path prefix khi deploy MCP dưới cùng domain với app khác (vd reverse
     # proxy `wiki.example.com/mcp/*` → MCP service). Rỗng = deploy ở
