@@ -117,9 +117,14 @@ export default function Settings() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // ─── General settings state ───
+  // Default placeholder derive từ host runtime (Phase 5 PROXY-02 pattern) — BE
+  // `_build_defaults()` đọc env `WIKI_PUBLIC_DOMAIN` cũng dùng cùng domain.
+  // useEffect bên dưới sẽ overwrite từ DB value khi GET /api/system-settings về.
+  // KHÔNG fallback hardcode domain (Vite SPA luôn chạy browser).
+  const _defaultHost = window.location.hostname;
   const [systemName, setSystemName] = useState('Medinet Wiki');
-  const [systemUrl, setSystemUrl] = useState('https://wiki.medinet.vn');
-  const [adminEmail, setAdminEmail] = useState('admin@medinet.vn');
+  const [systemUrl, setSystemUrl] = useState(`https://${_defaultHost}`);
+  const [adminEmail, setAdminEmail] = useState(`admin@${_defaultHost}`);
   const [systemLanguage, setSystemLanguage] = useState('vi');
 
   // ─── Security settings state ───
@@ -765,7 +770,7 @@ export default function Settings() {
                         type="text"
                         value={smtpUsername}
                         onChange={e => setSmtpUsername(e.target.value)}
-                        placeholder="no-reply@medinet.vn"
+                        placeholder={`no-reply@${_defaultHost}`}
                         className="input-field w-full font-mono text-sm"
                         autoComplete="off"
                         spellCheck={false}
@@ -856,7 +861,7 @@ export default function Settings() {
                         type="email"
                         value={smtpFromEmail}
                         onChange={e => setSmtpFromEmail(e.target.value)}
-                        placeholder="no-reply@medinet.vn"
+                        placeholder={`no-reply@${_defaultHost}`}
                         className="input-field w-full font-mono text-sm"
                         spellCheck={false}
                       />

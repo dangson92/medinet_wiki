@@ -68,11 +68,11 @@ function HubSwitcher() {
   if (isLoading || hubsLoading) {
     return (
       <div
-        className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50"
+        className="px-3 py-2 border-b border-slate-200/50 dark:border-slate-700/50"
         aria-busy="true"
         aria-label="Đang tải danh sách hub"
       >
-        <div className="h-9 w-full rounded-md bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        <div className="h-8 w-full rounded-md bg-slate-200 dark:bg-slate-800 animate-pulse" />
       </div>
     );
   }
@@ -82,7 +82,7 @@ function HubSwitcher() {
       <div
         role="status"
         aria-live="polite"
-        className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50 text-sm text-slate-500 italic"
+        className="px-3 py-2 border-b border-slate-200/50 dark:border-slate-700/50 text-xs text-slate-500 italic"
       >
         Bạn chưa được gán hub nào — liên hệ admin.
       </div>
@@ -90,26 +90,30 @@ function HubSwitcher() {
   }
 
   return (
-    <div className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50">
-      <label
-        htmlFor="hub-switcher"
-        className="block text-xs uppercase text-slate-500 font-medium mb-1"
-      >
-        Hub đang xem:
+    <div className="px-3 py-2 border-b border-slate-200/50 dark:border-slate-700/50">
+      <label htmlFor="hub-switcher" className="sr-only">
+        Hub đang xem
       </label>
-      <select
-        id="hub-switcher"
-        value={CURRENT_HUB}
-        onChange={(e) => { window.location.href = `/${e.target.value}/`; }}
-        aria-label="Chọn hub đang xem"
-        className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent"
-      >
-        {visibleHubs.map((h) => (
-          <option key={h.code} value={h.code}>
-            {h.name} ({h.code})
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <Database
+          size={14}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+          aria-hidden="true"
+        />
+        <select
+          id="hub-switcher"
+          value={CURRENT_HUB}
+          onChange={(e) => { window.location.href = `/${e.target.value}/`; }}
+          aria-label="Chọn hub đang xem"
+          className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-2 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+        >
+          {visibleHubs.map((h) => (
+            <option key={h.code} value={h.code}>
+              {h.name}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

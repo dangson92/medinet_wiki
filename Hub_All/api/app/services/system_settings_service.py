@@ -27,6 +27,8 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 # Mask hiển thị thay password thật khi GET — frontend dùng mask này để biết
@@ -34,29 +36,40 @@ logger = logging.getLogger(__name__)
 # leak length password thật.
 _PASSWORD_MASK = "********"
 
+
+def _build_defaults() -> dict[str, str]:
+    """Build default settings runtime — domain derive từ env `WIKI_PUBLIC_DOMAIN`.
+
+    Tách thành function (KHÔNG module-level const) để mỗi lần get_settings()
+    đọc lại env hiện tại — operator đổi `WIKI_PUBLIC_DOMAIN` rồi restart container
+    là defaults cập nhật, KHÔNG cần redeploy code.
+    """
+    domain = get_settings().wiki_public_domain
+    return {
+        "SYSTEM_NAME": "Medinet Wiki",
+        "SYSTEM_URL": f"https://{domain}",
+        "ADMIN_EMAIL": f"admin@{domain}",
+        "SYSTEM_LANGUAGE": "vi",
+        "SECURITY_2FA_ENABLED": "false",
+        "SECURITY_SESSION_TIMEOUT": "30",
+        "NOTIFY_EMAIL_ENABLED": "true",
+        "NOTIFY_TELEGRAM_ENABLED": "false",
+        # Rỗng = chưa cấu hình → frontend tự suy domain từ host thật của app.
+        "MCP_PUBLIC_URL": "",
+        # SMTP — rỗng = chưa cấu hình (frontend hiển thị placeholder + disable test).
+        "SMTP_HOST": "",
+        "SMTP_PORT": "587",
+        "SMTP_USERNAME": "",
+        "SMTP_PASSWORD": "",
+        "SMTP_FROM_EMAIL": "",
+        "SMTP_FROM_NAME": "Medinet Wiki",
+        "SMTP_USE_TLS": "true",
+    }
+
+
 # Whitelist key cho phép — chặn admin ghi đè key RAG_*/LLM_* qua endpoint này.
-# Default khớp state khởi tạo trong Settings.tsx (giá trị hiển thị khi DB rỗng).
-_DEFAULTS: dict[str, str] = {
-    "SYSTEM_NAME": "Medinet Wiki",
-    "SYSTEM_URL": "https://wiki.medinet.vn",
-    "ADMIN_EMAIL": "admin@medinet.vn",
-    "SYSTEM_LANGUAGE": "vi",
-    "SECURITY_2FA_ENABLED": "false",
-    "SECURITY_SESSION_TIMEOUT": "30",
-    "NOTIFY_EMAIL_ENABLED": "true",
-    "NOTIFY_TELEGRAM_ENABLED": "false",
-    # Rỗng = chưa cấu hình → frontend tự suy domain từ host thật của app.
-    "MCP_PUBLIC_URL": "",
-    # SMTP — rỗng = chưa cấu hình (frontend hiển thị placeholder + disable test).
-    "SMTP_HOST": "",
-    "SMTP_PORT": "587",
-    "SMTP_USERNAME": "",
-    "SMTP_PASSWORD": "",
-    "SMTP_FROM_EMAIL": "",
-    "SMTP_FROM_NAME": "Medinet Wiki",
-    "SMTP_USE_TLS": "true",
-}
-_ALLOWED_KEYS = frozenset(_DEFAULTS)
+# Key list static (KHÔNG phụ thuộc env), value defaults build runtime ở _build_defaults().
+_ALLOWED_KEYS = frozenset(_build_defaults())
 
 # Key chứa secret — GET trả mask thay plain text; PUT "" = giữ cũ.
 _SENSITIVE_KEYS = frozenset({"SMTP_PASSWORD"})
@@ -109,9 +122,10 @@ class SystemSettingsService:
             await self.db.execute(text("SELECT key, value FROM settings"))
         ).fetchall()
         stored = {row[0]: _parse_jsonb(row[1]) for row in rows}
+        defaults = _build_defaults()
         return {
             key: _coerce_to_str(stored.get(key, default))
-            for key, default in _DEFAULTS.items()
+            for key, default in defaults.items()
         }
 
     async def get_settings(self) -> dict[str, str]:

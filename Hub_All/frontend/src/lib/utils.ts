@@ -6,9 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getHubUrl(code: string | undefined | null): string {
-  const host = typeof window !== 'undefined' && window.location?.host
-    ? window.location.host
-    : 'wiki.medinet.vn';
+  // Host runtime từ window.location — Vite SPA luôn chạy browser, vitest jsdom
+  // cũng cung cấp window.location. KHÔNG fallback hardcode domain.
+  const host = window.location.host;
   if (!code) return host;
   return code === 'central' ? host : `${host}/${code}`;
 }

@@ -144,6 +144,12 @@ class Settings(BaseSettings):
     #   CENTRAL_URL=http://python-api-central:8080
     central_url: str | None = None
 
+    # Domain public của hệ thống — match `.env WIKI_PUBLIC_DOMAIN` (Caddy auto-TLS).
+    # Dev local default `localhost`; prod set `wiki.<domain-thật>` qua env.
+    # System settings service dùng giá trị này để build default `SYSTEM_URL` +
+    # `ADMIN_EMAIL` khi DB rỗng — KHÔNG hardcode domain trong code.
+    wiki_public_domain: str = "localhost"
+
     # ──────────────────────────────────────────────────────────────────────
     # Phase 4 Plan 04-02 — Cross-hub Data Sync config (SYNC-01/03/04)
     # ──────────────────────────────────────────────────────────────────────

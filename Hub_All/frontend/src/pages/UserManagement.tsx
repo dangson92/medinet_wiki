@@ -916,7 +916,7 @@ const UserManagement = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Email</label>
-                  <input type="email" placeholder="nva@medinet.vn" className="input-field w-full" value={newUserEmail} onChange={e => { setNewUserEmail(e.target.value); setAddError(null); }} />
+                  <input type="email" placeholder={`nva@${window.location.hostname}`} className="input-field w-full" value={newUserEmail} onChange={e => { setNewUserEmail(e.target.value); setAddError(null); }} />
                 </div>
                 {/* Plan 03-02 v3.1 Phase 3 FE-01 — Form 3 option radio + warning banner conditional */}
                 {/* Source: .planning/phases/03-frontend-form-refactor/03-UI-SPEC.md §6.1 + §7.1 + §8.1 */}
