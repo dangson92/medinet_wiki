@@ -361,13 +361,16 @@ docker compose exec postgres psql -U medinet -l
 ## Step 13 — Sinh `docker-compose.override.yml` cho 2 hub thật
 
 ```bash
-make hub-add HUB=dmd PORT=8181
-make hub-add HUB=tdt PORT=8182
+# Auto-detect port: hub-add.sh scan max port hiện hữu trong base + override + 1.
+# Base đã chiếm 8180 (central) + 8181/8182/8183 (ghost yte/duoc/hcns) → auto = 8184, 8185.
+# KHÔNG truyền PORT=8181/8182 (conflict với ghost yte/duoc — script reject).
+bash api/scripts/hub-add.sh dmd        # auto → 8184
+bash api/scripts/hub-add.sh tdt        # auto → 8185
 
 docker compose config --quiet           # phải PASS (không error YAML)
 ```
 
-> Base `docker-compose.yml` vẫn pin 3 service ghost `yte/duoc/hcns` — KHÔNG boot chúng ở Step 15 (chỉ chọn lọc service `python-api-dmd` + `python-api-tdt`).
+> Base `docker-compose.yml` vẫn pin 3 service ghost `yte/duoc/hcns` (port 8181-8183) — KHÔNG boot chúng ở Step 15 (chỉ chọn lọc service `python-api-dmd` + `python-api-tdt` port 8184/8185).
 
 ---
 
@@ -439,9 +442,9 @@ docker compose logs -f caddy
 # Ctrl+C khi thấy
 
 # Verify HTTPS
-curl -I https://wiki.medinet.work/api/health        # 200 + strict-transport-security header
-curl https://wiki.medinet.work/dmd/api/health       # 200
-curl https://wiki.medinet.work/tdt/api/health       # 200
+curl -I https://wiki.medinet.work/healthz           # 200 + strict-transport-security header
+curl https://wiki.medinet.work/dmd/healthz          # 200
+curl https://wiki.medinet.work/tdt/healthz          # 200
 ```
 
 ---
@@ -517,7 +520,7 @@ echo "HUB_MARKETING_ID=${HUB_MARKETING_ID}" >> .env
 
 docker compose up -d python-api-marketing
 docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
-curl https://wiki.medinet.work/marketing/api/health
+curl https://wiki.medinet.work/marketing/healthz
 ```
 
 ### Backup daily Postgres

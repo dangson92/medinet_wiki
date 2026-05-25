@@ -198,26 +198,48 @@ services:
 EOF
 fi
 
-# Append service block (sed substitute placeholder)
+# Generate service block (sed substitute placeholder)
 # Bug fix 2026-05-23: thiếu {{HUB_UPPER}} substitution → docker compose config FAIL
 # vì env HUB_ID parse `${HUB_{{HUB_UPPER}}_ID:?...}` literal placeholder. Compute
 # HUB_UPPER qua `tr` (portable hơn bash ${HUB^^} cần bash 4+).
 HUB_UPPER=$(echo "$HUB" | tr '[:lower:]' '[:upper:]')
-sed "s/{{HUB_UPPER}}/$HUB_UPPER/g; s/{{HUB}}/$HUB/g; s/{{PORT}}/$PORT/g" "$TEMPLATE_PATH" >> "$OVERRIDE_PATH"
 
-# Append volume declaration (cocoindex LMDB per-hub) neu chua co volumes: section
-if ! grep -q "^volumes:" "$OVERRIDE_PATH"; then
+# Bug fix 2026-05-25: khi hub thu 2+ duoc add, override.yml da co `volumes:` section
+# o cuoi file → `sed >> override.yml` append service block VAO SAU `volumes:` →
+# YAML parse service block thanh volume mapping → `volumes.python-api-X additional
+# properties 'build', 'ports'... not allowed`. Fix: neu file da co `volumes:` section,
+# INSERT service block TRUOC dong `^volumes:` qua awk split-and-rejoin (atomic tmp+mv).
+SERVICE_BLOCK_TMP=$(mktemp)
+trap 'rm -f "$SERVICE_BLOCK_TMP"' EXIT
+sed "s/{{HUB_UPPER}}/$HUB_UPPER/g; s/{{HUB}}/$HUB/g; s/{{PORT}}/$PORT/g" "$TEMPLATE_PATH" > "$SERVICE_BLOCK_TMP"
+
+if grep -q "^volumes:" "$OVERRIDE_PATH"; then
+    # File da co volumes: section → INSERT service block TRUOC dong `^volumes:`
+    OVERRIDE_TMP=$(mktemp)
+    awk -v block_file="$SERVICE_BLOCK_TMP" '
+        /^volumes:/ && !inserted {
+            while ((getline line < block_file) > 0) print line
+            close(block_file)
+            inserted = 1
+        }
+        { print }
+    ' "$OVERRIDE_PATH" > "$OVERRIDE_TMP" && mv "$OVERRIDE_TMP" "$OVERRIDE_PATH"
+
+    # Append volume moi sau marker `^volumes:` (idempotent)
+    sed -i.bak "/^volumes:/a\\
+  medinet_cocoindex_$HUB:
+" "$OVERRIDE_PATH" && rm -f "${OVERRIDE_PATH}.bak"
+else
+    # Chua co volumes: section → append service block + volumes: section vao cuoi
+    cat "$SERVICE_BLOCK_TMP" >> "$OVERRIDE_PATH"
     cat >> "$OVERRIDE_PATH" <<EOF
 
 volumes:
   medinet_cocoindex_$HUB:
 EOF
-else
-    # Volumes section da co — append volume moi sau marker
-    sed -i.bak "/^volumes:/a\\
-  medinet_cocoindex_$HUB:
-" "$OVERRIDE_PATH" && rm -f "${OVERRIDE_PATH}.bak"
 fi
+rm -f "$SERVICE_BLOCK_TMP"
+trap - EXIT
 
 # Step 7c: Verify docker compose config merge OK
 echo "[hub-add] (c) Verify docker compose config merge OK..."
