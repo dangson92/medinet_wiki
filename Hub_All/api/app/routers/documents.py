@@ -26,6 +26,9 @@ Mitigations:
 from __future__ import annotations
 
 import logging
+import mimetypes
+from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import (
@@ -38,7 +41,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import (
@@ -222,6 +225,66 @@ async def get_status(
             code="NOT_FOUND",
         )
     return resp.ok(data={"status": doc.status, "progress": doc.progress})
+
+
+@router.get("/{document_id}/file")
+async def get_file(
+    document_id: str,
+    user: User = Depends(get_current_user),  # noqa: B008
+    service: DocumentService = Depends(get_document_service),  # noqa: B008
+) -> FileResponse | JSONResponse:
+    """GET /api/documents/:id/file — trả file gốc cho FE preview/download.
+
+    FE DocumentIngestion modal preview (api.getDocumentFileUrl) iframe PDF
+    inline / img / anchor download DOCX dùng URL này. Trả FileResponse với
+    Content-Disposition `inline` + filename* RFC 5987 UTF-8 cho tên file
+    tiếng Việt có dấu. FE quyết download vs preview qua `<a download={...}>`.
+
+    File gốc lưu UUID + ext (FileStore — KHÔNG giữ basename gốc); MIME detect
+    từ doc.name (filename gốc) qua mimetypes.guess_type.
+    """
+    _ = user  # Phase 5 HUB-02 hub isolation defer (carry pattern get_by_id).
+    try:
+        doc_uuid = UUID(document_id)
+    except ValueError:
+        return resp.bad_request(
+            message=f"document_id không phải UUID hợp lệ: {document_id!r}",
+            code="INVALID_DOCUMENT_ID",
+        )
+
+    doc = await service.get(doc_uuid)
+    if doc is None:
+        return resp.not_found(
+            message=f"Document {document_id} không tồn tại",
+            code="NOT_FOUND",
+        )
+
+    file_path = Path(doc.file_path)
+    if not file_path.is_file():
+        # Row DB còn nhưng file mất trên disk — thường do volume bị reset hoặc
+        # deploy mới mất file_store. Log warning để operator phát hiện qua metric.
+        logger.warning(
+            "document_file_missing_on_disk: id=%s db_path=%s",
+            document_id,
+            doc.file_path,
+        )
+        return resp.not_found(
+            message="File gốc không còn trên storage",
+            code="FILE_NOT_FOUND",
+        )
+
+    media_type, _ = mimetypes.guess_type(doc.name)
+    if not media_type:
+        media_type = "application/octet-stream"
+
+    quoted_name = quote(doc.name, safe="")
+    content_disposition = f"inline; filename*=UTF-8''{quoted_name}"
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        headers={"Content-Disposition": content_disposition},
+    )
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
