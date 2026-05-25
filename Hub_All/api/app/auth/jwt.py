@@ -8,7 +8,7 @@ Claims shape (KHÁC Go điểm `hub_ids` array thay vì `hub_id` single):
     sub        — user UUID string
     email      — email người dùng
     name       — full name (có thể null)
-    role       — "admin" | "editor" | "viewer"
+    role       — "admin" | "hub_admin" | "editor" | "viewer" (v3.1 Plan 02-03)
     hub_ids    — list[str] UUID hub assignments (M2 multi-hub) — Phase 3 Plan
                  03-03 REQUIRED (M2 cũ JWT thiếu → 401 reject, user re-login)
     iss        — "medinet-wiki" (cố định — RE-CONFIRM D-V3-Phase3-E, KHÔNG URL)
@@ -46,6 +46,7 @@ import jwt as pyjwt
 from pydantic import BaseModel
 
 from app.config import Settings
+from app.schemas.users import UserRole
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
@@ -79,7 +80,11 @@ class JWTClaims(BaseModel):
     sub: str
     email: str
     name: str | None = None
-    role: Literal["admin", "editor", "viewer"]
+    # v3.1 Plan 02-03 carry forward — 4 value (admin|hub_admin|editor|viewer).
+    # Single source-of-truth qua schemas/users.UserRole — chống drift Phase 2
+    # v3.1 đã extend Pydantic UserRole + migration 0006 CHECK nhưng QUÊN
+    # JWTClaims.role → token issue role='hub_admin' OK, verify reject 401.
+    role: UserRole
     # Phase 3 Plan 03-03 — hub_ids REQUIRED (D-V3-Phase3-E + SSO-03).
     # M2 cũ JWT default [] → bỏ default → JWT thiếu claim raise ValidationError.
     hub_ids: list[str]
