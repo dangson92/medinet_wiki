@@ -89,39 +89,29 @@ def _parse_jsonb(raw: Any) -> Any:
     return raw
 
 
-async def load_smtp_config(db: AsyncSession) -> SmtpConfig | None:
-    """Load SMTP config từ bảng `settings`. Return None nếu chưa đủ hoặc tắt.
-
-    Điều kiện return None:
-    - NOTIFY_EMAIL_ENABLED != 'true' (admin tắt notify email ở tab Thông báo).
-    - SMTP_HOST hoặc SMTP_FROM_EMAIL rỗng (chưa cấu hình tối thiểu).
-
-    Trả None để router skip enqueue silently (KHÔNG raise — admin có thể chủ
-    ý tắt SMTP, KHÔNG phải lỗi).
+async def _load_smtp_stored(db: AsyncSession) -> dict[str, str]:
+    """Đọc raw SMTP key từ bảng `settings`. Helper share giữa load_smtp_config
+    (auto-send welcome/reset) + build_smtp_config_from_overrides (test endpoint).
     """
     rows = (
         await db.execute(
-            text(
-                "SELECT key, value FROM settings WHERE key = ANY(:keys)"
-            ),
+            text("SELECT key, value FROM settings WHERE key = ANY(:keys)"),
             {"keys": list(_SMTP_KEYS)},
         )
     ).fetchall()
-    stored = {row[0]: str(_parse_jsonb(row[1])) for row in rows}
+    return {row[0]: str(_parse_jsonb(row[1])) for row in rows}
 
-    if stored.get("NOTIFY_EMAIL_ENABLED", "true").lower() != "true":
-        return None
 
+def _build_smtp_config(stored: dict[str, str]) -> SmtpConfig | None:
+    """Build SmtpConfig từ dict raw key/value. Return None nếu thiếu HOST/FROM."""
     host = stored.get("SMTP_HOST", "").strip()
     from_email = stored.get("SMTP_FROM_EMAIL", "").strip()
     if not host or not from_email:
         return None
-
     try:
         port = int(stored.get("SMTP_PORT", "587"))
     except ValueError:
         port = 587
-
     return SmtpConfig(
         host=host,
         port=port,
@@ -135,6 +125,182 @@ async def load_smtp_config(db: AsyncSession) -> SmtpConfig | None:
         or "Medinet Wiki",
         system_url=stored.get("SYSTEM_URL", "").strip(),
     )
+
+
+async def load_smtp_config(
+    db: AsyncSession, *, require_enabled: bool = True
+) -> SmtpConfig | None:
+    """Load SMTP config từ bảng `settings`. Return None nếu chưa đủ hoặc tắt.
+
+    Điều kiện return None:
+    - `require_enabled=True` (mặc định) + NOTIFY_EMAIL_ENABLED != 'true' (admin
+      tắt notify email ở tab Thông báo). Test endpoint pass False để cho phép
+      test khi notify chưa bật.
+    - SMTP_HOST hoặc SMTP_FROM_EMAIL rỗng (chưa cấu hình tối thiểu).
+
+    Trả None để router skip enqueue silently (KHÔNG raise — admin có thể chủ
+    ý tắt SMTP, KHÔNG phải lỗi).
+    """
+    stored = await _load_smtp_stored(db)
+    if require_enabled and stored.get("NOTIFY_EMAIL_ENABLED", "true").lower() != "true":
+        return None
+    return _build_smtp_config(stored)
+
+
+async def build_smtp_config_with_overrides(
+    db: AsyncSession, overrides: dict[str, str] | None
+) -> SmtpConfig | None:
+    """Build SmtpConfig từ overrides (form FE chưa save) + DB fallback.
+
+    Pattern preserve-on-empty: nếu overrides có key nhưng value rỗng (hoặc value
+    là mask `********` cho SMTP_PASSWORD), dùng giá trị DB. Giúp admin test
+    SMTP với cấu hình form CHƯA save mà KHÔNG phải gõ lại password.
+
+    Trả None nếu sau merge vẫn thiếu SMTP_HOST hoặc SMTP_FROM_EMAIL.
+    """
+    stored = await _load_smtp_stored(db)
+    if overrides:
+        for key in _SMTP_KEYS:
+            if key not in overrides:
+                continue
+            value = overrides[key]
+            # SMTP_PASSWORD: rỗng / mask "********" → giữ DB (preserve-on-empty).
+            if key == "SMTP_PASSWORD" and value in ("", "********"):
+                continue
+            stored[key] = value
+    return _build_smtp_config(stored)
+
+
+def send_test_email(config: SmtpConfig, *, to_email: str) -> bool:
+    """Gửi test email synchronous — admin click "Test gửi email" trong Settings.
+
+    Subject + body cố định ngắn gọn tiếng Việt. KHÔNG escape XSS phức tạp vì
+    nội dung do server kiểm soát + không có user input nguy hiểm (chỉ
+    system_name + recipient email — đều đã đi qua sanitization của Pydantic).
+    """
+    safe_system = html.escape(config.system_name)
+    safe_to = html.escape(to_email)
+    text_body = (
+        f"Đây là email test từ {config.system_name}.\n\n"
+        f"Nếu bạn nhận được email này, cấu hình SMTP đã hoạt động đúng:\n"
+        f"  - Host: {config.host}:{config.port}\n"
+        f"  - From: {config.from_email}\n"
+        f"  - To: {to_email}\n"
+        f"  - STARTTLS: {'có' if config.use_tls else 'không'}\n\n"
+        f"-- {config.system_name}"
+    )
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="vi">
+  <body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.5; color: #1e293b;">
+    <h2 style="color: #6366f1;">✓ Test SMTP thành công</h2>
+    <p>Đây là email test từ <strong>{safe_system}</strong>.</p>
+    <p>Nếu bạn nhận được email này, cấu hình SMTP đã hoạt động đúng.</p>
+    <table style="border-collapse: collapse; margin: 16px 0; font-size: 14px;">
+      <tr><td style="padding: 6px 12px; background: #f1f5f9; border: 1px solid #e2e8f0;">Host</td><td style="padding: 6px 12px; border: 1px solid #e2e8f0;"><code>{html.escape(config.host)}:{config.port}</code></td></tr>
+      <tr><td style="padding: 6px 12px; background: #f1f5f9; border: 1px solid #e2e8f0;">From</td><td style="padding: 6px 12px; border: 1px solid #e2e8f0;"><code>{html.escape(config.from_email)}</code></td></tr>
+      <tr><td style="padding: 6px 12px; background: #f1f5f9; border: 1px solid #e2e8f0;">To</td><td style="padding: 6px 12px; border: 1px solid #e2e8f0;"><code>{safe_to}</code></td></tr>
+      <tr><td style="padding: 6px 12px; background: #f1f5f9; border: 1px solid #e2e8f0;">STARTTLS</td><td style="padding: 6px 12px; border: 1px solid #e2e8f0;">{'có' if config.use_tls else 'không'}</td></tr>
+    </table>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+    <p style="font-size: 12px; color: #64748b;">Email gửi tự động từ {safe_system}. Vui lòng KHÔNG trả lời email này.</p>
+  </body>
+</html>
+"""
+    return send_email_sync(
+        config,
+        to_email=to_email,
+        subject=f"[{config.system_name}] Test SMTP",
+        html_body=html_body,
+        text_body=text_body,
+    )
+
+
+def _smtp_send_raw(config: SmtpConfig, msg: MIMEMultipart) -> None:
+    """Low-level smtplib send — raise raw exception cho caller xử lý diagnostics.
+
+    Tách khỏi send_email_sync (fail-quiet) để endpoint test có thể catch
+    từng class exception và trả message tiếng Việt cụ thể.
+    """
+    if config.port == 465:
+        with smtplib.SMTP_SSL(config.host, config.port, timeout=15) as smtp:
+            if config.username and config.password:
+                smtp.login(config.username, config.password)
+            smtp.send_message(msg)
+        return
+    with smtplib.SMTP(config.host, config.port, timeout=15) as smtp:
+        smtp.ehlo()
+        if config.use_tls:
+            smtp.starttls()
+            smtp.ehlo()
+        if config.username and config.password:
+            smtp.login(config.username, config.password)
+        smtp.send_message(msg)
+
+
+def send_test_email_with_diagnostics(
+    config: SmtpConfig, *, to_email: str
+) -> tuple[bool, str]:
+    """Variant của send_test_email — trả về (success, error_message).
+
+    KHÔNG dùng send_email_sync chung (vốn fail-quiet log warning) — endpoint
+    test cần thông báo lý do fail cho admin (DNS / auth / connection refused).
+
+    LƯU Ý: error message return cho FE KHÔNG được leak password — exc.__str__
+    của smtplib KHÔNG chứa credential, nhưng vẫn defensive strip.
+    """
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"[{config.system_name}] Test SMTP"
+    msg["From"] = formataddr((config.from_name, config.from_email))
+    msg["To"] = to_email
+    safe_system = html.escape(config.system_name)
+    safe_to = html.escape(to_email)
+    text_body = (
+        f"Đây là email test từ {config.system_name}.\n\n"
+        f"Nếu bạn nhận được email này, cấu hình SMTP đã hoạt động đúng:\n"
+        f"  - Host: {config.host}:{config.port}\n"
+        f"  - From: {config.from_email}\n"
+        f"  - To: {to_email}\n"
+        f"  - STARTTLS: {'có' if config.use_tls else 'không'}\n\n"
+        f"-- {config.system_name}"
+    )
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="vi">
+  <body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.5; color: #1e293b;">
+    <h2 style="color: #6366f1;">✓ Test SMTP thành công</h2>
+    <p>Đây là email test từ <strong>{safe_system}</strong>.</p>
+    <p>Nếu bạn nhận được email này, cấu hình SMTP đã hoạt động đúng.</p>
+    <p><code>To: {safe_to}</code></p>
+  </body>
+</html>
+"""
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        _smtp_send_raw(config, msg)
+    except smtplib.SMTPAuthenticationError as exc:
+        return False, f"Sai username/password SMTP ({exc.smtp_code}). Kiểm tra credential."
+    except smtplib.SMTPConnectError as exc:
+        return False, f"Không kết nối được {config.host}:{config.port} ({exc})."
+    except smtplib.SMTPRecipientsRefused:
+        return False, f"Server từ chối recipient '{to_email}'. Kiểm tra địa chỉ email."
+    except smtplib.SMTPSenderRefused as exc:
+        return False, f"Server từ chối From '{config.from_email}' ({exc.smtp_code})."
+    except smtplib.SMTPException as exc:
+        return False, f"SMTP error: {exc}"
+    except TimeoutError:
+        return False, f"Timeout kết nối {config.host}:{config.port} sau 15s."
+    except OSError as exc:
+        return False, f"Lỗi mạng / DNS: {exc}"
+
+    logger.info(
+        "email_test_sent: host=%s to=%s",
+        config.host,
+        to_email,
+    )
+    return True, "OK"
 
 
 def send_email_sync(

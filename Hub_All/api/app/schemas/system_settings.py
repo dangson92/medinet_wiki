@@ -7,7 +7,22 @@ PUT là partial update — chỉ field gửi lên (non-None) mới được pers
 """
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
+
+
+class TestSmtpRequest(BaseModel):
+    """Body POST /api/system-settings/test-smtp — gửi email test.
+
+    `overrides` (optional): admin gửi giá trị form FE chưa save để test trước
+    khi commit. Empty / mask `********` cho SMTP_PASSWORD → backend fallback
+    DB (preserve-on-empty). Bỏ trống → backend dùng config DB hiện tại.
+    """
+
+    to_email: EmailStr = Field(..., description="Địa chỉ email nhận test")
+    overrides: dict[str, str] | None = Field(
+        default=None,
+        description="Override SMTP_* + SYSTEM_* keys từ form FE chưa save",
+    )
 
 
 class UpdateSystemSettingsRequest(BaseModel):

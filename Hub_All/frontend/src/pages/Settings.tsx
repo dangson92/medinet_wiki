@@ -144,6 +144,12 @@ export default function Settings() {
   const [smtpUseTls, setSmtpUseTls] = useState(true);
   // Cho phép user xem password vừa nhập để xác nhận đã gõ đúng (UX feedback).
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  // ─── Test SMTP state — gửi email test với cấu hình form HIỆN TẠI ───
+  // Default recipient = adminEmail (đã load từ system-settings ở useEffect bên dưới).
+  const [testSmtpTo, setTestSmtpTo] = useState('');
+  const [testingSmtp, setTestingSmtp] = useState(false);
+  const [testSmtpResult, setTestSmtpResult] = useState<'success' | 'error' | null>(null);
+  const [testSmtpMessage, setTestSmtpMessage] = useState('');
 
   // ─── MCP domain state (admin set chung cho cả deployment) ───
   // Mặc định suy từ host thật của app (MCP_URL); giá trị admin đã lưu trong
@@ -389,6 +395,57 @@ export default function Settings() {
       setTimeout(() => setSaveError(null), 5000);
     }
     setIsSaving(false);
+  };
+
+  // Test SMTP — gửi với cấu hình form HIỆN TẠI (overrides) để admin test
+  // trước khi Save. Nếu password rỗng (đang để mask), BE tự fallback DB.
+  const handleTestSmtp = async () => {
+    const to = (testSmtpTo || adminEmail).trim();
+    if (!to) {
+      setTestSmtpResult('error');
+      setTestSmtpMessage('Nhập địa chỉ email nhận test trước.');
+      setTimeout(() => setTestSmtpResult(null), 6000);
+      return;
+    }
+    setTestingSmtp(true);
+    setTestSmtpResult(null);
+    setTestSmtpMessage('');
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`/api/system-settings/test-smtp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          to_email: to,
+          overrides: {
+            SMTP_HOST: smtpHost,
+            SMTP_PORT: smtpPort,
+            SMTP_USERNAME: smtpUsername,
+            // empty → BE fallback DB password (preserve-on-empty pattern).
+            SMTP_PASSWORD: smtpPassword,
+            SMTP_FROM_EMAIL: smtpFromEmail,
+            SMTP_FROM_NAME: smtpFromName,
+            SMTP_USE_TLS: String(smtpUseTls),
+          },
+        }),
+      });
+      const body = await res.json().catch(() => ({} as { success?: boolean; message?: string }));
+      if (res.ok && body.success) {
+        setTestSmtpResult('success');
+        setTestSmtpMessage(body.message || `Đã gửi email test tới ${to}.`);
+      } else {
+        setTestSmtpResult('error');
+        setTestSmtpMessage(body.message || `Test thất bại (${res.status}).`);
+      }
+    } catch {
+      setTestSmtpResult('error');
+      setTestSmtpMessage('Không kết nối được máy chủ.');
+    }
+    setTestingSmtp(false);
+    setTimeout(() => setTestSmtpResult(null), 8000);
   };
 
   const handleTestConnection = async (provider: 'gemini' | 'openai') => {
@@ -843,11 +900,80 @@ export default function Settings() {
                     </button>
                   </div>
 
-                  {/* SMTP info note — chưa có sender service */}
+                  {/* ── Test gửi email ── */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50/40 dark:bg-slate-800/30">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                        <Mail size={18} className="text-emerald-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Test gửi email</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Gửi email test với cấu hình SMTP đang nhập (chưa cần Lưu). Password rỗng = dùng password đã lưu.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="email"
+                        value={testSmtpTo}
+                        onChange={e => setTestSmtpTo(e.target.value)}
+                        placeholder={adminEmail || 'email@nhan-test.vn'}
+                        className="input-field flex-1 font-mono text-sm"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleTestSmtp}
+                        disabled={testingSmtp}
+                        className={cn(
+                          'btn-secondary !px-4 min-h-[38px] text-xs sm:w-auto',
+                          testSmtpResult === 'success' && '!border-success !text-success',
+                          testSmtpResult === 'error' && '!border-danger !text-danger',
+                        )}
+                      >
+                        {testingSmtp ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            <span>Đang gửi…</span>
+                          </>
+                        ) : testSmtpResult === 'success' ? (
+                          <>
+                            <CheckCircle2 size={14} />
+                            <span>Đã gửi</span>
+                          </>
+                        ) : testSmtpResult === 'error' ? (
+                          <>
+                            <AlertTriangle size={14} />
+                            <span>Lỗi</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail size={14} />
+                            <span>Gửi test</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {testSmtpMessage && (
+                      <p
+                        className={cn(
+                          'mt-2 text-[11px] leading-relaxed',
+                          testSmtpResult === 'success' && 'text-success',
+                          testSmtpResult === 'error' && 'text-danger',
+                        )}
+                      >
+                        {testSmtpMessage}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* SMTP info note */}
                   <div className="flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
                     <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Cấu hình lưu vào DB; service gửi email (welcome / reset password) sẽ kích hoạt ở phiên bản kế tiếp. Password lưu plain text — encrypt at-rest defer v4.0.
+                      Cấu hình lưu vào DB; password lưu plain text — encrypt at-rest defer v4.0. Welcome / reset password email tự động kích hoạt khi bật toggle <strong>Thông báo qua Email</strong> ở trên.
                     </p>
                   </div>
                 </div>
