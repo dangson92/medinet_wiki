@@ -13,6 +13,7 @@
 #   bash scripts/rebuild-all.sh                 # rebuild FE + BE + recreate
 #   bash scripts/rebuild-all.sh --fe-only       # chỉ build FE (Caddy reload nếu hot)
 #   bash scripts/rebuild-all.sh --be-only       # chỉ rebuild BE (skip Vite)
+#   bash scripts/rebuild-all.sh --recreate-only # chỉ recreate container (skip Vite + docker build)
 #   bash scripts/rebuild-all.sh --no-cache      # docker build --no-cache (slow nhưng clean)
 #   bash scripts/rebuild-all.sh --logs          # tail logs sau khi recreate xong
 #   bash scripts/rebuild-all.sh --fe-only --logs
@@ -37,15 +38,17 @@ err()  { printf "%s[rebuild]%s %s\n" "$RED" "$NC" "$*" >&2; }
 # ── Parse flags ──────────────────────────────────────────────────────────────
 FE_ONLY=0
 BE_ONLY=0
+RECREATE_ONLY=0
 NO_CACHE=0
 TAIL_LOGS=0
 
 for arg in "$@"; do
   case "$arg" in
-    --fe-only)   FE_ONLY=1 ;;
-    --be-only)   BE_ONLY=1 ;;
-    --no-cache)  NO_CACHE=1 ;;
-    --logs)      TAIL_LOGS=1 ;;
+    --fe-only)        FE_ONLY=1 ;;
+    --be-only)        BE_ONLY=1 ;;
+    --recreate-only)  RECREATE_ONLY=1 ;;
+    --no-cache)       NO_CACHE=1 ;;
+    --logs)           TAIL_LOGS=1 ;;
     -h|--help)
       grep -E '^# ' "$0" | sed 's/^# //'
       exit 0
@@ -59,6 +62,14 @@ done
 
 if [ "$FE_ONLY" = "1" ] && [ "$BE_ONLY" = "1" ]; then
   err "--fe-only và --be-only không dùng cùng lúc"
+  exit 2
+fi
+if [ "$RECREATE_ONLY" = "1" ] && { [ "$FE_ONLY" = "1" ] || [ "$BE_ONLY" = "1" ]; }; then
+  err "--recreate-only không kết hợp với --fe-only / --be-only"
+  exit 2
+fi
+if [ "$RECREATE_ONLY" = "1" ] && [ "$NO_CACHE" = "1" ]; then
+  err "--recreate-only không kết hợp với --no-cache (recreate-only skip build)"
   exit 2
 fi
 
@@ -81,7 +92,7 @@ fi
 START_TS=$(date +%s)
 
 # ── 1) Frontend build ────────────────────────────────────────────────────────
-if [ "$BE_ONLY" = "0" ]; then
+if [ "$BE_ONLY" = "0" ] && [ "$RECREATE_ONLY" = "0" ]; then
   log "${BOLD}[1/3] Frontend build (Vite)${NC}"
   pushd frontend >/dev/null
 
@@ -94,6 +105,8 @@ if [ "$BE_ONLY" = "0" ]; then
   npm run build
   popd >/dev/null
   ok "Frontend build xong → Caddy serve qua volume mount ./frontend/dist:/srv/wiki/dist:ro (no restart cần)"
+elif [ "$RECREATE_ONLY" = "1" ]; then
+  warn "Skip frontend (--recreate-only)"
 else
   warn "Skip frontend (--be-only)"
 fi
@@ -105,7 +118,7 @@ fi
 API_SERVICES=(python-api-central python-api-dmd)
 ALL_SERVICES=("${API_SERVICES[@]}" mcp_service)
 
-if [ "$FE_ONLY" = "0" ]; then
+if [ "$FE_ONLY" = "0" ] && [ "$RECREATE_ONLY" = "0" ]; then
   log "${BOLD}[2/3] Backend rebuild${NC} (services: ${ALL_SERVICES[*]})"
 
   BUILD_ARGS=()
@@ -113,9 +126,17 @@ if [ "$FE_ONLY" = "0" ]; then
 
   docker compose build "${BUILD_ARGS[@]}" "${ALL_SERVICES[@]}"
   ok "Backend image rebuild xong"
+elif [ "$RECREATE_ONLY" = "1" ]; then
+  warn "Skip backend build (--recreate-only, dùng image hiện có)"
+fi
 
-  # ── 3) Recreate containers ─────────────────────────────────────────────────
-  log "${BOLD}[3/3] Recreate containers${NC} (--force-recreate, infra services KHÔNG đụng)"
+# ── 3) Recreate containers ───────────────────────────────────────────────────
+if [ "$FE_ONLY" = "0" ]; then
+  if [ "$RECREATE_ONLY" = "1" ]; then
+    log "${BOLD}[recreate] Force-recreate containers${NC} (skip build, --no-deps giữ infra)"
+  else
+    log "${BOLD}[3/3] Recreate containers${NC} (--force-recreate, infra services KHÔNG đụng)"
+  fi
   # Không đụng postgres + redis + caddy (infra) — tránh interrupt DB/cache.
   docker compose up -d --force-recreate --no-deps "${ALL_SERVICES[@]}"
   ok "Containers recreated"
@@ -141,7 +162,7 @@ END_TS=$(date +%s)
 ELAPSED=$((END_TS - START_TS))
 ok "${BOLD}DONE${NC} trong ${ELAPSED}s"
 
-if [ "$BE_ONLY" = "0" ]; then
+if [ "$BE_ONLY" = "0" ] && [ "$RECREATE_ONLY" = "0" ]; then
   log "Frontend đã ở frontend/dist/ → mở https://${WIKI_PUBLIC_DOMAIN:-localhost}/ verify"
 fi
 if [ "$FE_ONLY" = "0" ]; then
