@@ -20,6 +20,7 @@ import {
   X,
   Sparkles,
   Plug,
+  Server,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -129,6 +130,20 @@ export default function Settings() {
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifyTelegram, setNotifyTelegram] = useState(false);
 
+  // ─── SMTP settings state (tab Thông báo § SMTP) ───
+  // Backend mask SMTP_PASSWORD → "********" khi đã set, "" khi chưa cấu hình.
+  // Edit mode: bật → input plain text user nhập password mới; tắt + giữ value
+  // = "" → PUT chuỗi rỗng → BE preserve-on-empty giữ password cũ.
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUsername, setSmtpUsername] = useState('');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpPasswordMask, setSmtpPasswordMask] = useState('');
+  const [editingSmtpPassword, setEditingSmtpPassword] = useState(false);
+  const [smtpFromEmail, setSmtpFromEmail] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('Medinet Wiki');
+  const [smtpUseTls, setSmtpUseTls] = useState(true);
+
   // ─── MCP domain state (admin set chung cho cả deployment) ───
   // Mặc định suy từ host thật của app (MCP_URL); giá trị admin đã lưu trong
   // DB sẽ override. Profile tab MCP Connector tự fetch giá trị này để mọi
@@ -217,6 +232,14 @@ export default function Settings() {
         if (data.NOTIFY_EMAIL_ENABLED)     setNotifyEmail(data.NOTIFY_EMAIL_ENABLED === 'true');
         if (data.NOTIFY_TELEGRAM_ENABLED)  setNotifyTelegram(data.NOTIFY_TELEGRAM_ENABLED === 'true');
         if (data.MCP_PUBLIC_URL)           setMcpPublicUrl(data.MCP_PUBLIC_URL);
+        // SMTP — load value plain + mask password (BE trả "********" nếu đã set, "" nếu chưa).
+        if (data.SMTP_HOST !== undefined)        setSmtpHost(data.SMTP_HOST);
+        if (data.SMTP_PORT)                      setSmtpPort(data.SMTP_PORT);
+        if (data.SMTP_USERNAME !== undefined)    setSmtpUsername(data.SMTP_USERNAME);
+        if (data.SMTP_PASSWORD !== undefined)    setSmtpPasswordMask(data.SMTP_PASSWORD);
+        if (data.SMTP_FROM_EMAIL !== undefined)  setSmtpFromEmail(data.SMTP_FROM_EMAIL);
+        if (data.SMTP_FROM_NAME)                 setSmtpFromName(data.SMTP_FROM_NAME);
+        if (data.SMTP_USE_TLS)                   setSmtpUseTls(data.SMTP_USE_TLS === 'true');
       })
       .catch(() => {});
   }, []);
@@ -275,6 +298,14 @@ export default function Settings() {
         NOTIFY_EMAIL_ENABLED:     String(notifyEmail),
         NOTIFY_TELEGRAM_ENABLED:  String(notifyTelegram),
         MCP_PUBLIC_URL:           mcpPublicUrl,
+        // SMTP — password rỗng → BE preserve-on-empty giữ cũ; non-empty plain → ghi đè.
+        SMTP_HOST:                smtpHost,
+        SMTP_PORT:                smtpPort,
+        SMTP_USERNAME:            smtpUsername,
+        SMTP_PASSWORD:            smtpPassword,
+        SMTP_FROM_EMAIL:          smtpFromEmail,
+        SMTP_FROM_NAME:           smtpFromName,
+        SMTP_USE_TLS:             String(smtpUseTls),
       }),
     });
     return res;
@@ -321,6 +352,12 @@ export default function Settings() {
       } else {
         // general / security / notifications all share the same system-settings endpoint
         res = await saveSystemSettings();
+        if (res.ok && smtpPassword) {
+          // Password vừa được ghi đè → refresh mask + clear plain + exit edit mode.
+          setSmtpPasswordMask('********');
+          setSmtpPassword('');
+          setEditingSmtpPassword(false);
+        }
       }
       if (res.ok) {
         setSaveSuccess(true);
@@ -610,6 +647,169 @@ export default function Settings() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* ── SMTP configuration ── */}
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-700 pb-4">
+                    <div className="w-9 h-9 rounded-xl bg-brand-indigo/10 flex items-center justify-center shrink-0">
+                      <Server size={18} className="text-brand-indigo" />
+                    </div>
+                    <div>
+                      <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100">Cấu hình SMTP</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Máy chủ gửi email — dùng cho thông báo hệ thống và reset mật khẩu.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* SMTP host */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">SMTP Host</label>
+                      <input
+                        type="text"
+                        value={smtpHost}
+                        onChange={e => setSmtpHost(e.target.value)}
+                        placeholder="smtp.gmail.com"
+                        className="input-field w-full font-mono text-sm"
+                        spellCheck={false}
+                      />
+                    </div>
+                    {/* SMTP port */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">SMTP Port</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={smtpPort}
+                        onChange={e => setSmtpPort(e.target.value)}
+                        placeholder="587"
+                        className="input-field w-full font-mono text-sm"
+                      />
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Thường dùng <code className="font-mono">587</code> (TLS) hoặc <code className="font-mono">465</code> (SSL).
+                      </p>
+                    </div>
+                    {/* SMTP username */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Username</label>
+                      <input
+                        type="text"
+                        value={smtpUsername}
+                        onChange={e => setSmtpUsername(e.target.value)}
+                        placeholder="no-reply@medinet.vn"
+                        className="input-field w-full font-mono text-sm"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    {/* SMTP password — pencil edit pattern carry forward RAG API key */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Password</label>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          {editingSmtpPassword ? (
+                            <input
+                              type="password"
+                              autoFocus
+                              value={smtpPassword}
+                              onChange={e => setSmtpPassword(e.target.value)}
+                              placeholder="Nhập password mới..."
+                              className="input-field w-full font-mono text-sm"
+                              autoComplete="new-password"
+                              data-lpignore="true"
+                              data-form-type="other"
+                              data-1p-ignore
+                              spellCheck={false}
+                            />
+                          ) : (
+                            <div className="input-field w-full font-mono text-sm text-slate-500 dark:text-slate-400">
+                              {smtpPasswordMask || <span className="italic text-slate-400">Chưa cấu hình</span>}
+                            </div>
+                          )}
+                        </div>
+                        {editingSmtpPassword ? (
+                          <button
+                            type="button"
+                            onClick={() => { setEditingSmtpPassword(false); setSmtpPassword(''); }}
+                            title="Hủy"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
+                          >
+                            <X size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingSmtpPassword(true)}
+                            title="Sửa / đổi password"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Để trống khi lưu sẽ <strong>giữ password cũ</strong>.
+                      </p>
+                    </div>
+                    {/* SMTP from email */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">From Email</label>
+                      <input
+                        type="email"
+                        value={smtpFromEmail}
+                        onChange={e => setSmtpFromEmail(e.target.value)}
+                        placeholder="no-reply@medinet.vn"
+                        className="input-field w-full font-mono text-sm"
+                        spellCheck={false}
+                      />
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Email gửi đi (thường trùng <strong>Username</strong>).
+                      </p>
+                    </div>
+                    {/* SMTP from name */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">From Name</label>
+                      <input
+                        type="text"
+                        value={smtpFromName}
+                        onChange={e => setSmtpFromName(e.target.value)}
+                        placeholder="Medinet Wiki"
+                        className="input-field w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* SMTP use TLS toggle */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center gap-4">
+                      <Lock size={20} className="text-slate-400" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Mã hóa STARTTLS</p>
+                        <p className="text-xs text-slate-500">Bật khi dùng port 587 (Gmail / Outlook). Tắt khi dùng port 465 (SSL trực tiếp) hoặc 25 (không mã hóa).</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSmtpUseTls(v => !v)}
+                      className={cn(
+                        "w-12 h-6 rounded-full relative transition-colors duration-200 shrink-0",
+                        smtpUseTls ? "bg-brand-indigo" : "bg-slate-200 dark:bg-slate-700"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200",
+                        smtpUseTls ? "right-1" : "left-1"
+                      )} />
+                    </button>
+                  </div>
+
+                  {/* SMTP info note — chưa có sender service */}
+                  <div className="flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
+                    <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Cấu hình lưu vào DB; service gửi email (welcome / reset password) sẽ kích hoạt ở phiên bản kế tiếp. Password lưu plain text — encrypt at-rest defer v4.0.
+                    </p>
                   </div>
                 </div>
               </motion.div>

@@ -621,14 +621,15 @@ class UserService:
         actor_role: str,
         actor_hub_id: str | None = None,
         request_id: str | None = None,
-    ) -> str | None:
+    ) -> tuple[str, str, str] | None:
         """USER-02 reset password — sinh password tạm + UPDATE password_hash +
-        audit + return plaintext 1 lần. None nếu user không tồn tại.
+        audit + return (password, email, name) 1 lần. None nếu user không tồn tại.
 
-        v3.x KHÔNG có SMTP (memory project_no_smtp_v4) → admin copy password
-        plaintext + gửi user qua kênh nội bộ (Zalo/gặp trực tiếp), giống flow
-        create user (UI-SPEC §"Show password 1 lần"). Phiên bản cũ sinh reset
-        token Redis chỉ log console là dead code (FE không có UI gắn token).
+        Trả tuple (password, email, name) thay vì chỉ password — router cần
+        email + name để enqueue BackgroundTask gửi email notify (không phải
+        query thêm). Phiên bản cũ trả str cho admin copy thủ công (memory
+        project_no_smtp_v4); v3.1+ có SMTP nên gửi email tự động nếu admin
+        đã cấu hình ở tab Thông báo.
 
         Bảo mật:
         - Password sinh qua `secrets.choice` (CSPRNG — KHÔNG `random.choice`).
@@ -638,13 +639,14 @@ class UserService:
         """
         row = (
             await self.db.execute(
-                text("SELECT email FROM users WHERE id = :id"),
+                text("SELECT email, full_name FROM users WHERE id = :id"),
                 {"id": str(user_id)},
             )
         ).fetchone()
         if row is None:
             return None
         email = str(row[0])
+        full_name = str(row[1]) if row[1] is not None else ""
 
         charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
         new_password = "".join(secrets.choice(charset) for _ in range(14))
@@ -679,7 +681,7 @@ class UserService:
             email,
             reset_by,
         )
-        return new_password
+        return new_password, email, full_name
 
     async def change_password_self(
         self,

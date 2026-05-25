@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text  # B1 iter 1 — query user_hubs membership trong DELETE handler.
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +46,11 @@ from app.schemas.users import (
     ChangeUserStatusRequest,
     CreateUserRequest,
     UpdateUserRequest,
+)
+from app.services.email_service import (
+    load_smtp_config,
+    send_reset_password_email,
+    send_welcome_email,
 )
 from app.services.user_service import (
     LastAdminError,
@@ -118,6 +123,7 @@ async def list_users(
 async def create_user(
     req: CreateUserRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),  # noqa: B008 — Phase 2 Plan 02-03 thay require_role("admin")
     db: AsyncSession = Depends(get_session),  # noqa: B008 — Phase 2 cho assert_hub_admin_for
     service: UserService = Depends(get_user_service),  # noqa: B008
@@ -171,6 +177,20 @@ async def create_user(
                 }
         return resp.conflict(
             message=str(e), code="EMAIL_CONFLICT", details=details
+        )
+
+    # Welcome email — gửi password tạm cho user mới qua BackgroundTask.
+    # Load config TRƯỚC enqueue vì task chạy SAU response, lúc đó `db` đã đóng.
+    # Config = None khi admin tắt NOTIFY_EMAIL_ENABLED hoặc chưa cấu hình SMTP →
+    # skip silently (admin vẫn thấy password 1 lần ở modal create, gửi tay được).
+    smtp_config = await load_smtp_config(db)
+    if smtp_config is not None:
+        background_tasks.add_task(
+            send_welcome_email,
+            smtp_config,
+            to_email=req.email,
+            name=req.name,
+            password=req.password,
         )
     return resp.created(data=result.model_dump(mode="json"))
 
@@ -408,16 +428,24 @@ async def delete_user(
 async def reset_user_password(
     user_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: User = Depends(require_role("admin")),  # noqa: B008
+    db: AsyncSession = Depends(get_session),  # noqa: B008 — load SMTP config cho BackgroundTask
     service: UserService = Depends(get_user_service),  # noqa: B008
 ) -> JSONResponse:
-    """POST /api/users/:id/reset-password — sinh password tạm + return 1 lần.
+    """POST /api/users/:id/reset-password — sinh password tạm + return 1 lần
+    + (optional) gửi email cho target user nếu admin đã cấu hình SMTP.
 
     Super-only (Phase 2 DEP-03 LOCKED — cross-hub op; hub_admin defer mở
-    quyền per-hub v4.0). v3.x KHÔNG có SMTP (memory project_no_smtp_v4) →
-    admin copy password plaintext gửi user qua kênh nội bộ; mất → reset lại.
+    quyền per-hub v4.0). Modal admin VẪN hiển thị password 1 lần (UI carry
+    forward) như fallback khi SMTP chưa cấu hình HOẶC email gửi fail —
+    admin có thể copy gửi tay (Zalo/gặp trực tiếp).
 
-    Bảo mật: password CHỈ trả 1 lần qua response; KHÔNG audit/log plaintext.
+    Bảo mật:
+    - Password trả qua response 1 lần (modal admin).
+    - Email gửi cho target user nếu admin bật NOTIFY_EMAIL_ENABLED + cấu
+      hình SMTP đầy đủ ở tab Thông báo → user nhận password mới trực tiếp.
+    - KHÔNG audit/log plaintext password (T-05-04-03 carry forward).
     """
     try:
         user_uuid = UUID(user_id)
@@ -427,23 +455,48 @@ async def reset_user_password(
             code="INVALID_USER_ID",
         )
     request_id = getattr(request.state, "request_id", None)
-    new_password = await service.reset_password(
+    reset_result = await service.reset_password(
         user_id=user_uuid,
         reset_by=user.id,
         actor_role="admin",
         actor_hub_id=None,
         request_id=request_id,
     )
-    if new_password is None:
+    if reset_result is None:
         return resp.not_found(
             message=f"User {user_id} không tồn tại", code="NOT_FOUND"
+        )
+    new_password, target_email, target_name = reset_result
+
+    # Reset email — gửi password mới qua BackgroundTask (fail-quiet).
+    # Modal admin vẫn hiển thị password fallback khi email gửi fail / SMTP
+    # chưa cấu hình.
+    smtp_config = await load_smtp_config(db)
+    email_sent = smtp_config is not None
+    if smtp_config is not None:
+        background_tasks.add_task(
+            send_reset_password_email,
+            smtp_config,
+            to_email=target_email,
+            name=target_name,
+            password=new_password,
+        )
+
+    if email_sent:
+        message = (
+            "Password mới đã sinh — hệ thống đang gửi email cho user. "
+            "Đồng thời có thể copy password ở dưới gửi backup qua kênh nội bộ."
+        )
+    else:
+        message = (
+            "Password tạm đã sinh — copy + gửi user qua kênh nội bộ "
+            "(Zalo/gặp trực tiếp). SMTP chưa cấu hình ở tab Thông báo "
+            "nên hệ thống KHÔNG gửi email tự động."
         )
     return resp.ok(
         data={
             "password": new_password,
-            "message": (
-                "Password tạm đã sinh — copy + gửi user qua kênh nội bộ "
-                "(Zalo/gặp trực tiếp). Đóng modal = mất mật khẩu, phải reset lại."
-            ),
+            "email_sent": email_sent,
+            "message": message,
         }
     )

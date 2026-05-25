@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class UpdateSystemSettingsRequest(BaseModel):
-    """Body PUT /api/system-settings — 9 key khớp Settings.tsx."""
+    """Body PUT /api/system-settings — khớp Settings.tsx."""
 
     SYSTEM_NAME: str | None = None
     SYSTEM_URL: str | None = None
@@ -23,3 +23,13 @@ class UpdateSystemSettingsRequest(BaseModel):
     NOTIFY_TELEGRAM_ENABLED: str | None = None
     # MCP Connector — domain public HTTPS của MCP Service (tab MCP Connector).
     MCP_PUBLIC_URL: str | None = None
+    # SMTP — cấu hình gửi email (tab Thông báo § SMTP).
+    # SMTP_PASSWORD: gửi chuỗi rỗng "" → giữ password cũ trong DB (preserve-on-empty);
+    # gửi chuỗi non-empty → ghi đè plain text (LƯU Ý: chưa encrypt at-rest, defer v4.0).
+    SMTP_HOST: str | None = None
+    SMTP_PORT: str | None = None
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_FROM_NAME: str | None = None
+    SMTP_USE_TLS: str | None = None
