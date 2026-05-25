@@ -23,7 +23,6 @@ import {
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import GeminiAssistant from './components/GeminiAssistant';
 import { useTheme } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
 import { getBranding, getContrastTextColor } from './branding';
@@ -457,7 +456,6 @@ const Layout = () => {
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 relative">
           <Outlet />
-          <GeminiAssistant />
         </main>
       </div>
     </div>

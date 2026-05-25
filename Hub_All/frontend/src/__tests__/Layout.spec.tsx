@@ -36,11 +36,6 @@ async function renderLayoutWithCurrentHub(hub: string) {
     ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   }));
 
-  // Mock GeminiAssistant component (it may have side effects)
-  vi.doMock('../components/GeminiAssistant', () => ({
-    default: () => null,
-  }));
-
   // Plan 03-03 v3.1 Phase 3 FE-02 — HubSwitcher mới gọi api.getHubs khi mount Layout
   // Mock api.getHubs để tránh unhandled fetch (jsdom KHÔNG resolve relative URL `/yte/api/hubs`).
   // CURRENT_HUB const phải re-export đúng (services/api line 46 compute từ window.location).

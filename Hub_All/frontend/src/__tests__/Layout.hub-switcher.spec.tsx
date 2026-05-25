@@ -60,8 +60,6 @@ async function renderLayoutWithUser(opts: {
     ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   }));
 
-  vi.doMock('../components/GeminiAssistant', () => ({ default: () => null }));
-
   vi.doMock('../services/api', async () => {
     const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
     return {
