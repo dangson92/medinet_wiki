@@ -62,8 +62,9 @@ const UserManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Reset password modal state — show password tạm 1 lần sau khi BE sinh
-  // (M2/v3 KHÔNG có SMTP, admin copy + gửi user qua kênh nội bộ).
+  // Reset password modal state — show password tạm 1 lần sau khi BE sinh.
+  // BE tự gửi email cho user nếu admin đã cấu hình SMTP ở Settings → Thông báo;
+  // modal vẫn hiển thị password làm backup admin copy gửi tay khi cần.
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetTargetUser, setResetTargetUser] = useState<UserRow | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
@@ -96,9 +97,10 @@ const UserManagement = () => {
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
 
-  // Show-password-one-time modal — M2 KHÔNG có SMTP (email defer v4.0). Sau khi
-  // tạo user xong, hiển thị password tạm thời cho admin copy + gửi user qua kênh
-  // nội bộ (Zalo, gặp trực tiếp). Backend hash argon2 — KHÔNG lưu plaintext.
+  // Show-password-one-time modal — sau khi tạo user xong, hiển thị password tạm
+  // làm backup cho admin. BE tự gửi welcome email với password này nếu admin đã
+  // cấu hình SMTP ở Settings → Thông báo (fail-quiet, KHÔNG block create thành
+  // công). Backend hash argon2 — KHÔNG lưu plaintext.
   const [createdCredentials, setCreatedCredentials] = useState<{
     name: string;
     email: string;
@@ -416,9 +418,9 @@ const UserManagement = () => {
 
   // Reset password — mở dialog confirm + POST /api/users/:id/reset-password.
   // BE sinh password tạm 14 char ~83 bits entropy + UPDATE users.password_hash
-  // argon2 + audit non-blocking + trả plaintext 1 lần. v3.x KHÔNG có SMTP →
-  // admin copy + gửi user qua kênh nội bộ. Đóng modal = mất password, phải reset
-  // lại (BE KHÔNG lưu plaintext anywhere).
+  // argon2 + audit non-blocking + trả plaintext 1 lần + tự gửi email cho target
+  // user nếu admin đã cấu hình SMTP ở Settings → Thông báo. Đóng modal = mất
+  // password, phải reset lại (BE KHÔNG lưu plaintext anywhere).
   const handleOpenReset = (user: UserRow) => {
     setActionMenuId(null);
     setResetTargetUser(user);
@@ -1037,7 +1039,7 @@ const UserManagement = () => {
                 <div className="flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 px-3 py-2 rounded-lg">
                   <Info size={14} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-500" />
                   <span>
-                    Hệ thống <b>chưa có SMTP</b> (defer v4.0). Sau khi tạo, mật khẩu tạm thời sẽ hiện 1 lần — copy và gửi user qua kênh nội bộ (Zalo, gặp trực tiếp).
+                    Hệ thống sẽ tự động <b>gửi email welcome</b> tới user nếu đã cấu hình SMTP ở <b>Settings → Thông báo</b>. Mật khẩu tạm vẫn hiển thị 1 lần làm backup — copy nếu cần gửi tay.
                   </span>
                 </div>
                 {addError && (
@@ -1083,7 +1085,7 @@ const UserManagement = () => {
                   <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-semibold">Mật khẩu CHỈ hiện 1 lần</p>
-                    <p>Hệ thống chưa gửi email tự động (defer v4.0). Hãy copy và gửi user qua kênh nội bộ. Đóng modal này = mất mật khẩu, phải reset.</p>
+                    <p>Email welcome đã được gửi tự động nếu SMTP đã cấu hình ở <b>Settings → Thông báo</b>. Mật khẩu bên dưới là bản backup — copy nếu cần gửi tay. Đóng modal này = mất mật khẩu, phải reset.</p>
                   </div>
                 </div>
 
@@ -1482,7 +1484,7 @@ const UserManagement = () => {
                     <ul className="list-disc list-inside space-y-0.5">
                       <li>Mật khẩu cũ của <b>{resetTargetUser.name}</b> mất hiệu lực ngay</li>
                       <li>Hệ thống sinh mật khẩu mới + hiển thị 1 lần cho admin copy</li>
-                      <li>Hệ thống <b>chưa có SMTP</b> — admin gửi user qua Zalo / gặp trực tiếp</li>
+                      <li>Hệ thống tự gửi email cho user nếu SMTP đã cấu hình ở <b>Settings → Thông báo</b></li>
                     </ul>
                   </div>
                 </div>
@@ -1512,8 +1514,9 @@ const UserManagement = () => {
         )}
 
         {/* Show-password-one-time modal sau khi reset thành công — pattern same
-            với create user (M2/v3 KHÔNG có SMTP). Đóng modal → password biến mất
-            khỏi state FE, BE KHÔNG lưu plaintext anywhere. */}
+            với create user. BE tự gửi email cho user nếu SMTP đã cấu hình; modal
+            là bản backup admin copy gửi tay khi cần. Đóng modal → password biến
+            mất khỏi state FE, BE KHÔNG lưu plaintext anywhere. */}
         {resetCredentials && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <motion.div
@@ -1542,7 +1545,7 @@ const UserManagement = () => {
                   <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-semibold">Mật khẩu CHỈ hiện 1 lần</p>
-                    <p>Hệ thống chưa gửi email tự động (defer v4.0). Hãy copy và gửi user qua kênh nội bộ. Đóng modal này = mất mật khẩu, phải reset lại.</p>
+                    <p>Email với mật khẩu mới đã được gửi tự động nếu SMTP đã cấu hình ở <b>Settings → Thông báo</b>. Mật khẩu bên dưới là bản backup — copy nếu cần gửi tay. Đóng modal này = mất mật khẩu, phải reset lại.</p>
                   </div>
                 </div>
 
