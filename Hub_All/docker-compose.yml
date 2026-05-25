@@ -108,6 +108,15 @@ services:
       # Operator gen: openssl rand -hex 32. Fail-loud syntax ${VAR:?msg} truoc boot
       # Settings validation (docker-compose interpolation error truoc container start).
       SETTINGS_PROXY_SECRET: ${SETTINGS_PROXY_SECRET:?SETTINGS_PROXY_SECRET env var phai set min 32 char — Plan 06-01 SETTINGS-03}
+      # Phase 8.3 MCP per-user pre-registered OAuth — shared secret giua API <-> MCP
+      # cho endpoint internal GET /api/internal/mcp/clients/{id}. Central-only
+      # (mcp_oauth_internal_router mount in block hub_name=central — xem main.py).
+      # require_internal_token tra 503 INTERNAL_AUTH_NOT_CONFIGURED neu env rong
+      # -> MCP lookup fail -> Claude OAuth tra "Client ID not found". Fail-loud
+      # ${VAR:?msg} ensure operator set ROOT .env truoc boot. Cung gia tri voi
+      # mcp_service container (xem block mcp_service environment duoi). Gen prod:
+      # openssl rand -hex 32.
+      MCP_INTERNAL_TOKEN: ${MCP_INTERNAL_TOKEN:?MCP_INTERNAL_TOKEN env var phai set min 32 char — Phase 8.3 per-user OAuth bind; openssl rand -hex 32}
       COCOINDEX_DB: /app/.cocoindex/state.lmdb
       COCOINDEX_LMDB_PATH: /app/.cocoindex/state.lmdb
     volumes:
@@ -272,6 +281,13 @@ services:
       MCP_OAUTH_ISSUER_URL: ${MCP_OAUTH_ISSUER_URL:-http://localhost:8190}
       # SQLite OAuth state — đường dẫn tuyệt đối trong named volume (sống sót restart).
       MCP_OAUTH_STATE_DB_PATH: /app/.oauth/state.db
+      # Phase 8.3 per-user pre-registered OAuth bind — phải trùng giá trị với
+      # python-api-central (cùng đọc từ ROOT .env). MCP gửi `Authorization:
+      # Bearer <token>` xuống API; API verify match. Field config.py dùng
+      # validation_alias="MCP_INTERNAL_TOKEN" (bypass env_prefix=MCP_ +
+      # field name auto-derive thành MCP_OAUTH_INTERNAL_TOKEN). Fail-loud
+      # cùng pattern với python-api-central — operator chỉ set 1 lần ở ROOT .env.
+      MCP_INTERNAL_TOKEN: ${MCP_INTERNAL_TOKEN:?MCP_INTERNAL_TOKEN env var phai set min 32 char — Phase 8.3 per-user OAuth bind; openssl rand -hex 32}
     volumes:
       - medinet_mcp_oauth_state:/app/.oauth
     depends_on:

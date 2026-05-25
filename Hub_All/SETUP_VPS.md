@@ -97,12 +97,14 @@ git checkout v3.1           # hoặc main
 # Hex chỉ có a-f0-9 → an toàn tuyệt đối cho cả URL DSN lẫn configparser.
 PG_PWD=$(openssl rand -hex 32)
 SP_SECRET=$(openssl rand -hex 32)
+MCP_TOKEN=$(openssl rand -hex 32)
 AES=$(python3 -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
 
 echo "POSTGRES_PASSWORD=${PG_PWD}"
 echo "SETTINGS_PROXY_SECRET=${SP_SECRET}"
+echo "MCP_INTERNAL_TOKEN=${MCP_TOKEN}"
 echo "AES_KEY=${AES}"
-# COPY 3 dòng — dùng ở Step 6 + 7. Giữ shell session mở để biến vẫn còn.
+# COPY 4 dòng — dùng ở Step 6 + 7. Giữ shell session mở để biến vẫn còn.
 ```
 
 ---
@@ -116,6 +118,13 @@ LOG_LEVEL=info
 
 POSTGRES_PASSWORD=${PG_PWD}
 SETTINGS_PROXY_SECRET=${SP_SECRET}
+
+# Phase 8.3 — Shared secret API <-> MCP cho per-user pre-registered OAuth
+# (endpoint internal GET /api/internal/mcp/clients/{id}). docker-compose.yml
+# wire vào CẢ python-api-central VÀ mcp_service qua ${MCP_INTERNAL_TOKEN:?msg}.
+# KHÔNG đặt lại ở mcp_service/.env hay api/.env — drift-prone.
+# Thiếu → Claude OAuth /authorize trả "Client ID not found" cho mọi mcpu_*.
+MCP_INTERNAL_TOKEN=${MCP_TOKEN}
 
 WIKI_PUBLIC_DOMAIN=wiki.medinet.work
 MCP_OAUTH_ISSUER_URL=https://wiki.medinet.work/mcp
@@ -278,8 +287,12 @@ nano mcp_service/.env
 MCP_API_BASE_URL=http://python-api-central:8080
 MCP_OAUTH_ISSUER_URL=https://wiki.medinet.work/mcp
 MCP_PATH_PREFIX=mcp
-MCP_INTERNAL_TOKEN=<openssl rand -hex 32>
 ```
+
+> **KHÔNG đặt `MCP_INTERNAL_TOKEN` ở đây** — đã wire qua ROOT `Hub_All/.env`
+> (Step 6) vào CẢ 2 container (python-api-central + mcp_service) bằng
+> `${MCP_INTERNAL_TOKEN:?msg}` trong docker-compose.yml. Đặt 2 nơi sẽ drift
+> giữa API và MCP → 401 internal lookup → "Client ID not found" ở Claude.
 
 ---
 
