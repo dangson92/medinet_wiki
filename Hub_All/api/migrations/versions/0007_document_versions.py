@@ -172,3 +172,53 @@ def upgrade() -> None:
     print(
         "[0007] OK CREATE TABLE document_versions (15 cột + UNIQUE doc_ver + INDEX document_id + CHECK change_type)"
     )
+
+
+def downgrade() -> None:
+    """Idempotent rollback — DROP TABLE document_versions + INDEX + log COUNT(*).
+
+    Thứ tự ngược upgrade:
+    1. Defensive log COUNT(*) document_versions hiện có (operator visibility — KHÔNG raise).
+    2. DROP INDEX ix_document_versions_document_id (IF EXISTS).
+    3. DROP TABLE document_versions (CASCADE FK auto-drop UNIQUE + CHECK).
+
+    Lưu ý: KHÔNG raise nếu COUNT > 0 — schema 0007 là feature-additive (KHÔNG migrate
+    data từ table cũ). Operator quyết định manual review trước rollback nếu data
+    valuable (production deployment chưa nên rollback nếu user đã restore version).
+    Pattern khác Plan 01-01 0006 — 0006 có defensive RuntimeError vì rollback CHECK
+    constraint 3-value với row role='hub_admin' sẽ FAIL; 0007 DROP TABLE atomic OK.
+    """
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    existing_tables = set(inspector.get_table_names())
+
+    # ============================================================
+    # STEP 1 — Defensive log COUNT(*) (operator visibility).
+    # ============================================================
+    if "document_versions" in existing_tables:
+        count_result = bind.execute(
+            sa.text("SELECT COUNT(*) FROM document_versions")
+        ).scalar()
+        print(
+            f"[0007 downgrade] document_versions table hiện có {count_result} row "
+            f"— sẽ bị DROP. Nếu data valuable, ABORT downgrade + backup trước "
+            f"khi re-run alembic downgrade."
+        )
+    else:
+        print("[0007 downgrade] SKIP — document_versions table KHÔNG tồn tại")
+        return
+
+    # ============================================================
+    # STEP 2 — DROP INDEX (IF EXISTS guard idempotent).
+    # ============================================================
+    op.execute(
+        "DROP INDEX IF EXISTS ix_document_versions_document_id"
+    )
+    print("[0007 downgrade] OK DROP INDEX ix_document_versions_document_id")
+
+    # ============================================================
+    # STEP 3 — DROP TABLE (CASCADE auto-drop UNIQUE + CHECK + FK).
+    # ============================================================
+    op.drop_table("document_versions")
+    print("[0007 downgrade] OK DROP TABLE document_versions (CASCADE auto-drop UNIQUE + CHECK + FK)")
