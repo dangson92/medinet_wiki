@@ -223,8 +223,14 @@ def test_extract_file_not_found(tmp_path: Path) -> None:
 
 
 def test_allowed_extensions_pinned() -> None:
-    """Whitelist M2 cố định 4 ext (R4 mitigation)."""
-    assert ALLOWED_EXTENSIONS == frozenset({".docx", ".txt", ".md", ".pdf"})
+    """Whitelist post-v3.1 quick task 2026-05-26: 8 ext (R4 mitigation extend).
+
+    Original M2 4 format + quick task extend 4 format (csv/xlsx/pptx/html).
+    OCR ảnh (.jpg/.png) + .doc legacy vẫn out of scope (defer v4.0).
+    """
+    assert ALLOWED_EXTENSIONS == frozenset(
+        {".docx", ".txt", ".md", ".pdf", ".csv", ".xlsx", ".pptx", ".html"}
+    )
 
 
 def test_extract_md_file(tmp_path: Path) -> None:
@@ -235,3 +241,186 @@ def test_extract_md_file(tmp_path: Path) -> None:
     assert "Khám bệnh" in text
     assert is_scanned is False
     assert meta["format"] == "md"
+
+
+# ============================================================================
+# Quick task 2026-05-26-add-file-format-readers — 4 format mới
+# ============================================================================
+
+
+@pytest.fixture
+def csv_vn(tmp_path: Path) -> Path:
+    """CSV 3 cột × 4 row VN có dấu, UTF-8 (KHÔNG BOM)."""
+    import csv as stdlib_csv
+
+    path = tmp_path / "danh-sach-thuoc.csv"
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = stdlib_csv.writer(f)
+        writer.writerow(["Mã thuốc", "Tên thuốc", "Đơn vị"])
+        writer.writerow(["T001", "Paracetamol 500mg", "Viên"])
+        writer.writerow(["T002", "Amoxicillin 250mg", "Viên"])
+        writer.writerow(["T003", "Vitamin C", "Gói"])
+    return path
+
+
+@pytest.fixture
+def csv_excel_bom_semicolon(tmp_path: Path) -> Path:
+    """CSV xuất từ Excel Windows VN — UTF-8 BOM + delimiter ';'."""
+    path = tmp_path / "excel-export.csv"
+    content = "﻿Họ tên;Tuổi;Chẩn đoán\nNguyễn Văn A;45;Cảm cúm\nTrần Thị B;30;Viêm họng\n"
+    path.write_bytes(content.encode("utf-8"))
+    return path
+
+
+@pytest.fixture
+def xlsx_two_sheets(tmp_path: Path) -> Path:
+    """XLSX 2 sheet — Bệnh nhân + Thuốc."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws1 = wb.active
+    ws1.title = "Bệnh nhân"
+    ws1.append(["ID", "Họ tên", "Tuổi"])
+    ws1.append([1, "Nguyễn Văn A", 45])
+    ws1.append([2, "Trần Thị B", 30])
+
+    ws2 = wb.create_sheet("Thuốc")
+    ws2.append(["Mã", "Tên thuốc"])
+    ws2.append(["T001", "Paracetamol 500mg"])
+    ws2.append(["T002", "Amoxicillin 250mg"])
+
+    path = tmp_path / "ho-so.xlsx"
+    wb.save(str(path))
+    return path
+
+
+@pytest.fixture
+def pptx_three_slides(tmp_path: Path) -> Path:
+    """PPTX 3 slide — title + content."""
+    from pptx import Presentation
+
+    prs = Presentation()
+    layout = prs.slide_layouts[5]  # Title Only layout (luôn có ở default template)
+
+    for i, (title, body) in enumerate(
+        [
+            ("Mục 1. KHÁM TỔNG QUÁT", "Bệnh nhân khám lâm sàng đầy đủ."),
+            ("Mục 2. XÉT NGHIỆM", "Làm xét nghiệm máu và nước tiểu."),
+            ("Mục 3. KẾT LUẬN", "Bệnh nhân ổn định."),
+        ],
+        start=1,
+    ):
+        slide = prs.slides.add_slide(layout)
+        slide.shapes.title.text = title
+        # Add 1 text box body
+        from pptx.util import Inches
+
+        tb = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(1))
+        tb.text_frame.text = body
+        del i  # unused
+
+    path = tmp_path / "trinh-bay.pptx"
+    prs.save(str(path))
+    return path
+
+
+@pytest.fixture
+def html_with_script(tmp_path: Path) -> Path:
+    """HTML có <script> + <style> để verify decompose."""
+    path = tmp_path / "trang.html"
+    html = (
+        "<!DOCTYPE html><html><head>"
+        "<title>Khám bệnh</title>"
+        "<style>body { color: red; }</style>"
+        "<script>alert('xss should be stripped');</script>"
+        "</head><body>"
+        "<h1>Khám bệnh đa khoa</h1>"
+        "<p>Bệnh nhân lâm sàng tốt.</p>"
+        "<ul><li>Xét nghiệm máu</li><li>Xét nghiệm nước tiểu</li></ul>"
+        "</body></html>"
+    )
+    path.write_text(html, encoding="utf-8")
+    return path
+
+
+def test_extract_csv_vietnamese(csv_vn: Path) -> None:
+    """CSV UTF-8 VN — row join ' | ', detect delimiter ','."""
+    text, is_scanned, meta = extract_text(csv_vn)
+    assert "Mã thuốc | Tên thuốc | Đơn vị" in text
+    assert "Paracetamol 500mg" in text
+    assert "Vitamin C" in text
+    assert is_scanned is False
+    assert meta["format"] == "csv"
+    assert meta["row_count"] == 4  # 1 header + 3 data
+    assert meta["delimiter"] == ","
+
+
+def test_extract_csv_excel_bom_semicolon(csv_excel_bom_semicolon: Path) -> None:
+    """CSV BOM + delimiter ';' — utf-8-sig strip BOM + Sniffer detect ';'."""
+    text, is_scanned, meta = extract_text(csv_excel_bom_semicolon)
+    # BOM ﻿ PHẢI bị strip — KHÔNG có ở đầu text decoded
+    assert not text.startswith("﻿")
+    assert "Nguyễn Văn A" in text
+    assert "Cảm cúm" in text
+    # Delimiter ';' được Sniffer detect
+    assert meta["delimiter"] == ";"
+    assert meta["encoding"] == "utf-8-sig"
+    assert is_scanned is False
+
+
+def test_extract_xlsx_two_sheets(xlsx_two_sheets: Path) -> None:
+    """XLSX 2 sheet — extract cả sheet với separator '--- Sheet: ... ---'."""
+    text, is_scanned, meta = extract_text(xlsx_two_sheets)
+    assert "--- Sheet: Bệnh nhân ---" in text
+    assert "--- Sheet: Thuốc ---" in text
+    assert "Nguyễn Văn A" in text
+    assert "Paracetamol 500mg" in text
+    assert is_scanned is False
+    assert meta["format"] == "xlsx"
+    assert meta["sheet_count"] == 2
+    # 3 row × 2 sheet = 6 row data (header + 2 data row mỗi sheet)
+    assert meta["row_count"] == 6
+
+
+def test_extract_pptx_three_slides(pptx_three_slides: Path) -> None:
+    """PPTX 3 slide — extract title + body với separator '--- Slide N ---'."""
+    text, is_scanned, meta = extract_text(pptx_three_slides)
+    assert "--- Slide 1 ---" in text
+    assert "--- Slide 2 ---" in text
+    assert "--- Slide 3 ---" in text
+    assert "Mục 1. KHÁM TỔNG QUÁT" in text
+    assert "xét nghiệm máu" in text.lower()
+    assert "Bệnh nhân ổn định" in text
+    assert is_scanned is False
+    assert meta["format"] == "pptx"
+    assert meta["slide_count"] == 3
+    assert meta["pages"] == 3
+
+
+def test_extract_html_decompose_script_style(html_with_script: Path) -> None:
+    """HTML — <script> + <style> decompose + tag stripped + content giữ nguyên."""
+    text, is_scanned, meta = extract_text(html_with_script)
+    # Content user-visible PHẢI có
+    assert "Khám bệnh đa khoa" in text
+    assert "Bệnh nhân lâm sàng tốt" in text
+    assert "Xét nghiệm máu" in text
+    # Script content PHẢI bị strip (T-quick-html-01 mitigation)
+    assert "alert" not in text
+    assert "xss" not in text
+    # Style content PHẢI bị strip
+    assert "color: red" not in text
+    # Tag stripped — KHÔNG có '<' hoặc '>' raw trong output
+    assert "<h1>" not in text
+    assert "<p>" not in text
+    assert is_scanned is False
+    assert meta["format"] == "html"
+
+
+def test_extract_legacy_doc_still_rejected(tmp_path: Path) -> None:
+    """Word 97-2003 .doc binary vẫn out of scope (user phải convert sang .docx)."""
+    bad = tmp_path / "old-word.doc"
+    bad.write_bytes(b"\xd0\xcf\x11\xe0")  # OLE2 magic header
+    with pytest.raises(UnsupportedFormatError) as exc:
+        extract_text(bad)
+    assert ".doc" in str(exc.value)
+    assert exc.value.ext == ".doc"

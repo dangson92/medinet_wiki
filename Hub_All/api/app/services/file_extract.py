@@ -1,7 +1,7 @@
 """File extract service — Plan 04-02 Task 01 (INGEST-02 prerequisite).
 
-Hỗ trợ 4 format whitelist (R4 mitigation): DOCX, TXT, MD, PDF text-only.
-KHÔNG OCR (D4 — defer v4.0). Scanned PDF → is_scanned=True (R4 mitigation).
+Hỗ trợ 8 format whitelist (R4 mitigation): DOCX, TXT, MD, PDF, CSV, XLSX, PPTX, HTML.
+KHÔNG OCR cho ảnh + scanned PDF (D4 — defer v4.0). Scanned PDF → is_scanned=True.
 
 Public API ổn định cho:
 - Plan 04-03 cocoindex flow wrap thành cocoindex.op.function (extract step).
@@ -10,19 +10,26 @@ Public API ổn định cho:
 
 Quy tắc xử lý theo extension:
 
-| Extension     | Library                | Output            | is_scanned                  |
-|---------------|------------------------|-------------------|-----------------------------|
-| .docx         | python-docx Document() | paragraph + bảng  | False luôn                  |
-| .txt, .md     | open + chardet detect  | full text         | False luôn                  |
-| .pdf          | pypdf PdfReader        | pages join \n     | True nếu > 80% page < 30 ký |
+| Extension     | Library                | Output                  | is_scanned                  |
+|---------------|------------------------|-------------------------|-----------------------------|
+| .docx         | python-docx Document() | paragraph + bảng        | False luôn                  |
+| .txt, .md     | open + chardet detect  | full text               | False luôn                  |
+| .pdf          | pypdf PdfReader        | pages join \\n          | True nếu > 80% page < 30 ký |
+| .csv          | stdlib csv + Sniffer   | row join " | "          | False luôn                  |
+| .xlsx         | openpyxl read_only     | sheet/row join " | "    | False luôn                  |
+| .pptx         | python-pptx            | slide text + heading    | False luôn                  |
+| .html         | bs4 + lxml             | get_text strip tag      | False luôn                  |
 
 Tham chiếu:
 - PITFALLS P5 — Scanned PDF silent fail (HIGH).
-- PROJECT.md R4 — whitelist `{.docx, .txt, .md, .pdf}` + enum `failed_unsupported`.
-- CLAUDE.md section 3 — format hỗ trợ M2.
+- PROJECT.md R4 — whitelist 4 format M2 (CSV/XLSX/PPTX/HTML thêm post-v3.1 quick task 2026-05-26).
+- CLAUDE.md section 3 — format hỗ trợ.
+- Quick task 2026-05-26-add-file-format-readers — mở rộng 4 → 8 format.
 """
 from __future__ import annotations
 
+import csv as _csv
+import io as _io
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -34,8 +41,11 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
 
-#: Whitelist extension hỗ trợ M2 — KHÔNG đổi giữa phase (R4 mitigation).
-ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".docx", ".txt", ".md", ".pdf"})
+#: Whitelist extension hỗ trợ — KHÔNG đổi giữa phase (R4 mitigation).
+#: Quick task 2026-05-26 mở rộng 4 → 8 (thêm csv/xlsx/pptx/html).
+ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
+    {".docx", ".txt", ".md", ".pdf", ".csv", ".xlsx", ".pptx", ".html"}
+)
 
 #: Threshold heuristic detect scanned PDF (P5 / R4):
 #: page có < 30 ký tự non-whitespace coi là "không có text"; > 80% page như vậy
@@ -86,6 +96,14 @@ def extract_text(file_path: Path) -> tuple[str, bool, dict[str, Any]]:
         return _extract_text_file(file_path, ext)
     if ext == ".pdf":
         return _extract_pdf(file_path)
+    if ext == ".csv":
+        return _extract_csv(file_path)
+    if ext == ".xlsx":
+        return _extract_xlsx(file_path)
+    if ext == ".pptx":
+        return _extract_pptx(file_path)
+    if ext == ".html":
+        return _extract_html(file_path)
     # Defensive — không reach do guard ALLOWED_EXTENSIONS phía trên.
     raise UnsupportedFormatError(ext)
 
@@ -265,3 +283,165 @@ def _is_pdf_scanned(reader: PdfReader) -> bool:
         if len(text.strip()) < _SCANNED_PAGE_CHAR_THRESHOLD:
             empty_pages += 1
     return (empty_pages / len(reader.pages)) > _SCANNED_RATIO_THRESHOLD
+
+
+def _decode_with_fallback(raw: bytes) -> tuple[str, str]:
+    """Decode bytes ưu tiên utf-8-sig (strip BOM), fallback chardet detect.
+
+    Dùng chung cho CSV + HTML — 2 format hay export từ Excel/Word Windows
+    có BOM `\\ufeff` đầu file. `utf-8-sig` codec stdlib tự strip BOM,
+    KHÔNG cần codecs.BOM_UTF8 detect thủ công.
+    """
+    try:
+        return raw.decode("utf-8-sig"), "utf-8-sig"
+    except UnicodeDecodeError:
+        detected = chardet.detect(raw)
+        enc = detected.get("encoding") or "latin-1"
+        return raw.decode(enc, errors="replace"), enc
+
+
+def _extract_csv(file_path: Path) -> tuple[str, bool, dict[str, Any]]:
+    """Extract CSV — auto-detect delimiter + encoding, mỗi row join ' | '.
+
+    Pitfall mitigation:
+    - BOM (Excel Windows export): utf-8-sig codec tự strip.
+    - Delimiter VN locale: csv.Sniffer detect trong {',', ';', '\\t', '|'}; fallback ','.
+    - Encoding non-utf8: chardet fallback (latin-1 / windows-1258 / etc).
+
+    Output format: mỗi row hàng = các ô join ' | ', các hàng join '\\n' —
+    KHỚP pattern `_table_to_text` DOCX để chunker downstream xử lý nhất quán.
+    """
+    raw = file_path.read_bytes()
+    text_decoded, encoding = _decode_with_fallback(raw)
+
+    # Sniff delimiter từ sample 4KB đầu file
+    sample = text_decoded[:4096]
+    try:
+        dialect = _csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        delimiter = dialect.delimiter
+    except _csv.Error:
+        delimiter = ","
+
+    reader = _csv.reader(_io.StringIO(text_decoded), delimiter=delimiter)
+    rows: list[str] = []
+    row_count = 0
+    for row in reader:
+        cells = [cell.strip() for cell in row if cell.strip()]
+        if cells:
+            rows.append(" | ".join(cells))
+            row_count += 1
+    text = "\n".join(rows)
+    meta: dict[str, Any] = {
+        "pages": 1,
+        "format": "csv",
+        "encoding": encoding,
+        "row_count": row_count,
+        "delimiter": delimiter,
+    }
+    return text, False, meta
+
+
+def _extract_xlsx(file_path: Path) -> tuple[str, bool, dict[str, Any]]:
+    """Extract XLSX qua openpyxl read_only + data_only.
+
+    - `read_only=True`: streaming parse, memory-friendly cho file lớn.
+    - `data_only=True`: trả value của cell (kể cả công thức đã eval); cell công
+      thức chưa eval (mới create chưa save Excel) → None → skip.
+    - Sheet header `--- Sheet: <name> ---` trước mỗi sheet để chunker phân biệt.
+    - Row format ` | ` separator tương đương CSV + DOCX table.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(filename=str(file_path), read_only=True, data_only=True)
+    try:
+        parts: list[str] = []
+        total_rows = 0
+        sheet_count = 0
+        for sheet in wb.worksheets:
+            sheet_count += 1
+            sheet_lines: list[str] = [f"--- Sheet: {sheet.title} ---"]
+            for row in sheet.iter_rows(values_only=True):
+                cells = [
+                    str(cell).strip()
+                    for cell in row
+                    if cell is not None and str(cell).strip()
+                ]
+                if cells:
+                    sheet_lines.append(" | ".join(cells))
+                    total_rows += 1
+            if len(sheet_lines) > 1:  # có nội dung ngoài header
+                parts.append("\n".join(sheet_lines))
+    finally:
+        wb.close()
+
+    text = "\n\n".join(parts)
+    meta: dict[str, Any] = {
+        "pages": 1,
+        "format": "xlsx",
+        "encoding": "utf-8",
+        "sheet_count": sheet_count,
+        "row_count": total_rows,
+    }
+    return text, False, meta
+
+
+def _extract_pptx(file_path: Path) -> tuple[str, bool, dict[str, Any]]:
+    """Extract PPTX qua python-pptx — text frame mỗi slide + heading separator.
+
+    - Duyệt `shape.has_text_frame` → `text_frame.text` (paragraph text gộp).
+    - Slide header `--- Slide N ---` để chunker phân biệt biên slide.
+    - Bỏ qua: Picture, Chart, Table shape (rare ở docs nội bộ; defer v4.0).
+    """
+    from pptx import Presentation
+
+    prs = Presentation(str(file_path))
+    parts: list[str] = []
+    slide_count = 0
+    for slide_idx, slide in enumerate(prs.slides, start=1):
+        slide_count += 1
+        slide_lines: list[str] = [f"--- Slide {slide_idx} ---"]
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+            tf_text = shape.text_frame.text.strip()
+            if tf_text:
+                slide_lines.append(tf_text)
+        if len(slide_lines) > 1:
+            parts.append("\n".join(slide_lines))
+
+    text = "\n\n".join(parts)
+    meta: dict[str, Any] = {
+        "pages": slide_count,
+        "format": "pptx",
+        "encoding": "utf-8",
+        "slide_count": slide_count,
+    }
+    return text, False, meta
+
+
+def _extract_html(file_path: Path) -> tuple[str, bool, dict[str, Any]]:
+    """Extract HTML qua BeautifulSoup + lxml parser — strip tag, decompose script/style.
+
+    Pitfall mitigation:
+    - `<script>` + `<style>` tag content KHÔNG phải nội dung user → decompose trước get_text.
+    - lxml parser handle HTML malformed tốt hơn html.parser stdlib (Word/PowerPoint export
+      HTML hay sai cấu trúc).
+    - BOM: utf-8-sig codec strip.
+    """
+    from bs4 import BeautifulSoup
+
+    raw = file_path.read_bytes()
+    text_decoded, encoding = _decode_with_fallback(raw)
+    soup = BeautifulSoup(text_decoded, "lxml")
+
+    # Decompose script + style trước khi get_text (T-quick-html-01 mitigation)
+    for tag in soup(["script", "style"]):
+        tag.decompose()
+
+    text = soup.get_text(separator="\n", strip=True)
+    meta: dict[str, Any] = {
+        "pages": 1,
+        "format": "html",
+        "encoding": encoding,
+    }
+    return text, False, meta

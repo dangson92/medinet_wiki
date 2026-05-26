@@ -251,6 +251,13 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 - SEED-001 local embedding model (dormant v4.1)
 - Visual regression smoke 4 hub × 11 trang React M2 COMPAT-01 (defer ops handover post-v3.0)
 
+## Quick Tasks Completed
+
+| Date       | Slug                                    | Description                                                                      | Directory                                                                                        |
+|------------|-----------------------------------------|----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| 2026-05-23 | mcp-subdomain-consolidate               | Gộp `mcp.medinet.vn` về `wiki.medinet.vn/mcp` (1 public subdomain)               | [.planning/quick/2026-05-23-mcp-subdomain-consolidate/](./quick/2026-05-23-mcp-subdomain-consolidate/) |
+| 2026-05-26 | add-file-format-readers                 | Thêm thư viện đọc file gốc CSV / XLSX / PPTX / HTML (4 → 8 ALLOWED_EXTENSIONS)   | [.planning/quick/2026-05-26-add-file-format-readers/](./quick/2026-05-26-add-file-format-readers/)     |
+
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-23 v3.1 milestone start) + `.planning/REQUIREMENTS.md` (v3.1 — 15 REQ-ID v1) + `.planning/ROADMAP.md` (v3.1 — 4 phase reset numbering)

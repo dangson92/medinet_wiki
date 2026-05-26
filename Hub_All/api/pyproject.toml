@@ -28,6 +28,11 @@ dependencies = [
     "python-docx==1.2.0",
     "markdown-it-py>=3,<4",
     "chardet>=5,<6",
+    # Quick task 2026-05-26 — đọc file gốc thêm 4 format (CSV/XLSX/PPTX/HTML)
+    "openpyxl>=3.1,<4",
+    "python-pptx>=1.0,<2",
+    "beautifulsoup4>=4.12,<5",
+    "lxml>=5,<6",
     # Observability + util
     "structlog>=25.0,<26",
     "prometheus-client>=0.21,<1",
@@ -83,7 +88,7 @@ plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["cocoindex.*", "litellm.*", "pgvector.*", "pwdlib.*"]
+module = ["cocoindex.*", "litellm.*", "pgvector.*", "pwdlib.*", "openpyxl.*", "pptx.*", "bs4.*", "lxml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
