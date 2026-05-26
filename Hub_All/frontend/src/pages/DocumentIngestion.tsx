@@ -11,6 +11,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import RichTextEditor from '../components/RichTextEditor';
 import EditContentModal from '../components/EditContentModal';
 import Pagination from '../components/Pagination';
+import { DocxPreview } from '../components/DocxPreview';
+import { XlsxPreview } from '../components/XlsxPreview';
+import { CsvPreview } from '../components/CsvPreview';
 import {
   Upload,
   File,
@@ -90,6 +93,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
   const [ragConfig, setRagConfig] = useState<{ chunker: string; chunk_size: number; chunk_overlap: number; embedding_model: string; embedding_provider: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<RAGDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTab, setPreviewTab] = useState<'preview' | 'history'>('preview');
   const { user } = useAuth();
@@ -251,6 +255,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
   const handlePreview = async (doc: RAGDocument) => {
     setPreviewDoc(doc);
     setPreviewUrl(null);
+    setPreviewBlob(null);
     setPreviewTab('preview');
     setPreviewLoading(true);
     try {
@@ -261,6 +266,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
+        setPreviewBlob(blob);
         setPreviewUrl(url);
       } else {
         setPreviewUrl('error');
@@ -275,6 +281,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
     if (previewUrl && previewUrl !== 'error') URL.revokeObjectURL(previewUrl);
     setPreviewDoc(null);
     setPreviewUrl(null);
+    setPreviewBlob(null);
   };
 
   // Fetch hubs + RAG config
@@ -1211,7 +1218,27 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                       />
                     );
                   }
-                  // DOCX / XLSX / PPTX / CSV / HTML — offer download
+                  if (t === 'html' || t === 'htm') {
+                    return (
+                      <iframe
+                        src={previewUrl}
+                        title={previewDoc.name}
+                        sandbox=""
+                        className="w-full h-full min-h-[60vh] bg-white"
+                        style={{ border: 'none' }}
+                      />
+                    );
+                  }
+                  if (t === 'docx' && previewBlob) {
+                    return <DocxPreview blob={previewBlob} />;
+                  }
+                  if (t === 'xlsx' && previewBlob) {
+                    return <XlsxPreview blob={previewBlob} />;
+                  }
+                  if (t === 'csv' && previewBlob) {
+                    return <CsvPreview blob={previewBlob} />;
+                  }
+                  // PPTX (chưa có lib lightweight) + format khác — offer download
                   return (
                     <div className="flex flex-col items-center justify-center h-full py-20 gap-4">
                       <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">

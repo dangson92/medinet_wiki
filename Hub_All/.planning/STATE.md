@@ -257,6 +257,7 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 |------------|-----------------------------------------|----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
 | 2026-05-23 | mcp-subdomain-consolidate               | Gộp `mcp.medinet.vn` về `wiki.medinet.vn/mcp` (1 public subdomain)               | [.planning/quick/2026-05-23-mcp-subdomain-consolidate/](./quick/2026-05-23-mcp-subdomain-consolidate/) |
 | 2026-05-26 | add-file-format-readers                 | Thêm thư viện đọc file gốc CSV / XLSX / PPTX / HTML (4 → 8 ALLOWED_EXTENSIONS)   | [.planning/quick/2026-05-26-add-file-format-readers/](./quick/2026-05-26-add-file-format-readers/)     |
+| 2026-05-26 | add-frontend-file-preview               | Render DOCX/XLSX/CSV/HTML trực tiếp browser (docx-preview + SheetJS + PapaParse lazy load) | [.planning/quick/2026-05-26-add-frontend-file-preview/](./quick/2026-05-26-add-frontend-file-preview/)   |
 
 ## Project Reference
 
