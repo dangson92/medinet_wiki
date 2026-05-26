@@ -10,7 +10,7 @@
 - ❌ **v1.0 RAG Quality with Docling** — Abandoned 2026-05-13 (xem [`milestones/v1.0-docling-rag/`](milestones/v1.0-docling-rag/))
 - ✅ **v2.0 Full RAG Rewrite** — Shipped 2026-05-21 (archive: [`milestones/v2.0-full-rag-rewrite/`](milestones/v2.0-full-rag-rewrite/))
 - ✅ **v3.0 Multi-Hub Split** — Shipped 2026-05-23 (archive: [`milestones/v3.0-multi-hub-split/`](milestones/v3.0-multi-hub-split/))
-- ✅ **v3.1 RBAC hub_admin** — Shipped 2026-05-24, 4 phase / 15 REQ-ID / 15 plan (defer archive qua `/gsd-complete-milestone v3.1`; D-V3.1-04 phase numbering reset về 1)
+- ✅ **v3.1 RBAC hub_admin** — Shipped 2026-05-24 + Phase 5 DONE 2026-05-26 (re-open scope Document Version History), 5 phase / 20 REQ-ID / 20 plan (defer archive qua `/gsd-complete-milestone v3.1`; D-V3.1-04 phase numbering reset về 1)
 - 📋 **v4.0 Production Hardening + Advanced RAG** — Backlog (OCR Vietnamese, cross-dim embedding swap, streaming `/api/ask`, coverage >80%, per-resource ACL, ...)
 - 📋 **v4.1 Advanced Retrieval** — Backlog (Hybrid BM25 + reranker, local embedding SEED-001, version history)
 
@@ -26,7 +26,7 @@
 | **2** | Backend RBAC enforcement (DEP) ✅ DONE 2026-05-24 | Dependency `require_hub_admin_for(hub_id)`; refactor GET /api/hubs filter cả admin; users.py CRUD scope; hubs.py mutate super admin only; audit actor.scope | DEP-01..05 (5) | 5 | Phase 1 |
 | **3** | Frontend form refactor (FE) ✅ DONE 2026-05-24 | UserManagement form 3 option; hub switcher hide central; edit modal disabled assign super; api.ts UserRole type extend | FE-01..04 (4) | 4 | Phase 2 |
 | **4** | Migration + smoke E2E (MIGRATE) ✅ DONE 2026-05-24 | Migration idempotent + rollback; smoke E2E 4 scenario; closeout docs | MIGRATE-01..02 (2) | 2 | Phase 1-3 |
-| **5** | Document version history (VER) 📋 PLANNED 2026-05-26 | Alembic migration `document_versions` table + service snapshot khi reupload/edit/reextract/restore + 4 endpoint router + audit + RBAC hub-scope + integration test. FE đã ship trước BE → user gặp 404 console khi mở version tab. | VER-01..05 (5 estimate) | 5 | Phase 2 (RBAC) — independent của Phase 3+4 |
+| **5** | Document version history (VER) ✅ DONE 2026-05-26 | Alembic migration `0007_document_versions` table 15 cột exact match DocumentVersionAPI interface + service `document_version_service.py` 5 API (snapshot dedupe-by-hash + restore append-only + retention CTE + audit emit 2 action) + router `document_versions.py` 4 endpoint exact match api.ts:268-285 + RBAC 3-layer (3 GET Layer 3 SSO-04 + POST inline assert_hub_admin_for) + 5 scenario E2E integration test PASS in 19.44s. FE `DocumentVersionHistory.tsx` 404 bug fixed. | VER-01..05 (5) | 5 | Phase 2 (RBAC) — independent của Phase 3+4 |
 
 **Critical path:** 1 → 2 → 3 → 4 (RBAC linear). Phase 5 độc lập, depend Phase 2 RBAC (cho hub_admin scope filter).
 
@@ -175,7 +175,14 @@ Plans:
 
 **Plans estimate:** 4-5 plans (Wave 1 schema migration + Wave 2 service snapshot 4 trigger + Wave 3 router 4 endpoint + Wave 4 RBAC integration test + Wave 5 closeout).
 
-Plans: (TBD — sẽ điền sau `/gsd-plan-phase 5`)
+**Plans:** 5 plans (Wave 1 BLOCKING migration → Wave 2 BLOCKING service → Wave 3 BLOCKING router → Wave 4 BLOCKING integration test → Wave 5 BLOCKING closeout — linear critical path).
+
+Plans:
+- [x] 05-01-PLAN.md — Alembic migration 0007 document_versions table (15 cột exact match DocumentVersionAPI + UNIQUE doc_ver + INDEX document_id + CHECK change_type) + 5 integration test idempotent với DSN injection SAFETY pattern Plan 01-03 carry forward (VER-01) ✅ DONE 2026-05-26
+- [x] 05-02-PLAN.md — document_version_service.py 5 public API + 3 helper (snapshot dedupe-by-hash D-V3.1-Phase5-A + restore append-only D-V3.1-Phase5-D + retention CTE D-V3.1-Phase5-E + audit emit 2 action D-V3.1-Phase5-H) + 8 unit test PASS in 4.45s (VER-02) ✅ DONE 2026-05-26
+- [x] 05-03-PLAN.md — document_versions.py router 4 endpoint exact match api.ts:268-285 (envelope M2 + chunks=[] D-V3.1-Phase5-B + StreamingResponse RFC 6266 percent-encoded filename) + RBAC 3-layer (Layer 3 SSO-04 GET + inline assert_hub_admin_for POST /restore) + universal mount main.py + 10 unit test PASS in 5.04s (VER-03 + VER-04) ✅ DONE 2026-05-26
+- [x] 05-04-PLAN.md — Integration test test_document_versions.py 5 scenario E2E PASS in 19.44s (create + list DESC + restore append-only + cross-hub 403 HUB_ADMIN_REQUIRED + audit forensic chain) qua app_with_auth + sample_docs python-docx inline (VER-05) ✅ DONE 2026-05-26
+- [x] 05-05-PLAN.md — Closeout 4 docs atomic (STATE + REQUIREMENTS + ROADMAP + CLAUDE) + KHÔNG git tag mới mặc định (D-V3.1-Phase5 discretion semver clean) ✅ DONE 2026-05-26
 
 ---
 
@@ -204,7 +211,7 @@ Full details: [`milestones/v2.0-full-rag-rewrite/ROADMAP.md`](milestones/v2.0-fu
 | v1.0 RAG Quality with Docling | 5 | 28/28 | 34/34 | ❌ Abandoned | 2026-05-13 |
 | v2.0 Full RAG Rewrite | 13 | ~75/75 | 38/38 | ✅ Shipped | 2026-05-21 |
 | v3.0 Multi-Hub Split | 7 | 38/38 | 30/30 | ✅ Shipped | 2026-05-23 |
-| **v3.1 RBAC hub_admin** | **4** | **15/15** | **15/15** | ✅ **SHIPPED** | 2026-05-24 |
+| **v3.1 RBAC hub_admin** | **5** | **20/20** | **20/20** | ✅ **SHIPPED + Phase 5 DONE** | 2026-05-26 |
 | v4.0 Production Hardening | — | — | — | 📋 Backlog | — |
 | v4.1 Advanced Retrieval | — | — | — | 📋 Backlog | — |
 
@@ -255,4 +262,4 @@ Tham chiếu `.planning/BACKLOG.md` cho 999.x items. Highlights cho v4.0 / v4.1:
 
 ---
 
-*Last updated: 2026-05-23 sau `/gsd-new-milestone v3.1` — RBAC hub_admin STARTED. Phase numbering reset về 1 (D-V3.1-04). 4 phase × ~3-4 plan = ~12-15 plan v1 (ROLE/DEP/FE/MIGRATE). KHÔNG cần anti-pivot split (small scope). Next: `/gsd-discuss-phase 1` ROLE migration.*
+*Last updated: 2026-05-26 (Phase 5 DONE — Document Version History 5 plan ship VER-01..05; v3.1 milestone re-open scope catch-up FE 404 bug `DocumentVersionHistory.tsx`; total 5 phase / 20 REQ-ID / 20 plan). Original 2026-05-23 sau `/gsd-new-milestone v3.1` — RBAC hub_admin STARTED. Phase numbering reset về 1 (D-V3.1-04). Next: `/gsd-complete-milestone v3.1` archive HOẶC `/gsd-new-milestone v4.0` Production Hardening fresh discuss.*

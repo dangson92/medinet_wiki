@@ -2,20 +2,22 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: RBAC hub_admin
-status: "🎉 v3.1 SHIPPED 2026-05-24 — 4 phase / 15 REQ-ID / 15 plan ship · ROLE/DEP/FE/MIGRATE · proper fix bug user gán hub_admin vẫn vào central (memory project_rbac_hub_admin_gap 2026-05-23 trigger). Phase 4 MIGRATE-01..02 ship 3 plan (Makefile shortcut + smoke E2E 4 scenario PASS clean in 19.86s + audit forensic chain verified runtime). Migration verify Plan 01-01 LIVE deployment 2026-05-23 (medinet-postgres applied). Smoke E2E real backend code path Plan 02-01..04 + Plan 03-01..03 — KHÔNG mock."
-last_updated: "2026-05-24T14:30:00.000Z"
+status: "🎉 v3.1 SHIPPED 2026-05-24 + Phase 5 DONE 2026-05-26 (Document Version History 5 plan / 5 REQ-ID VER-01..05 ship; re-open scope catch-up FE 404 bug). Total: 5 phase / 20 REQ-ID / 20 plan · ROLE/DEP/FE/MIGRATE/VER · proper fix bug user gán hub_admin vẫn vào central (memory project_rbac_hub_admin_gap 2026-05-23 trigger) + version history feature catch-up (FE DocumentVersionHistory.tsx ship trước BE, user gặp 404 console). Phase 5 ship 28 test (5 migration + 8 service + 10 router + 5 E2E) PASS in-process testcontainers + audit forensic chain `document.version.{create,restore}` payload nest verified runtime. 14/14 cluster regression Phase 2+4+5 PASS in 52.91s — KHÔNG break existing."
+last_updated: "2026-05-26T00:00:00.000Z"
 progress:
   total_phases: 5  # Phase 5 added 2026-05-26 (re-open v3.1 cho version history feature)
-  completed_phases: 4
-  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 + Phase 4 ship 3 = 15 plan complete; Phase 5 TBD
-  completed_plans: 15
-  percent: 80  # 4/5 phase done
-milestone_status: "RE-OPENED"
+  completed_phases: 5
+  total_plans: 20  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 + Phase 4 ship 3 + Phase 5 ship 5 = 20 plan complete
+  completed_plans: 20
+  percent: 100  # 5/5 phase done
+milestone_status: "SHIPPED + Phase 5 DONE"
 milestone_start_date: "2026-05-23"
 milestone_shipped_date: "2026-05-24"
 milestone_reopened_date: "2026-05-26"
-phase_5_status: "PLANNED"
+phase_5_status: "DONE"
 phase_5_added_date: "2026-05-26"
+phase_5_done_date: "2026-05-26"
+phase_5_plan_count: 5
 phase_2_status: "DONE"
 phase_2_plan_count: 5
 phase_2_done_date: "2026-05-24"
@@ -33,7 +35,7 @@ phase_4_plan_status: "DONE"
 phase_4_plan_count: 3
 phase_4_plan_date: "2026-05-24"
 phase_4_done_date: "2026-05-24"
-next_action: "Phase 5 PLANNED 2026-05-26 (Document version history) — run `/gsd-discuss-phase 5` để chốt 5 gray area (GA-V3.1-D..H) trước plan. Trigger: user gặp error 404 console khi mở 'Lịch sử phiên bản' tab — FE đã ship trước BE."
+next_action: "Phase 5 DONE 2026-05-26 (Document Version History 5 plan / 5 REQ-ID VER-01..05). Chọn 1 trong 2 path: (a) `/gsd-complete-milestone v3.1` archive `.planning/milestones/v3.1-rbac-hub-admin-archive/` (v3.1 đã tag local 2026-05-24 — operator decide push `git push origin v3.1`); (b) `/gsd-new-milestone v4.0` Production Hardening fresh discuss (HA Redis cluster + OCR Vietnamese + streaming /api/ask SSE + coverage >80% + per-resource ACL granular per memory project_v3_multi_hub_split seed)."
 ---
 
 # State — MEDWIKI (v3.1)
@@ -45,12 +47,12 @@ next_action: "Phase 5 PLANNED 2026-05-26 (Document version history) — run `/gs
 
 ## Current Position
 
-🚧 **v3.1 RE-OPENED 2026-05-26** — Phase 5 PLANNED (Document version history). Phase 1-4 DONE từ 2026-05-24 (15 plan ship); v3.1 đã SHIPPED nhưng re-open để pull v4.1 backlog "version history" vì FE ghost UI gây 404 console.
+🎉 **v3.1 SHIPPED 2026-05-24 + Phase 5 DONE 2026-05-26** — 5 phase / 20 REQ-ID / 20 plan ship. Phase 5 Document Version History re-open scope ship 5 plan (VER-01..05) ngày 2026-05-26 sau v3.1 SHIPPED 2026-05-24 — catch-up backend cho FE `DocumentVersionHistory.tsx` đã ship trước.
 
-- **Phase:** 05-document-version-history (📋 PLANNED 2026-05-26)
-- **Plan:** TBD — sẽ tạo qua `/gsd-plan-phase 5` sau khi discuss xong.
-- **Status:** Phase 5 directory scaffolded `.planning/phases/05-document-version-history/` (rỗng). ROADMAP.md table + Phase Details section + 5 gray area GA-V3.1-D..H ghi sẵn cho discuss.
-- **Next Action:** `/gsd-discuss-phase 5` — chốt 5 gray area: GA-D snapshot file storage (dedupe via hash vs duplicate) · GA-E chunks snapshot policy · GA-F viewer RBAC read access · GA-G "3 gốc + 2 gần nhất" limit BE vs FE · GA-H restore semantics (append-only vs overwrite).
+- **Phase:** 05-document-version-history (✅ DONE 2026-05-26)
+- **Plan:** 5 plan ship (05-01 migration → 05-02 service → 05-03 router → 05-04 integration test → 05-05 closeout)
+- **Status:** Phase 5 ship 28 test PASS (5 migration + 8 service + 10 router + 5 E2E in-process testcontainers); audit forensic chain `document.version.{create,restore}` payload nest verified runtime; 14/14 cluster regression PASS in 52.91s — KHÔNG break existing.
+- **Next Action:** Operator decide: (a) `/gsd-complete-milestone v3.1` archive milestone; HOẶC (b) `/gsd-new-milestone v4.0` Production Hardening fresh discuss; HOẶC (c) `git push origin v3.1` push tag local đã tag 2026-05-24.
 
 ## Phase 2 Planning Summary (PLANNED 2026-05-24)
 
@@ -229,6 +231,54 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 - `/gsd-complete-milestone v3.1` — archive `.planning/milestones/v3.1-rbac-hub-admin-archive/` + reset ROADMAP.md cho v4.0 backlog.
 - `/gsd-new-milestone v4.0` — skip archive, fresh discuss-milestone (Production Hardening + Advanced RAG per memory `project_v3_multi_hub_split` seed + HA Redis cluster + OCR Vietnamese + streaming `/api/ask` SSE + coverage >80% + per-resource ACL granular).
 - `git push origin v3.1` — manual push tag annotated (Plan 04-03 chỉ tag local).
+
+## Phase 5 Results Summary (DONE 2026-05-26) — v3.1 RE-OPEN SCOPE (Document Version History)
+
+5 plan ship 5 REQ-ID VER-01..05 — v3.1 milestone re-opened 2026-05-26 catch-up FE 404 bug (FE `DocumentVersionHistory.tsx` đã ship trước BE ở milestone trước; user gặp 404 console khi mở "Lịch sử phiên bản" tab):
+
+- **Plan 05-01** (VER-01): Alembic migration `0007_document_versions` 15 cột exact match `DocumentVersionAPI` interface (frontend/src/services/api.ts:599-615) + UNIQUE (document_id, version_number) + INDEX (document_id) + CHECK constraint change_type IN 4 value (reupload|reextract|content_edit|restore). Idempotent introspect pattern Plan 01-01 v3.1 carry forward (`sa.inspect()` 3-STEP guard: table existence + FK precondition documents + users). downgrade() defensive COUNT(*) log + DROP TABLE atomic (KHÔNG raise RuntimeError vì schema feature-additive — operator review responsibility). 5 integration test PASS in 6.54s (upgrade head idempotent re-run + downgrade rollback + 15 cột verify + UNIQUE enforce + CHECK reject invalid). DSN injection SAFETY pattern Plan 01-03 v3.1 carry forward (`monkeypatch DATABASE_URL` env + `get_settings.cache_clear()` — KHÔNG `Config.set_main_option` vì env.py:185-191 runtime override bypass). 1 Rule 1 deviation: CHECK constraint name double-prefix (`ck_document_versions_ck_document_versions_change_type`) do `NAMING_CONVENTION` template ở `app/db/base.py` — same behavior 0006 (`ck_users_ck_users_role_enum`); fix bằng `LIKE '%ck_document_versions_change_type'` query resilient.
+
+- **Plan 05-02** (VER-02): Service `api/app/services/document_version_service.py` (633 LOC) 5 public API (`snapshot`, `restore_to_version`, `list_versions`, `get_version_with_chunks`, `get_version_file_path`) + 3 private helper (`_compute_file_hash` SHA-256 sync, `_enforce_retention` CTE async, `_cleanup_orphan_files` reference-count async). Implement D-V3.1-Phase5-A dedupe-by-hash (trong cùng document_id, reupload exact same → reference path cũ KHÔNG `FileStore.save` mới) + D-V3.1-Phase5-D restore append-only (snapshot TRƯỚC khi UPDATE documents.file_path|filename|mime_type|file_size_bytes immutable history forensic) + D-V3.1-Phase5-E retention "3 gốc + 2 gần nhất" CTE write-time enforce (DEVIATION từ ROADMAP GA-V3.1-G "FE filter client-side" per FE codebase audit — FE KHÔNG có filter logic, hint "Lưu tối đa 5 phiên bản" text-only) + D-V3.1-Phase5-H audit emit 2 action codes (`document.version.create` + `document.version.restore`) qua `enqueue_audit(AuditEntry(...))` reuse Plan 02-04 v3.1 `build_audit_payload`. Raw SQL via `sqlalchemy.text()` + named bind params `:doc_id` `:hash` (T-05-02-01 SQL injection mitigation). 8 unit test PASS in 4.45s. 1 Rule 1 deviation: test mock factory ordering alignment — fix inline trong test setup (placeholder None ở fetchone mock #2 cho MAX scalar query + shift `scalar_returns=[0, 3]`); service code KHÔNG đụng.
+
+- **Plan 05-03** (VER-03 + VER-04): Router `api/app/routers/document_versions.py` (309 LOC) 4 endpoint exact match `frontend/src/services/api.ts:268-285` URL + envelope M2 LOCKED `{success, data, error, meta}` shape: `GET /api/documents/{id}/versions` (list DESC), `GET /api/documents/{id}/versions/{vid}` (detail + `chunks: []` empty D-V3.1-Phase5-B FE typecheck happy), `GET /api/documents/{id}/versions/{vid}/file` (StreamingResponse + RFC 6266 `Content-Disposition: attachment; filename*=UTF-8''<percent-encoded>` cho Vietnamese filename safe), `POST /api/documents/{id}/versions/{vid}/restore` (rollback + audit emit). main.py universal mount `app.include_router(document_versions_router)` SAU `documents_router` (per-hub data, KHÔNG central-only — carry forward FACTOR-01 v3.0 Phase 2). RBAC 3-layer (D-V3.1-Phase5-C LOCKED viewer PASS): 3 GET `Depends(get_current_user_for_hub_access)` Layer 3 SSO-04 (Plan 03-03 v3.0 carry forward — JWT.hub_ids check); POST `/restore` `Depends(get_current_user)` + inline `await assert_hub_admin_for(user, db, target_hub_id=doc_hub_id)` hybrid pattern Plan 02-01 v3.1 (viewer + cross-hub hub_admin reject 403 `HUB_ADMIN_REQUIRED` envelope). Actor metadata derive: admin → None / hub_admin → `doc.hub_id` (Plan 02-04 v3.1 pattern; defense in depth raise nếu role khác). Cocoindex re-extract best-effort SYNC (D-V3.1-Phase5-I LOCKED) — `getattr(app.state, 'cocoindex_app', None)` + `hasattr('update_blocking')` + try/except log + continue (KHÔNG fail restore). Audit emit RESPONSIBILITY ở service layer (Plan 05-02) — router KHÔNG gọi `enqueue_audit`. 10 unit test PASS in 5.04s (4 endpoint × happy path + 5 error case + RBAC inline check + envelope shape + actor metadata derive logic).
+
+- **Plan 05-04** (VER-05): Integration test `api/tests/integration/test_document_versions.py` (701 LOC) 5 scenario E2E PASS clean in 19.44s qua `pytest tests/integration/test_document_versions.py -v -m integration`. (1) `create_version_via_reupload` — service `snapshot` 2 lần với file khác hash → 2 row INSERT + version_number monotonic + `file_hash` khác nhau (D-V3.1-Phase5-A dedupe verify). (2) `list_returns_ordered_desc` — 3 mutation → `GET /api/documents/{id}/versions` trả `[v3, v2, v1]` DESC + envelope M2 shape exact. (3) `restore_creates_new_version_append_only` — `POST /restore` từ v1 → v_max+1 INSERT `change_type='restore'` + `documents.file_path` UPDATE = v1.file_path + total versions = 2 (KHÔNG xoá v1, D-V3.1-Phase5-D append-only LOCKED; restore-marker row capture PRE-restore documents.file_path verified runtime contract). (4) `hub_admin_cross_hub_versions_403` — hub_admin dmd `POST /restore` doc tdt → 403 `HUB_ADMIN_REQUIRED` envelope (R-V3.1-2 mitigation chain Phase 5 verify defense in depth BE Layer 3 authoritative). (5) `audit_forensic_chain` — `_assert_audit_version_metadata` poll + assert 2 distinct action `document.version.create` + `document.version.restore` + payload nest `actor_role` + `actor_hub_id` + `document_id` + `version_number` + `restored_to` exact match (D-V3.1-Phase5-H LOCKED). `sample_docs` fixture python-docx inline tempfile (M2 dep, KHÔNG OpenAI API call test env). Reuse `postgres_container + redis_container + alembic_cfg + app_with_auth + auth_client + admin_user + admin_token + _login_get_token + GO_SEED_HASH` từ conftest.py — KHÔNG redeclare. Cluster regression 14/14 PASS in 52.91s (smoke + audit + dep_hubs + new) — KHÔNG break existing suite. 2 deviations: (Rule 3) `hub_app_factory('central')` → `app_with_auth` vì fake DSN KHÔNG apply migration nên scenario require DB schema sẽ FAIL ngay (pattern carry forward Plan 04-02 v3.1); (Rule 1) `session.commit()` tường minh TRƯỚC `break` trong `async for get_session()` loop vì `break` triggers GeneratorExit → except path rollback (pattern carry forward memory `project_fastapi_bgtask_commit`).
+
+- **Plan 05-05** (closeout): 4 docs source-of-truth atomic update — STATE.md frontmatter (`phase_5_status: DONE` + `phase_5_done_date: 2026-05-26` + `phase_5_plan_count: 5` + progress counters 4 → 5 phase / 15 → 20 plan / 15 → 20 REQ / 80% → 100% + `milestone_status: SHIPPED + Phase 5 DONE` + status message + next_action 2 path) + body APPEND Phase 5 Results Summary section (file này); REQUIREMENTS.md APPEND section mới VER-01..05 với 5 dòng `- [x] **VER-XX**` + plan reference + traceability table extend; ROADMAP.md Phase 5 row `📋 PLANNED` → `✅ DONE 2026-05-26` + Plans checklist `(TBD)` → 5 plan `[x]` + Progress table v3.1 row update `4` → `5` / `15/15` → `20/20` / `SHIPPED` → `SHIPPED + Phase 5 DONE` + Milestones bullet line 13 update; CLAUDE.md §6 APPEND subsection mới `### Phase 5 v3.1 Document version history pattern (VER-01..05 — 2026-05-26)` + bump trailing `*Cập nhật:` line. **KHÔNG tạo git tag mới mặc định** (D-V3.1-Phase5 Claude's discretion — v3.1 đã tag local 2026-05-24 + semver clean, Phase 5 = re-open scope KHÔNG breaking change). Operator option manual `git tag -a v3.1.1 -m "v3.1.1 Phase 5 Document version history"` document trong SUMMARY nếu muốn distinguish post-v3.1 work.
+
+**Carry forward patterns (Phase 5 milestone-level — sẵn sàng v4.0 / v4.1):**
+- Document version history schema 15 cột exact match FE interface (api.ts:599-615) — contract bridge BE → FE LOCKED.
+- `snapshot` dedupe-by-hash trong cùng document_id (D-V3.1-Phase5-A) + retention CTE "3 gốc + 2 gần nhất" (D-V3.1-Phase5-E) + file cleanup reference count = 0 — storage explosion mitigation chain.
+- Restore append-only (D-V3.1-Phase5-D) — immutable history pattern carry forward audit_logs M2 + v4.0 per-resource ACL future.
+- chunks per-version NO snapshot (D-V3.1-Phase5-B) — FE typecheck happy; restore = re-index qua cocoindex deterministic; cross-version chunk snapshot defer v4.0 cùng dedup strategy.
+- Audit action codes `document.version.{create,restore}` + payload nest extend Plan 02-04 v3.1 pattern.
+- Router universal mount per-hub data (KHÔNG central-only) — pattern FACTOR-01 v3.0 carry forward.
+- RBAC 3 GET Layer 3 SSO-04 viewer PASS + POST hub_admin inline `assert_hub_admin_for` hybrid — pattern Plan 02-01 v3.1 carry forward future per-resource POST endpoint.
+- Integration test python-docx inline sample fixture + `app_with_auth` real-engine pattern — Plan 04-02 v3.1 carry forward future feature E2E test KHÔNG OpenAI API call.
+- `_wait_audit_row` + `_assert_audit_version_metadata` poll helper pattern — BackgroundTask audit emit timing memory `project_fastapi_bgtask_commit` carry forward.
+
+**R-V3.1-2 MEDIUM mitigation chain Phase 5:**
+- BE Layer 3 `assert_hub_admin_for` authoritative — KHÔNG dựa FE `canRestore` prop (UX layer). Plan 05-03 POST `/restore` enforce inline.
+- Test Plan 05-04 scenario 4 hub_admin dmd → doc tdt → 403 `HUB_ADMIN_REQUIRED` verify defense in depth runtime.
+- 3 GET endpoint Layer 3 SSO-04 enforce JWT.hub_ids ⊇ {settings.hub_name} (Plan 03-03 v3.0) — cross-hub viewer reject 403 `CROSS_HUB_ACCESS_DENIED` runtime.
+
+**Phase 5 new constraints (carry forward future):**
+- Storage explosion (D-V3.1-Phase5-A + D-V3.1-Phase5-E chain): dedupe-by-hash + retention cap COUNT(*) ≤ 5 per document + file cleanup reference count = 0; worst case 1 doc × 5 versions × 5MB = 25MB; 1000 docs = 25GB acceptable VPS.
+- Cocoindex re-extract sync block (D-V3.1-Phase5-I): small file < 5s acceptable; large file > 10MB defer v4.0 async queue Celery/RQ/Postgres LISTEN/NOTIFY.
+
+**Phase 5 backward compat (KHÔNG break v3.0 + v3.1 Phase 1-4):**
+- FE `DocumentVersionHistory.tsx` UNCHANGED (R-V3-2 minimal scope — chỉ verify FE render OK sau BE ship; FE đã ship trước milestone trước).
+- M2 LocalStorage + envelope M2 shape preserve LOCKED.
+- Phase 2 v3.1 envelope codes (`HUB_ADMIN_REQUIRED` + ROLE-04 helper + Plan 02-04 audit nest) carry forward Phase 5 router POST `/restore` + service emit.
+- KHÔNG đụng FE source code (frontend/src/services/api.ts + frontend/src/components/DocumentVersionHistory.tsx).
+- KHÔNG đụng existing routers/services (documents.py + documents_service.py + file_store.py + audit_service.py + dependencies.py).
+- KHÔNG đụng migration 0001-0006 source (chỉ ADD migration 0007 mới).
+
+**Next:** User decide:
+- `/gsd-complete-milestone v3.1` — archive `.planning/milestones/v3.1-rbac-hub-admin-archive/` + reset ROADMAP.md cho v4.0 backlog.
+- `/gsd-new-milestone v4.0` — skip archive, fresh discuss-milestone (Production Hardening + Advanced RAG per memory `project_v3_multi_hub_split` seed + HA Redis cluster + OCR Vietnamese + streaming `/api/ask` SSE + coverage >80% + per-resource ACL granular).
+- `git push origin v3.1` — manual push tag annotated nếu chưa push (Plan 04-03 chỉ tag local).
+- (Optional) `git tag -a v3.1.1 -m "v3.1.1 Phase 5 Document Version History"` — operator quyết định tag mới distinguish post-v3.1 work (default Plan 05-05 KHÔNG tag, semver clean).
 
 ## Open Question (chốt ở /gsd-discuss-phase tương ứng)
 
