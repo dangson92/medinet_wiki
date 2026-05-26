@@ -16,7 +16,7 @@ source: ROADMAP §"Phase 5 — Document version history" 5 gray-area recommendat
 
 **Trong scope Phase 5 (VER):**
 
-- **VER-01:** Schema migration `0007_document_versions.py` Alembic (introspect pattern carry forward Phase 1 v3.1 Plan 01-01 + Phase 4 v3.0 Plan 04-01) — tạo bảng `document_versions` 16 cột match FE `DocumentVersionAPI` interface (frontend/src/services/api.ts:599-615):
+- **VER-01:** Schema migration `0007_document_versions.py` Alembic (introspect pattern carry forward Phase 1 v3.1 Plan 01-01 + Phase 4 v3.0 Plan 04-01) — tạo bảng `document_versions` 15 cột match FE `DocumentVersionAPI` interface (frontend/src/services/api.ts:599-615):
   - `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`
   - `document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE`
   - `version_number INT NOT NULL` (monotonic increment per document_id)
@@ -324,7 +324,7 @@ Plan-phase agent quyết định:
 
 - `Hub_All/frontend/src/components/DocumentVersionHistory.tsx` — Component đã ship (229 LOC). Phase 5 BE catch-up KHÔNG sửa FE.
 - `Hub_All/frontend/src/services/api.ts:268-285` — 4 API call method (listDocumentVersions, getDocumentVersion, getDocumentVersionFileUrl, restoreDocumentVersion). Plan 05-03 router 4 endpoint match exact URL + envelope shape.
-- `Hub_All/frontend/src/services/api.ts:599-615` — `DocumentVersionAPI` interface (16 field). Plan 05-01 schema match exact column shape (BE → FE response serialization).
+- `Hub_All/frontend/src/services/api.ts:599-615` — `DocumentVersionAPI` interface (15 field). Plan 05-01 schema match exact column shape (BE → FE response serialization).
 - `Hub_All/frontend/src/services/api.ts:633-640` — `DocumentVersionChunkAPI` interface (6 field). Plan 05-03 GET /versions/{vid} trả `chunks: []` empty array để FE typecheck pass (D-V3.1-Phase5-B LOCKED).
 
 ### Test infrastructure existing (Phase 1-4 v3.1 + v3.0 carry forward)
@@ -397,7 +397,7 @@ Plan-phase agent quyết định:
 - **Phase 5 new: Cocoindex re-extract sync block D-V3.1-Phase5-I:**
   - Mitigation: ALLOWED_EXTENSIONS 8 format text extract < 5s small file; large file (> 10MB) warn UI defer v4.0 async queue.
 - **Phase 5 new: FE contract LOCKED — KHÔNG đụng frontend (R-V3-2 minimal scope):**
-  - Plan 05-01 schema 16 field exact match `DocumentVersionAPI` interface (api.ts:599-615).
+  - Plan 05-01 schema 15 field exact match `DocumentVersionAPI` interface (api.ts:599-615).
   - Plan 05-03 4 endpoint URL + response envelope exact match api.ts:268-285.
   - 1 test giả hành ship Plan 05-04 verify FE typecheck `chunks: []` empty array.
 
@@ -414,7 +414,7 @@ Plan-phase agent quyết định:
 Carry forward Plan 01-01 v3.1 introspect pattern + Plan 04-01 v3.0 introspect.
 - STEP 1: check document_versions table KHÔNG tồn tại (idempotent re-run).
 - STEP 2: check documents table tồn tại (precondition FK target).
-- CREATE TABLE document_versions (16 cột match DocumentVersionAPI).
+- CREATE TABLE document_versions (15 cột match DocumentVersionAPI).
 - UNIQUE (document_id, version_number) + index ix_document_versions_document_id.
 - downgrade: DROP TABLE document_versions (log COUNT(*) trước drop).
 """
