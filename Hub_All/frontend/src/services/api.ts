@@ -55,6 +55,33 @@ interface APIResponse<T> {
   meta?: { page: number; per_page: number; total: number; total_pages: number };
 }
 
+// Parse JSON envelope an toàn — body rỗng / không phải JSON sẽ thành envelope
+// error có code rõ ràng thay vì throw "Unexpected end of JSON input" (memory
+// `feedback_surface_error_message` — surface backend cause thay vì silent).
+async function parseEnvelope<T>(res: Response): Promise<APIResponse<T>> {
+  const text = await res.text();
+  if (!text) {
+    return {
+      success: false,
+      error: {
+        code: 'EMPTY_RESPONSE',
+        message: `Backend trả body rỗng (HTTP ${res.status}). Kiểm tra reverse proxy / dev proxy đã trỏ đúng tới uvicorn chưa.`,
+      },
+    };
+  }
+  try {
+    return JSON.parse(text) as APIResponse<T>;
+  } catch {
+    return {
+      success: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: `Backend trả non-JSON (HTTP ${res.status}): ${text.slice(0, 120)}`,
+      },
+    };
+  }
+}
+
 class APIClient {
   private baseURL: string;
 
@@ -83,7 +110,7 @@ class APIClient {
       if (refreshed) {
         headers['Authorization'] = `Bearer ${this.getToken()}`;
         const retry = await fetch(`${this.baseURL}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
-        return retry.json();
+        return parseEnvelope<T>(retry);
       }
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -91,7 +118,7 @@ class APIClient {
       throw new Error('Session expired');
     }
 
-    return res.json();
+    return parseEnvelope<T>(res);
   }
 
   /**
@@ -117,7 +144,7 @@ class APIClient {
       if (refreshed) {
         headers['Authorization'] = `Bearer ${this.getToken()}`;
         const retry = await fetch(absolutePath, { method, headers, body: body ? JSON.stringify(body) : undefined });
-        return retry.json();
+        return parseEnvelope<T>(retry);
       }
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -125,7 +152,7 @@ class APIClient {
       throw new Error('Session expired');
     }
 
-    return res.json();
+    return parseEnvelope<T>(res);
   }
 
   private async tryRefresh(): Promise<boolean> {
