@@ -813,8 +813,13 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         usage_router,
     )
 
+    # Plan 05-03 v3.1 VER-03 — universal mount (KHÔNG central-only) document_versions router
+    from app.routers.document_versions import router as document_versions_router
+
     app.include_router(auth_router)
     app.include_router(documents_router)
+    # Plan 05-03 v3.1 VER-03 — universal mount document_versions (per-hub data, KHÔNG central-only)
+    app.include_router(document_versions_router)
     app.include_router(profile_router)
     app.include_router(search_router)
     app.include_router(ask_router)
