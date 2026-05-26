@@ -227,7 +227,7 @@ async def get_status(
     return resp.ok(data={"status": doc.status, "progress": doc.progress})
 
 
-@router.get("/{document_id}/file")
+@router.get("/{document_id}/file", response_model=None)
 async def get_file(
     document_id: str,
     user: User = Depends(get_current_user),  # noqa: B008
