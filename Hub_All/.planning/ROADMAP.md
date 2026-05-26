@@ -16,9 +16,9 @@
 
 ---
 
-## Phases — v3.1 RBAC hub_admin (CURRENT)
+## Phases — v3.1 RBAC hub_admin (CURRENT — re-opened 2026-05-26 for Phase 5)
 
-4 phase reset numbering về 1 (precedent D9 v2.0 + D-V3-05 v3.0). Total ~12-15 plan estimate (~3-4 plan/phase).
+4 phase reset numbering về 1 (precedent D9 v2.0 + D-V3-05 v3.0) + Phase 5 added 2026-05-26 (re-open v3.1 thay vì start v3.2 — scope nhỏ, version history pull từ v4.1 backlog). Total ~17-20 plan estimate.
 
 | # | Phase | Goal | Requirements | Success Criteria | Depends on |
 |---|---|---|---|---|---|
@@ -26,10 +26,11 @@
 | **2** | Backend RBAC enforcement (DEP) ✅ DONE 2026-05-24 | Dependency `require_hub_admin_for(hub_id)`; refactor GET /api/hubs filter cả admin; users.py CRUD scope; hubs.py mutate super admin only; audit actor.scope | DEP-01..05 (5) | 5 | Phase 1 |
 | **3** | Frontend form refactor (FE) ✅ DONE 2026-05-24 | UserManagement form 3 option; hub switcher hide central; edit modal disabled assign super; api.ts UserRole type extend | FE-01..04 (4) | 4 | Phase 2 |
 | **4** | Migration + smoke E2E (MIGRATE) ✅ DONE 2026-05-24 | Migration idempotent + rollback; smoke E2E 4 scenario; closeout docs | MIGRATE-01..02 (2) | 2 | Phase 1-3 |
+| **5** | Document version history (VER) 📋 PLANNED 2026-05-26 | Alembic migration `document_versions` table + service snapshot khi reupload/edit/reextract/restore + 4 endpoint router + audit + RBAC hub-scope + integration test. FE đã ship trước BE → user gặp 404 console khi mở version tab. | VER-01..05 (5 estimate) | 5 | Phase 2 (RBAC) — independent của Phase 3+4 |
 
-**Critical path:** 1 → 2 → 3 → 4 (linear — RBAC schema enable backend enable frontend enable migration verify).
+**Critical path:** 1 → 2 → 3 → 4 (RBAC linear). Phase 5 độc lập, depend Phase 2 RBAC (cho hub_admin scope filter).
 
-**Parallel-able:** KHÔNG (small scope, mỗi phase depend phase trước).
+**Parallel-able:** Phase 5 KHÔNG conflict với Phase 1-4 (đã shipped) — chỉ touch documents + audit module.
 
 ---
 
@@ -144,6 +145,37 @@ Plans:
 - [x] 04-01-PLAN.md — Migration verify (Makefile test-integration + test-migration shortcut target; 7 test PASS deferred do pre-existing test infra debt outside MIGRATE-01 scope; Migration 0006 verified LIVE Plan 01-01 ship) (MIGRATE-01) ✅ DONE 2026-05-24
 - [x] 04-02-PLAN.md — Smoke E2E 4 scenario pytest httpx + audit forensic chain (test_smoke_e2e_v3_1_rbac.py ~430 LOC, 4 scenario PASS 19.86s testcontainers in-process) (MIGRATE-02) ✅ DONE 2026-05-24
 - [x] 04-03-PLAN.md — Closeout v3.1 SHIPPED — 4 docs atomic update + git tag annotated v3.1 LOCAL ✅ DONE 2026-05-24
+
+---
+
+### Phase 5 — Document version history (VER)
+
+**Goal:** Build version-history feature backend đang missing (frontend đã ship trước ở milestone trước — user gặp 404 console khi mở preview "Lịch sử phiên bản" tab). Alembic migration tạo `document_versions` table 14+ cột match frontend `DocumentVersionAPI` + service snapshot khi document mutate + 4 endpoint router + audit logging + RBAC hub-scope (carry forward Phase 2 `assert_hub_admin_for`).
+
+**Requirements:** VER-01..05 (5 estimate — sẽ chốt ở `/gsd-discuss-phase 5`)
+- **VER-01:** Schema migration `document_versions` table (id UUID + document_id FK + version_number INT + is_original BOOL + name TEXT + file_type TEXT + file_size BIGINT + file_path TEXT + file_hash TEXT + extractor_used TEXT + chunk_count INT + change_type ENUM `reupload|reextract|content_edit|restore` + change_note TEXT + created_by UUID FK users + created_at TIMESTAMPTZ + UNIQUE(document_id, version_number) + index document_id).
+- **VER-02:** Service layer `document_version_service.py` snapshot create 4 trigger điểm — reupload preview confirm + edit content commit + reextract trigger + restore action; version_number monotonic increment per document.
+- **VER-03:** Router 4 endpoint — `GET /api/documents/{id}/versions` list, `GET /api/documents/{id}/versions/{vid}` detail+chunks, `GET /api/documents/{id}/versions/{vid}/file` blob, `POST /api/documents/{id}/versions/{vid}/restore` rollback document → version cũ.
+- **VER-04:** RBAC hub-scope — Layer 2 repository filter `WHERE hub_id IN (...)` carry forward + Layer 3 dependency `assert_hub_admin_for(document.hub_id)` Phase 2 carry forward + audit `document.version.{create,restore}` action.
+- **VER-05:** Integration test pytest + testcontainers — 4 scenario (create version qua reupload + list returns ordered DESC + restore tạo version mới với `change_type=restore` + hub_admin scope enforce 403 cross-hub).
+
+**Success criteria:**
+1. `alembic upgrade head` idempotent (re-run KHÔNG fail) + downgrade rollback PASS; bảng `document_versions` 14+ cột + 1 UNIQUE + 1 index.
+2. Reupload + edit content + reextract + restore mỗi action trigger 1 version row INSERT atomic cùng transaction; version_number monotonic per document_id.
+3. Frontend `DocumentVersionHistory.tsx` mở console KHÔNG còn 404 error; list versions render OK với sample upload + reupload test.
+4. RBAC enforce: hub_admin dmd GET version của doc thuộc tdt → 403 envelope `HUB_ADMIN_REQUIRED`; super admin OK; viewer GET list OK, POST restore → 403.
+5. Audit forensic: 2 action `document.version.create` + `document.version.restore` row có `payload->>'actor_role'` + `payload->>'document_id'` + `payload->>'version_number'` queryable.
+
+**Discuss-phase gray areas (chốt ở `/gsd-discuss-phase 5`):**
+- **GA-V3.1-D (snapshot file storage):** Lưu file vào `file_store` UUID mới (mỗi version = file riêng — duplicate disk khi unchanged) HOẶC chỉ tham chiếu `file_path` (1 path = 1 hash, dedupe qua content-hash). Khuyến nghị: dedupe qua hash + reference; nhưng cần bảo đảm file gốc KHÔNG bị xóa khi version count = 0.
+- **GA-V3.1-E (chunks snapshot):** Frontend `DocumentVersionChunkAPI` implies chunks per-version. Lưu snapshot cả `chunks` table theo version hay chỉ giữ chunk hiện tại + version_id chunks cũ overwrite? Khuyến nghị: KHÔNG snapshot chunks (chỉ giữ chunk_count + change_type metadata); restore = re-index version file qua cocoindex.
+- **GA-V3.1-F (RBAC viewer):** Viewer có quyền GET list versions của doc trong hub mình không, hay chỉ admin/hub_admin? Khuyến nghị: viewer GET list OK (read-only feature; same as document detail).
+- **GA-V3.1-G (3 gốc + 2 gần nhất pattern):** api.ts comment line 268 nói "3 gốc + 2 gần nhất" — limit list response hay trả full? Khuyến nghị: FE filter client-side, BE trả full chronological DESC.
+- **GA-V3.1-H (Restore semantics):** Restore tạo version mới `change_type=restore` (history append-only) hay overwrite hiện tại + delete versions newer? Khuyến nghị: append-only (immutable history).
+
+**Plans estimate:** 4-5 plans (Wave 1 schema migration + Wave 2 service snapshot 4 trigger + Wave 3 router 4 endpoint + Wave 4 RBAC integration test + Wave 5 closeout).
+
+Plans: (TBD — sẽ điền sau `/gsd-plan-phase 5`)
 
 ---
 

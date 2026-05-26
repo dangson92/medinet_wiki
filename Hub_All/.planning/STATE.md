@@ -5,14 +5,17 @@ milestone_name: RBAC hub_admin
 status: "🎉 v3.1 SHIPPED 2026-05-24 — 4 phase / 15 REQ-ID / 15 plan ship · ROLE/DEP/FE/MIGRATE · proper fix bug user gán hub_admin vẫn vào central (memory project_rbac_hub_admin_gap 2026-05-23 trigger). Phase 4 MIGRATE-01..02 ship 3 plan (Makefile shortcut + smoke E2E 4 scenario PASS clean in 19.86s + audit forensic chain verified runtime). Migration verify Plan 01-01 LIVE deployment 2026-05-23 (medinet-postgres applied). Smoke E2E real backend code path Plan 02-01..04 + Plan 03-01..03 — KHÔNG mock."
 last_updated: "2026-05-24T14:30:00.000Z"
 progress:
-  total_phases: 4
+  total_phases: 5  # Phase 5 added 2026-05-26 (re-open v3.1 cho version history feature)
   completed_phases: 4
-  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 + Phase 4 ship 3 = 15 plan complete
+  total_plans: 15  # Phase 1 ship 3 + Phase 2 ship 5 + Phase 3 ship 4 + Phase 4 ship 3 = 15 plan complete; Phase 5 TBD
   completed_plans: 15
-  percent: 100
-milestone_status: "SHIPPED"
+  percent: 80  # 4/5 phase done
+milestone_status: "RE-OPENED"
 milestone_start_date: "2026-05-23"
 milestone_shipped_date: "2026-05-24"
+milestone_reopened_date: "2026-05-26"
+phase_5_status: "PLANNED"
+phase_5_added_date: "2026-05-26"
 phase_2_status: "DONE"
 phase_2_plan_count: 5
 phase_2_done_date: "2026-05-24"
@@ -30,7 +33,7 @@ phase_4_plan_status: "DONE"
 phase_4_plan_count: 3
 phase_4_plan_date: "2026-05-24"
 phase_4_done_date: "2026-05-24"
-next_action: "🎉 v3.1 SHIPPED — /gsd-complete-milestone v3.1 (archive .planning/milestones/v3.1-rbac-hub-admin-archive/) hoặc /gsd-new-milestone v4.0 (Production Hardening + Advanced RAG backlog per memory project_v3_multi_hub_split seed). Optional: git push origin v3.1 manual."
+next_action: "Phase 5 PLANNED 2026-05-26 (Document version history) — run `/gsd-discuss-phase 5` để chốt 5 gray area (GA-V3.1-D..H) trước plan. Trigger: user gặp error 404 console khi mở 'Lịch sử phiên bản' tab — FE đã ship trước BE."
 ---
 
 # State — MEDWIKI (v3.1)
@@ -42,12 +45,12 @@ next_action: "🎉 v3.1 SHIPPED — /gsd-complete-milestone v3.1 (archive .plann
 
 ## Current Position
 
-🚧 **v3.1 PHASE 2 DONE 2026-05-24** — Phase 1 DONE (3 plan / 4 REQ-ID); Phase 2 DONE (5 plan / 5 REQ-ID DEP-01..05); 11 unit + 12 integration test PASS + 471/471 unit regression PASS.
+🚧 **v3.1 RE-OPENED 2026-05-26** — Phase 5 PLANNED (Document version history). Phase 1-4 DONE từ 2026-05-24 (15 plan ship); v3.1 đã SHIPPED nhưng re-open để pull v4.1 backlog "version history" vì FE ghost UI gây 404 console.
 
-- **Phase:** 02-backend-rbac-enforcement (✅ DONE 2026-05-24)
-- **Plan:** 5 plan ship `.planning/phases/02-backend-rbac-enforcement/02-{01..05}-PLAN.md` + 5 SUMMARY.md.
-- **Status:** Phase 2 hoàn tất Wave 1 (02-01 assert_hub_admin_for + 5 unit test) → Wave 2 (02-02 hubs GET defensive AUTH_STATE_INCONSISTENT + 2 unit + 3 integration; 02-03 users CRUD scope DEP-03 với DELETE B1 iter 1 3-branch + 7 integration test runtime PASS) → Wave 3 (02-04 audit payload nest actor_role + actor_hub_id + 4 unit + 2 integration) → Wave 4 (02-05 closeout 4 docs + W5 FE breakage operator broadcast note).
-- **Next Action:** `/gsd-discuss-phase 3` — FE frontend form refactor (UserManagement 3 option radio + hub switcher hide central + edit modal disabled assign super + api.ts UserRole type extend).
+- **Phase:** 05-document-version-history (📋 PLANNED 2026-05-26)
+- **Plan:** TBD — sẽ tạo qua `/gsd-plan-phase 5` sau khi discuss xong.
+- **Status:** Phase 5 directory scaffolded `.planning/phases/05-document-version-history/` (rỗng). ROADMAP.md table + Phase Details section + 5 gray area GA-V3.1-D..H ghi sẵn cho discuss.
+- **Next Action:** `/gsd-discuss-phase 5` — chốt 5 gray area: GA-D snapshot file storage (dedupe via hash vs duplicate) · GA-E chunks snapshot policy · GA-F viewer RBAC read access · GA-G "3 gốc + 2 gần nhất" limit BE vs FE · GA-H restore semantics (append-only vs overwrite).
 
 ## Phase 2 Planning Summary (PLANNED 2026-05-24)
 
@@ -232,6 +235,10 @@ Decision (2026-05-23 user accept): Proper fix thêm role `hub_admin` (option pro
 - **GA-V3.1-A** (Phase 1): Migration backward compat — `users.role='admin'` map về super-admin semantic (KHÔNG rename) vs flag column `is_super_admin`. Khuyến nghị: giữ tên (D-V3.1-01 LOCKED carry forward).
 - **GA-V3.1-B** (Phase 2): GET /api/hubs filter cho hub_admin — backend filter authoritative vs frontend UI hide central. Khuyến nghị: backend (defense in depth).
 - **GA-V3.1-C** (Phase 4): Migration idempotent strategy — Alembic introspect via `sa.inspect()` vs PL/pgSQL DO block. Khuyến nghị: introspect.
+
+## Roadmap Evolution
+
+- 2026-05-26 — **Phase 5 added** (Document version history / VER-01..05): re-open v3.1 milestone (đã SHIPPED 2026-05-24) để pull "version history" từ v4.1 backlog. Trigger: user gặp 404 console khi mở "Lịch sử phiên bản" tab trong `DocumentIngestion` page — FE component `DocumentVersionHistory.tsx` + `api.ts` đã ship trước backend từ v3.0/M2 milestone trước (ghost UI). Backend hoàn toàn KHÔNG có `document_versions` table + 4 endpoint missing. Scope: schema migration + service snapshot + 4 endpoint router + audit + RBAC hub-scope + integration test. 4-5 plan estimate. Independent Phase 1-4 (chỉ depend Phase 2 RBAC `assert_hub_admin_for`).
 
 ## Accumulated Context (carry forward từ v3.0 + earlier)
 
