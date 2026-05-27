@@ -26,6 +26,7 @@ from app.routers.api_keys import router as api_keys_router
 from app.routers.ask import router as ask_router
 from app.routers.audit_logs import router as audit_logs_router
 from app.routers.documents import router as documents_router
+from app.routers.guides import router as guides_router
 from app.routers.hubs import router as hubs_router
 from app.routers.mcp_oauth import internal_router as mcp_oauth_internal_router
 from app.routers.mcp_oauth import router as mcp_oauth_router
@@ -44,6 +45,7 @@ __all__ = [
     "ask_router",
     "audit_logs_router",
     "documents_router",
+    "guides_router",
     "hubs_router",
     "mcp_oauth_internal_router",
     "mcp_oauth_router",

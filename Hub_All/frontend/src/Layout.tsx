@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   BookOpen,
+  NotebookPen,
   Settings as SettingsIcon,
   Sun,
   Moon,
@@ -277,7 +278,8 @@ const Layout = () => {
     { to: '/users', icon: Users, label: 'Quản lý User' },
     { to: '/registry', icon: Database, label: 'Quản lý Hub', rootOnly: true },
     { to: '/api-keys', icon: Key, label: 'Quản lý API Key', rootOnly: true },
-    { type: 'group', groupLabel: 'Hệ thống', rootOnly: true },
+    { type: 'group', groupLabel: 'Hệ thống' },
+    { to: '/guide', icon: NotebookPen, label: 'Hướng dẫn' },
     { to: '/logs', icon: History, label: 'Audit Log', rootOnly: true },
     { to: '/usage', icon: Zap, label: 'Token & API Usage', rootOnly: true },
     { to: '/settings', icon: SettingsIcon, label: 'Cài đặt hệ thống', rootOnly: true },
@@ -288,6 +290,10 @@ const Layout = () => {
     if (path === '/') return 'Dashboard';
     if (path === '/search') return 'Hỏi đáp AI';
     if (path === '/documents') return 'Danh sách tri thức';
+    if (path === '/guide') return 'Hướng dẫn';
+    if (path === '/guide/new') return 'Viết hướng dẫn mới';
+    if (path.endsWith('/edit')) return 'Sửa hướng dẫn';
+    if (path.startsWith('/guide/')) return 'Xem hướng dẫn';
     if (path === '/users') return 'Quản lý User';
     if (path === '/registry') return 'Quản lý Hub';
     if (path === '/sync') return 'Hàng đợi Sync';

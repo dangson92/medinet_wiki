@@ -836,6 +836,7 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         from app.routers import (
             api_keys_router,
             audit_logs_router,
+            guides_router,
             hubs_router,
             mcp_oauth_internal_router,
             mcp_oauth_router,
@@ -855,6 +856,7 @@ def create_app() -> FastAPI:  # noqa: C901 — readyz aggregate checks
         app.include_router(sync_router)
         app.include_router(mcp_oauth_router)
         app.include_router(mcp_oauth_internal_router)
+        app.include_router(guides_router)
 
         # ──────────────────────────────────────────────────────────────────
         # Phase 4 Plan 04-05 (SYNC-03 / D-V3-Phase4-D3) — Cross-hub aggregated

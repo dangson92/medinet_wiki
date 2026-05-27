@@ -15,6 +15,9 @@ import DocumentIngestion from './pages/DocumentIngestion';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import TokenUsage from './pages/TokenUsage';
+import Guide from './pages/Guide';
+import GuideEditor from './pages/GuideEditor';
+import GuideView from './pages/GuideView';
 import { Loader2 } from 'lucide-react';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +58,10 @@ export default function App() {
             <Route path="search" element={<CrossHubSearch />} />
             <Route path="documents" element={<DocumentIngestion />} />
             <Route path="documents/new" element={<DocumentIngestion mode="new" />} />
+            <Route path="guide" element={<Guide />} />
+            <Route path="guide/new" element={<GuideEditor />} />
+            <Route path="guide/:id" element={<GuideView />} />
+            <Route path="guide/:id/edit" element={<GuideEditor />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="registry" element={<HubRegistry />} />
             <Route path="sync" element={<SyncQueue />} />

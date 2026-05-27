@@ -342,6 +342,28 @@ class APIClient {
     return this.requestAbsolute<SearchResponseAPI>('POST', '/api/search/cross-hub', data);
   }
 
+  // ─── Guides (central-only, public read cho mọi user đã đăng nhập, write admin-only) ───
+  // Dùng requestAbsolute để hub con bypass API_BASE prefix → Caddy /api/* → python-api-central.
+  async listGuides() {
+    return this.requestAbsolute<GuideListItemAPI[]>('GET', '/api/guides');
+  }
+
+  async getGuide(id: string) {
+    return this.requestAbsolute<GuideAPI>('GET', `/api/guides/${id}`);
+  }
+
+  async createGuide(data: { title: string; content: string }) {
+    return this.requestAbsolute<GuideAPI>('POST', '/api/guides', data);
+  }
+
+  async updateGuide(id: string, data: { title: string; content: string }) {
+    return this.requestAbsolute<GuideAPI>('PUT', `/api/guides/${id}`, data);
+  }
+
+  async deleteGuide(id: string) {
+    return this.requestAbsolute<{ deleted: boolean }>('DELETE', `/api/guides/${id}`);
+  }
+
   async searchAnswer(data: { query: string; hub_ids?: string[]; top_k?: number }) {
     return this.request<SearchAnswerAPI>('POST', '/api/search/answer', data);
   }
@@ -603,6 +625,25 @@ export interface DocumentAPI {
   uploaded_by: string;
   uploaded_at: string;
   processed_at?: string;
+}
+
+export interface GuideAPI {
+  id: string;
+  title: string;
+  content: string;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GuideListItemAPI {
+  id: string;
+  title: string;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DocumentVersionAPI {
