@@ -21,8 +21,12 @@ declare global {
 }
 
 const HUB_CONFIG: HubConfigRuntime = (typeof window !== 'undefined' && window.__HUB_CONFIG__) ?? {
-  // Fallback hardcode initial 3 hub gốc Phase 5 — synced with Plan 05-01 .env.example HUBS_ALLOWLIST_REGEX
-  allowlist: ['yte', 'duoc', 'hcns'] as const,
+  // Fallback hardcode — synced với hub thật trong DB production (memory project_real_hubs_deployment):
+  // dmd (Đỗ Minh Đường) + tdt (Thuốc Dân Tộc) thực sự có data; yte/duoc/hcns là decorative ghost spec.
+  // Giải pháp đúng dài hạn: backend Caddy template inject <script>window.__HUB_CONFIG__=...</script>
+  // vào index.html (Phase 6 SETTINGS-04 hub_registry dynamic). Tạm hardcode union để dropdown switcher
+  // navigate đúng giữa các hub thật.
+  allowlist: ['yte', 'duoc', 'hcns', 'dmd', 'tdt'] as const,
 };
 
 const KNOWN_HUBS: readonly string[] = HUB_CONFIG.allowlist;
@@ -59,6 +63,11 @@ interface APIResponse<T> {
 // error có code rõ ràng thay vì throw "Unexpected end of JSON input" (memory
 // `feedback_surface_error_message` — surface backend cause thay vì silent).
 async function parseEnvelope<T>(res: Response): Promise<APIResponse<T>> {
+  // 204 No Content — endpoint success không body theo HTTP spec (vd DELETE
+  // /api/documents/{id} routers/documents.py:290). KHÔNG được coi là EMPTY_RESPONSE.
+  if (res.status === 204) {
+    return { success: true };
+  }
   const text = await res.text();
   if (!text) {
     return {

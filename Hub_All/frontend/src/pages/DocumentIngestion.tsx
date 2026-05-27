@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type DocumentAPI, type HubAPI } from '../services/api';
+import { api, CURRENT_HUB, type DocumentAPI, type HubAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import DocumentVersionHistory from '../components/DocumentVersionHistory';
 import DocumentDiffPreview from '../components/DocumentDiffPreview';
@@ -14,8 +14,10 @@ import Pagination from '../components/Pagination';
 import { DocxPreview } from '../components/DocxPreview';
 import { XlsxPreview } from '../components/XlsxPreview';
 import { CsvPreview } from '../components/CsvPreview';
+import FileTypeIcon from '../components/FileTypeIcon';
 import {
   Upload,
+  UploadCloud,
   File,
   CheckCircle2,
   Clock,
@@ -33,7 +35,6 @@ import {
   Globe,
   Edit3,
   Link as LinkIcon,
-  Plus,
   ArrowLeft,
   Search,
   Filter,
@@ -290,7 +291,12 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
       if (res.success && res.data) {
         const active = res.data.filter(h => h.status === 'active');
         setHubs(active);
-        if (active.length > 0 && !selectedHub) setSelectedHub(active[0].id);
+        if (active.length > 0 && !selectedHub) {
+          // Mặc định chọn hub trùng URL prefix (CURRENT_HUB) thay vì active[0] —
+          // KHÔNG có match thì fallback hub đầu tiên.
+          const currentHub = active.find(h => h.code === CURRENT_HUB) ?? active[0];
+          setSelectedHub(currentHub.id);
+        }
       }
     });
     fetch('/api/rag-config')
@@ -472,13 +478,13 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
 
   const getFileIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'pdf': return <FileText size={20} className="text-danger" />;
-      case 'docx': return <File size={20} className="text-brand-indigo" />;
-      case 'xlsx': return <FileSpreadsheet size={20} className="text-success" />;
+      case 'pdf': return <FileText size={20} className="text-error" />;
+      case 'docx': return <File size={20} className="text-primary" />;
+      case 'xlsx': return <FileSpreadsheet size={20} className="text-emerald-600" />;
       case 'pptx': return <Presentation size={20} className="text-orange-500" />;
-      case 'txt': return <FileText size={20} className="text-slate-500" />;
-      case 'md': return <FileCode size={20} className="text-brand-purple" />;
-      default: return <File size={20} className="text-slate-400" />;
+      case 'txt': return <FileText size={20} className="text-on-surface-variant" />;
+      case 'md': return <FileCode size={20} className="text-tertiary" />;
+      default: return <File size={20} className="text-outline" />;
     }
   };
 
@@ -516,316 +522,278 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
     <div className="space-y-8">
       {mode === 'list' ? (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Mẫu giao-dien-mau danh_sach_tri_thuc — header h1 + subtitle + count badge + Bộ lọc */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <h1 className="text-h1 font-semibold text-slate-900 dark:text-white">Danh sách tri thức</h1>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              <h1 className="font-display text-headline-xl text-on-surface dark:text-white">Danh sách tri thức</h1>
+              <p className="text-body-sm text-on-surface-variant mt-1">
                 {IS_HUB_TONG
                   ? 'Quản lý và duyệt tri thức được đồng bộ từ các Hub con'
                   : 'Quản lý các tri thức đã được nạp vào hệ thống'}
               </p>
             </div>
-            {!IS_HUB_TONG && (
-              <button
-                onClick={() => navigate('/documents/new')}
-                className="btn-primary w-full sm:w-auto"
-              >
-                <Plus size={18} />
-                Nạp tri thức mới
+            <div className="flex items-center gap-3">
+              <div className="bg-surface-container-low px-3 py-2 rounded-lg text-[11px] font-bold text-outline border border-outline-variant uppercase tracking-wider">
+                {totalDocs} Tệp tin
+              </div>
+              <button className="flex items-center gap-2 px-4 py-2 border border-outline-variant rounded-lg text-body-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
+                <Filter size={18} />
+                Bộ lọc
               </button>
-            )}
+            </div>
           </div>
 
-          <div className="glass-card">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 sticky top-0 z-10">
-              <div className="relative flex-1 max-w-md">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">
-                  <Search size={18} />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm tri thức..."
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  className="input-field w-full pl-10"
-                />
-              </div>
-              <div className="flex items-center justify-between sm:justify-end gap-3">
-                <button className="btn-secondary">
-                  <Filter size={14} />
-                  Bộ lọc
-                </button>
-                <span className="text-xs px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full">
-                  {totalDocs} Tệp tin
-                </span>
-              </div>
-            </div>
-            
-            <div className="">
-              <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="px-6 py-4 text-xs font-medium text-slate-500 dark:text-slate-400 w-[40%]">Tri thức</th>
-                    <th className="px-6 py-4 text-xs font-medium text-slate-500 dark:text-slate-400 w-[20%]">Hub</th>
-                    <th className="px-6 py-4 text-xs font-medium text-slate-500 dark:text-slate-400 w-[20%]">Trạng thái</th>
-                    <th className="px-6 py-4 text-xs font-medium text-slate-500 dark:text-slate-400 w-[15%]">Ngày tải</th>
-                    <th className="px-6 py-4 text-xs font-medium text-slate-500 dark:text-slate-400 w-[5%]"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {loading && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-16 text-center">
-                        <div className="flex flex-col items-center gap-3">
-                          <Loader2 className="text-accent animate-spin" size={32} />
-                          <span className="text-sm text-slate-500 dark:text-slate-400">Đang tải dữ liệu...</span>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {!loading && paginatedDocuments.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-16 text-center">
-                        <div className="flex flex-col items-center gap-3">
-                          <FileText className="text-slate-300 dark:text-slate-600" size={40} />
-                          <span className="text-sm text-slate-500 dark:text-slate-400">Chưa có tri thức nào</span>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  <AnimatePresence>
-                    {!loading && paginatedDocuments.map((doc) => (
-                      <React.Fragment key={doc.id}>
-                        <motion.tr 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          className={cn(
-                            "hover:bg-slate-50/50 dark:hover:bg-slate-700 transition-colors group cursor-pointer",
-                            expandedDoc === doc.id && "bg-slate-50/80 dark:bg-slate-800/50"
-                          )}
-                          onClick={() => toggleExpand(doc.id)}
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                                {getFileIcon(doc.type)}
-                              </div>
-                              <div>
-                                <div className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-brand-indigo transition-colors">{doc.name}</div>
-                                <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{doc.size} • {doc.type}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                              <Database size={14} className="text-slate-400 dark:text-slate-500" />
-                              {hubs.find(h => h.id === doc.hubId)?.name || doc.hubId}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                {getStatusIcon(doc.status)}
-                                <span className={cn(
-                                  "text-xs font-medium",
-                                  doc.status === 'completed' ? "text-success" :
-                                  (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error') ? "text-danger" :
-                                  "text-slate-600 dark:text-slate-300"
-                                )}>
-                                  {getStatusText(doc.status)}
-                                </span>
-                              </div>
-                              {doc.status === 'processing' && (
-                                <div className="w-32 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                  <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${doc.progress}%` }}
-                                    className="h-full bg-accent"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
-                            {new Date(doc.uploadedAt).toLocaleDateString('vi-VN')}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end">
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setActionMenuId(actionMenuId === doc.id ? null : doc.id); }}
-                                  className={cn(
-                                    "p-1.5 rounded-lg transition-all text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700",
-                                    actionMenuId === doc.id && "text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700"
-                                  )}
-                                  title="Thao tác"
-                                >
-                                  <MoreVertical size={16} />
-                                </button>
-                                <AnimatePresence>
-                                  {actionMenuId === doc.id && (
-                                    <>
-                                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActionMenuId(null); }} />
-                                      <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                                        className="absolute right-0 mt-1 w-44 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden py-1"
-                                      >
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setActionMenuId(null); handlePreview(doc); }}
-                                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                        >
-                                          <Eye size={14} className="text-brand-indigo" />
-                                          Xem file gốc
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActionMenuId(null);
-                                            handlePreview(doc);
-                                            setTimeout(() => setPreviewTab('history'), 0);
-                                          }}
-                                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                        >
-                                          <Clock size={14} className="text-brand-indigo" />
-                                          Lịch sử phiên bản
-                                        </button>
-                                        {isAdmin && !IS_HUB_TONG && (
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); setActionMenuId(null); triggerReupload(doc.id); }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                          >
-                                            <Upload size={14} className="text-brand-indigo" />
-                                            Tải lại file
-                                          </button>
-                                        )}
-                                        {isAdmin && !IS_HUB_TONG && ['md','txt','csv','html'].includes(doc.type.toLowerCase()) && (
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); setActionMenuId(null); triggerEditContent(doc.id); }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                          >
-                                            <Edit3 size={14} className="text-brand-indigo" />
-                                            Sửa nội dung
-                                          </button>
-                                        )}
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setActionMenuId(null); }}
-                                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                        >
-                                          <Sparkles size={14} className="text-brand-indigo" />
-                                          Phân tích bằng AI
-                                        </button>
-                                        {!IS_HUB_TONG && (
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              setActionMenuId(null);
-                                              const res = await api.deleteDocument(doc.id);
-                                              if (res.success) {
-                                                setDocuments(prev => prev.filter(d => d.id !== doc.id));
-                                                setTotalDocs(prev => prev - 1);
-                                              }
-                                            }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-danger hover:bg-danger/5 transition-colors"
-                                          >
-                                            <Trash2 size={14} />
-                                            Xóa tri thức
-                                          </button>
-                                        )}
-                                      </motion.div>
-                                    </>
-                                  )}
-                                </AnimatePresence>
-                              </div>
-                            </div>
-                          </td>
-                        </motion.tr>
-                        
-                        <AnimatePresence>
-                          {expandedDoc === doc.id && (
-                            <motion.tr
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="bg-slate-50/50 dark:bg-slate-800/50"
-                            >
-                              <td colSpan={5} className="px-6 py-5 border-t border-slate-100 dark:border-slate-700">
-                                <div className="space-y-4">
-                                  {/* Trạng thái xử lý — CocoIndex chạy một lượt update_blocking():
-                                      pending → completed / failed. KHÔNG có 4 stage như backend Go cũ. */}
-                                  <div className={cn(
-                                    "flex items-start gap-3 p-3 rounded-lg border",
-                                    doc.status === 'completed'
-                                      ? "bg-success/5 border-success/20"
-                                      : (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error')
-                                      ? "bg-danger/5 border-danger/20"
-                                      : "bg-accent/5 border-accent/20"
-                                  )}>
-                                    {doc.status === 'completed' ? (
-                                      <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" />
-                                    ) : (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error') ? (
-                                      <AlertCircle size={18} className="text-danger shrink-0 mt-0.5" />
-                                    ) : (
-                                      <Loader2 size={18} className="text-accent animate-spin shrink-0 mt-0.5" />
-                                    )}
-                                    <div className="text-sm">
-                                      {doc.status === 'completed' ? (
-                                        <>
-                                          <p className="font-medium text-slate-800 dark:text-slate-100">Đã nạp vào kho tri thức</p>
-                                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                            CocoIndex đã trích xuất, chia chunk và vector hóa — {doc.chunkCount ?? 0} chunks.
-                                          </p>
-                                        </>
-                                      ) : (doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error') ? (
-                                        <>
-                                          <p className="font-medium text-slate-800 dark:text-slate-100">Nạp tri thức thất bại</p>
-                                          <p className="text-xs text-danger mt-0.5">{doc.errorMessage || 'Không rõ nguyên nhân'}</p>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <p className="font-medium text-slate-800 dark:text-slate-100">Đang xử lý qua CocoIndex</p>
-                                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                            Trích xuất · chia chunk · embed chạy nền trong một lượt — trạng thái tự cập nhật khi hoàn tất.
-                                          </p>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Thông tin kỹ thuật - 1 dòng */}
-                                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-                                    <div className="flex items-center gap-1.5">
-                                      <Layers size={13} className="text-slate-400 dark:text-slate-500" />
-                                      <span className="text-slate-700 dark:text-slate-200 font-medium">{ragConfig?.chunker || 'Semantic Chunker'}</span>
-                                      <span>· {ragConfig?.chunk_size || 512} tokens · overlap {ragConfig?.chunk_overlap || 50}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <Cpu size={13} className="text-slate-400 dark:text-slate-500" />
-                                      <span className="text-slate-700 dark:text-slate-200 font-medium">{ragConfig?.embedding_model || 'gemini-embedding-001'}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                            </motion.tr>
-                          )}
-                        </AnimatePresence>
-                      </React.Fragment>
-                    ))}
-                  </AnimatePresence>
-                </tbody>
-              </table>
-            </div>
-
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              totalItems={totalDocs}
-              itemsPerPage={itemsPerPage}
+          {/* Search input — mẫu rounded-xl border-outline-variant max-w-xl */}
+          <div className="relative max-w-xl">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-outline pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm tri thức..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="w-full bg-white border border-outline-variant rounded-xl py-2.5 pl-11 pr-4 text-body-md shadow-sm focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
             />
           </div>
+
+          {/* Table header — mẫu grid 5 col uppercase outline */}
+          <div className="hidden lg:grid grid-cols-[1.5fr_1fr_140px_120px_56px] gap-6 px-6 py-3 text-[11px] font-bold text-outline uppercase tracking-wider">
+            <div>Tri thức</div>
+            <div>Hub tham chiếu</div>
+            <div>Trạng thái</div>
+            <div>Ngày tải</div>
+            <div></div>
+          </div>
+
+          {/* Document list — card-per-row */}
+          <div className="space-y-3">
+            {loading && (
+              <div className="m3-card p-10 flex flex-col items-center gap-3">
+                <Loader2 className="text-primary animate-spin" size={32} />
+                <span className="text-body-sm text-on-surface-variant">Đang tải dữ liệu...</span>
+              </div>
+            )}
+            {!loading && paginatedDocuments.length === 0 && (
+              <div className="m3-card p-10 flex flex-col items-center gap-3">
+                <FileText className="text-outline-variant" size={40} />
+                <span className="text-body-sm text-on-surface-variant">Chưa có tri thức nào</span>
+              </div>
+            )}
+            <AnimatePresence>
+              {!loading && paginatedDocuments.map((doc) => {
+                const isExpanded = expandedDoc === doc.id;
+                const isOk = doc.status === 'completed';
+                const isErr = doc.status === 'failed' || doc.status === 'failed_unsupported' || doc.status === 'error';
+                const isProcessing = !isOk && !isErr;
+                return (
+                  <motion.div
+                    key={doc.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className={cn(
+                      "group bg-white rounded-xl transition-all cursor-pointer dark:bg-slate-800",
+                      isExpanded
+                        ? "border border-primary/40 shadow-md"
+                        : "border border-outline-variant shadow-sm hover:shadow-md hover:border-primary/40 dark:border-slate-700"
+                    )}
+                    onClick={() => toggleExpand(doc.id)}
+                  >
+                    {/* Main row */}
+                    <div className="p-4 lg:grid lg:grid-cols-[1.5fr_1fr_140px_120px_56px] gap-6 items-center flex flex-col sm:flex-row sm:items-center sm:gap-4">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-white",
+                          isExpanded ? "border border-primary/20" : "border border-outline-variant/30"
+                        )}>
+                          {/* Mẫu giao-dien-mau — logo Office thực (W/X/P/PDF) */}
+                          <FileTypeIcon fileName={doc.name} size={28} />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className={cn(
+                            "text-body-sm font-bold truncate transition-colors",
+                            isExpanded ? "text-primary" : "text-on-surface group-hover:text-primary dark:text-white"
+                          )}>
+                            {doc.name}
+                          </h3>
+                          <p className="text-[11px] text-on-surface-variant">{doc.size} • {doc.type}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-primary text-on-primary text-[10px] rounded font-bold truncate max-w-[140px]">
+                          {hubs.find((h) => h.id === doc.hubId)?.name || doc.hubId}
+                        </span>
+                      </div>
+                      <div className={cn(
+                        "flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-tight",
+                        isOk && "text-emerald-600",
+                        isErr && "text-error",
+                        isProcessing && "text-on-surface-variant"
+                      )}>
+                        {isOk ? <CheckCircle2 size={16} /> : isErr ? <AlertCircle size={16} /> : <Loader2 size={16} className="animate-spin" />}
+                        {getStatusText(doc.status)}
+                      </div>
+                      <div className="text-[11px] text-on-surface-variant font-medium">
+                        {new Date(doc.uploadedAt).toLocaleDateString('vi-VN')}
+                      </div>
+                      <div className="flex justify-end items-center gap-1 relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handlePreview(doc); }}
+                          className={cn(
+                            "p-1.5 hover:bg-surface-container rounded-lg transition-colors",
+                            isExpanded ? "text-primary" : "text-outline"
+                          )}
+                          title="Xem tệp gốc"
+                        >
+                          <Eye size={20} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setActionMenuId(actionMenuId === doc.id ? null : doc.id); }}
+                          className={cn(
+                            "p-1.5 hover:bg-surface-container rounded-lg transition-colors",
+                            isExpanded || actionMenuId === doc.id ? "text-primary" : "text-outline"
+                          )}
+                          title="Thao tác"
+                        >
+                          <MoreVertical size={20} />
+                        </button>
+                        <AnimatePresence>
+                          {actionMenuId === doc.id && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActionMenuId(null); }} />
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                                className="absolute right-0 top-full mt-1 w-56 bg-white border border-outline-variant rounded-lg shadow-xl z-50 overflow-hidden py-1 dark:bg-slate-800 dark:border-slate-700"
+                              >
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setActionMenuId(null); handlePreview(doc); }}
+                                  className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
+                                >
+                                  <Eye size={18} />
+                                  Xem file gốc
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActionMenuId(null);
+                                    handlePreview(doc);
+                                    setTimeout(() => setPreviewTab('history'), 0);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
+                                >
+                                  <Clock size={18} />
+                                  Lịch sử phiên bản
+                                </button>
+                                {isAdmin && !IS_HUB_TONG && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setActionMenuId(null); triggerReupload(doc.id); }}
+                                    className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
+                                  >
+                                    <Upload size={18} />
+                                    Tải lại file
+                                  </button>
+                                )}
+                                {isAdmin && !IS_HUB_TONG && ['md','txt','csv','html'].includes(doc.type.toLowerCase()) && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setActionMenuId(null); triggerEditContent(doc.id); }}
+                                    className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
+                                  >
+                                    <Edit3 size={18} />
+                                    Sửa nội dung
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setActionMenuId(null); }}
+                                  className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
+                                >
+                                  <Sparkles size={18} />
+                                  Phân tích bằng AI
+                                </button>
+                                {!IS_HUB_TONG && (
+                                  <>
+                                    <div className="h-px bg-outline-variant/30 my-1" />
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        setActionMenuId(null);
+                                        const res = await api.deleteDocument(doc.id);
+                                        if (res.success) {
+                                          setDocuments(prev => prev.filter(d => d.id !== doc.id));
+                                          setTotalDocs(prev => prev - 1);
+                                        }
+                                      }}
+                                      className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-error hover:bg-error/5 transition-colors"
+                                    >
+                                      <Trash2 size={18} />
+                                      Xóa tri thức
+                                    </button>
+                                  </>
+                                )}
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+
+                    {/* Expanded extraction info — mẫu bg-primary/5 p-4 pl-16 */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="bg-primary/5 border-t border-outline-variant/10 overflow-hidden rounded-b-xl"
+                        >
+                          <div className="p-4 lg:pl-16">
+                            <div className="flex items-start gap-3 mb-3">
+                              {isOk ? <CheckCircle2 size={18} className="text-emerald-600 mt-0.5 shrink-0" />
+                                : isErr ? <AlertCircle size={18} className="text-error mt-0.5 shrink-0" />
+                                : <Loader2 size={18} className="text-primary animate-spin mt-0.5 shrink-0" />}
+                              <div className="flex-1">
+                                <p className="text-body-sm font-bold text-on-surface dark:text-white">
+                                  {isOk ? 'Đã trích xuất thành công'
+                                    : isErr ? 'Nạp tri thức thất bại'
+                                    : 'Đang xử lý qua CocoIndex'}
+                                </p>
+                                <p className="text-[11px] text-on-surface-variant">
+                                  {isOk ? `Hệ thống đã hoàn tất xử lý ${doc.chunkCount ?? 0} chunks dữ liệu từ tệp tin này.`
+                                    : isErr ? (doc.errorMessage || 'Không rõ nguyên nhân')
+                                    : 'Trích xuất · chia chunk · embed chạy nền trong một lượt — trạng thái tự cập nhật khi hoàn tất.'}
+                                </p>
+                              </div>
+                            </div>
+                            {isOk && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant font-medium bg-white px-2 py-1 rounded border border-outline-variant/40 dark:bg-slate-900 dark:border-slate-700">
+                                  <Layers size={14} className="text-primary" />
+                                  {ragConfig?.chunker || 'Semantic Chunker'} • {ragConfig?.chunk_size || 512} tokens
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant font-medium bg-white px-2 py-1 rounded border border-outline-variant/40 dark:bg-slate-900 dark:border-slate-700">
+                                  <Cpu size={14} className="text-primary" />
+                                  {ragConfig?.embedding_model || 'text-embedding-3-small'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {/* Pagination */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalDocs}
+            itemsPerPage={itemsPerPage}
+          />
         </div>
       ) : IS_HUB_TONG ? (
         // Hub tổng không có chức năng nạp tri thức mới, redirect về danh sách
@@ -840,50 +808,52 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Mẫu giao-dien-mau nap_tri_thuc — header: back round + h1 headline-xl + subtitle */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/documents')}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500 dark:text-slate-400"
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-outline-variant hover:bg-white hover:shadow-sm transition-all text-on-surface dark:border-slate-700 dark:hover:bg-slate-800 dark:text-white"
+              title="Quay lại danh sách"
             >
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h1 className="text-h1 font-semibold text-slate-900 dark:text-white">Nạp tri thức mới</h1>
-              <p className="text-slate-500 dark:text-slate-400">Chọn phương thức nạp tri thức vào kho dữ liệu Hub Tổng</p>
+              <h1 className="font-display text-headline-xl text-on-surface dark:text-white">Nạp tri thức mới</h1>
+              <p className="text-body-md text-on-surface-variant mt-1">Chọn phương thức nạp tri thức vào kho dữ liệu Hub Tổng</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT col-span-8: upload card + 3 feature chips */}
             <div className="lg:col-span-8 space-y-6">
-              <div className="glass-card overflow-hidden">
-                <div className="flex p-1 bg-slate-100 dark:bg-slate-700 m-4 rounded-xl overflow-x-auto no-scrollbar">
-                  <div className="flex min-w-full">
-                    {[
-                      { id: 'upload', icon: Upload, label: 'Tải lên tệp tin' },
-                      { id: 'compose', icon: Edit3, label: 'Soạn thảo văn bản' },
-                      { id: 'url', icon: Globe, label: 'Trích xuất từ URL' }
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={cn(
-                          "flex-1 flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-bold rounded-lg transition-all whitespace-nowrap",
-                          activeTab === tab.id
-                            ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
-                            : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                        )}
-                      >
-                        <tab.icon size={16} />
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
+              {/* Mẫu — bento card với tabs underline + content padding lg */}
+              <div className="m3-card overflow-hidden">
+                <div className="flex border-b border-outline-variant bg-surface-container-lowest dark:bg-slate-900 overflow-x-auto no-scrollbar">
+                  {[
+                    { id: 'upload', icon: Upload, label: 'Tải lên tệp tin' },
+                    { id: 'compose', icon: Edit3, label: 'Soạn thảo văn bản' },
+                    { id: 'url', icon: Globe, label: 'Trích xuất từ URL' }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={cn(
+                        "flex-1 py-4 px-6 flex items-center justify-center gap-2 text-body-sm font-semibold transition-all whitespace-nowrap border-b-2",
+                        activeTab === tab.id
+                          ? "border-primary text-primary font-bold"
+                          : "border-transparent text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-slate-700/50"
+                      )}
+                    >
+                      <tab.icon size={20} />
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
 
-                <div className="p-6 pt-2">
+                <div className="p-8">
                   <AnimatePresence mode="wait">
                     {activeTab === 'upload' && (
-                      <motion.div 
+                      <motion.div
                         key="upload"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -892,23 +862,23 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
                         className={cn(
-                          "border-2 border-dashed rounded-2xl p-6 sm:p-12 flex flex-col items-center justify-center text-center transition-all duration-200 min-h-[300px] sm:min-h-[400px]",
-                          isDragging ? "border-accent bg-accent/5" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600",
+                          "border-2 border-dashed rounded-xl bg-surface-container-low/30 p-8 sm:p-12 flex flex-col items-center justify-center text-center transition-all duration-200 group min-h-[320px]",
+                          isDragging ? "border-primary bg-primary/5" : "border-outline-variant hover:border-primary/50",
                           isUploading && "opacity-50 pointer-events-none"
                         )}
                       >
-                        <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-6">
+                        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                           {isUploading ? (
-                            <Loader2 className="text-accent animate-spin" size={40} />
+                            <Loader2 className="text-primary animate-spin" size={40} />
                           ) : (
-                            <Upload className="text-slate-400 dark:text-slate-500" size={40} />
+                            <UploadCloud className="text-primary" size={40} />
                           )}
                         </div>
-                        <h3 className="text-h3 font-semibold text-slate-800 dark:text-slate-100 mb-2">
+                        <h3 className="font-display text-headline-md text-on-surface dark:text-white mb-2">
                           {isUploading ? "Đang xử lý tri thức..." : "Kéo thả tệp tin vào đây"}
                         </h3>
-                        <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-sm">
-                          Hỗ trợ PDF, DOCX, TXT, MD. Tối đa 20MB. Hệ thống sẽ tự động OCR và trích xuất nội dung.
+                        <p className="text-body-md text-on-surface-variant mb-8 max-w-md">
+                          Hỗ trợ PDF, DOCX, TXT, MD. Tối đa 20MB.
                         </p>
                         <input
                           ref={fileInputRef}
@@ -921,7 +891,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                         <button
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isUploading || !selectedHub}
-                          className="btn-secondary"
+                          className="px-8 py-3 bg-white border border-outline-variant rounded-full text-body-sm font-bold text-on-surface hover:shadow-md hover:border-primary active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                         >
                           Chọn tệp từ máy tính
                         </button>
@@ -929,7 +899,7 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                     )}
 
                     {activeTab === 'compose' && (
-                      <motion.div 
+                      <motion.div
                         key="compose"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -937,34 +907,34 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                         className="space-y-6"
                       >
                         <div className="space-y-2">
-                          <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Tiêu đề tri thức</label>
-                          <input 
-                            type="text" 
+                          <label className="text-label-md font-bold text-on-surface-variant uppercase tracking-wider">Tiêu đề tri thức</label>
+                          <input
+                            type="text"
                             value={composedTitle}
                             onChange={(e) => setComposedTitle(e.target.value)}
-                            placeholder="Ví dụ: Quy trình vận hành nội bộ..." 
-                            className="input-field w-full font-medium"
+                            placeholder="Ví dụ: Quy trình vận hành nội bộ..."
+                            className="w-full bg-white border border-outline-variant rounded-xl px-4 py-2.5 text-body-md text-on-surface font-medium shadow-sm focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Nội dung chi tiết</label>
-                          <RichTextEditor 
+                          <label className="text-label-md font-bold text-on-surface-variant uppercase tracking-wider">Nội dung chi tiết</label>
+                          <RichTextEditor
                             content={composedContent}
                             onChange={setComposedContent}
-                            placeholder="Bắt đầu soạn thảo nội dung của bạn..." 
+                            placeholder="Bắt đầu soạn thảo nội dung của bạn..."
                           />
                         </div>
-                        <div className="flex justify-end gap-3 pt-4">
-                          <button 
+                        <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant">
+                          <button
                             onClick={() => navigate('/documents')}
-                            className="btn-secondary"
+                            className="px-5 py-2.5 bg-white border border-outline-variant rounded-full text-body-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                           >
                             Hủy bỏ
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleIngest('compose')}
                             disabled={!composedTitle || !composedContent || isUploading}
-                            className="btn-primary"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-full text-body-sm font-bold hover:bg-primary-container transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
                             Nạp vào hệ thống
@@ -974,38 +944,36 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                     )}
 
                     {activeTab === 'url' && (
-                      <motion.div 
+                      <motion.div
                         key="url"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="space-y-8 py-12 flex flex-col items-center max-w-2xl mx-auto"
+                        className="space-y-8 py-8 flex flex-col items-center max-w-2xl mx-auto"
                       >
-                        <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                          <Globe className="text-slate-400 dark:text-slate-500" size={40} />
+                        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Globe className="text-primary" size={40} />
                         </div>
                         <div className="text-center space-y-2">
-                          <h3 className="text-h3 font-semibold text-slate-800 dark:text-slate-100">Trích xuất từ địa chỉ Web</h3>
-                          <p className="text-slate-500 dark:text-slate-400">
+                          <h3 className="font-display text-headline-md text-on-surface dark:text-white">Trích xuất từ địa chỉ Web</h3>
+                          <p className="text-body-md text-on-surface-variant">
                             Nhập URL của bài viết hoặc tri thức trực tuyến, hệ thống sẽ tự động làm sạch và trích xuất văn bản.
                           </p>
                         </div>
                         <div className="w-full relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">
-                            <LinkIcon size={20} />
-                          </div>
-                          <input 
-                            type="url" 
+                          <LinkIcon size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+                          <input
+                            type="url"
                             value={importUrl}
                             onChange={(e) => setImportUrl(e.target.value)}
-                            placeholder="https://example.com/knowledge-base/article-1" 
-                            className="input-field w-full pl-12"
+                            placeholder="https://example.com/knowledge-base/article-1"
+                            className="w-full bg-white border border-outline-variant rounded-xl pl-12 pr-4 py-3 text-body-md text-on-surface shadow-sm focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all outline-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                           />
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleIngest('url')}
                           disabled={!importUrl || isUploading}
-                          className="btn-primary w-full"
+                          className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 bg-primary text-on-primary rounded-full text-body-sm font-bold hover:bg-primary-container transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Globe size={20} />}
                           Bắt đầu trích xuất nội dung
@@ -1015,44 +983,52 @@ export default function DocumentIngestion({ mode = 'list' }: { mode?: 'list' | '
                   </AnimatePresence>
                 </div>
               </div>
+
             </div>
 
+            {/* RIGHT col-span-4: target hub + notes */}
             <div className="lg:col-span-4 space-y-6">
-              <div className="glass-card p-6 space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Kho tri thức đích</label>
-                  <div className="input-field w-full flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50">
-                    <Database size={14} className="text-brand-indigo" />
-                    <span className="font-medium text-slate-700 dark:text-slate-200">
-                      {hubs.find(h => h.id === selectedHub)?.name || 'Hub Tổng'}
-                    </span>
+              {/* Mẫu — Kho tri thức đích */}
+              <div className="m3-card p-6">
+                <h4 className="text-label-md font-bold text-on-surface-variant uppercase tracking-wider mb-4">Kho tri thức đích</h4>
+                <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                    <Database size={18} className="text-on-primary" />
                   </div>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500">Tri thức sẽ được vector hóa và lưu trữ vào kho dữ liệu này.</p>
+                  <div className="min-w-0">
+                    <p className="text-body-md font-bold text-on-surface dark:text-white truncate">
+                      {hubs.find((h) => h.id === selectedHub)?.name || 'Chưa chọn Hub'}
+                    </p>
+                    <p className="text-[11px] text-on-surface-variant leading-tight">
+                      Tri thức sẽ được vector hóa và lưu trữ vào kho dữ liệu này.
+                    </p>
+                  </div>
                 </div>
+              </div>
 
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-4">
-                  <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                    <Info size={14} />
-                    Lưu ý quan trọng
-                  </div>
-                  <div className="space-y-4">
-                    {[
-                      { title: "Cấu trúc rõ ràng", desc: "Tri thức có tiêu đề và phân đoạn sẽ giúp AI hiểu tốt hơn." },
-                      { title: "Chất lượng file", desc: "Tránh các file scan mờ hoặc không có lớp văn bản (OCR)." },
-                      { title: "Tự động Chunking", desc: "Hệ thống sẽ tự động chia nhỏ tri thức để tối ưu tìm kiếm." },
-                      { title: "Bảo mật dữ liệu", desc: "Dữ liệu được mã hóa và chỉ có thể truy cập từ Hub đã chọn." }
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                          {i + 1}
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</p>
-                        </div>
+              {/* Mẫu — Lưu ý quan trọng với 4 numbered items */}
+              <div className="m3-card p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <Info size={20} className="text-amber-500" />
+                  <h4 className="text-label-md font-bold text-on-surface-variant uppercase tracking-wider">Lưu ý quan trọng</h4>
+                </div>
+                <div className="space-y-5">
+                  {[
+                    { title: 'Cấu trúc rõ ràng', desc: 'Tri thức có tiêu đề và phân đoạn sẽ giúp AI hiểu tốt hơn.' },
+                    { title: 'Chất lượng file', desc: 'Tránh các file scan mờ hoặc không có lớp văn bản (OCR).' },
+                    { title: 'Tự động Chunking', desc: 'Hệ thống sẽ tự động chia nhỏ tri thức để tối ưu tìm kiếm.' },
+                    { title: 'Bảo mật dữ liệu', desc: 'Dữ liệu được mã hóa và chỉ có thể truy cập từ Hub đã chọn.' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex gap-4">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-surface-container-highest text-[12px] font-bold flex items-center justify-center text-on-surface dark:bg-slate-700 dark:text-white">
+                        {i + 1}
+                      </span>
+                      <div>
+                        <h5 className="text-body-md font-bold text-on-surface dark:text-white">{item.title}</h5>
+                        <p className="text-body-sm text-on-surface-variant">{item.desc}</p>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Hub, AuditLogEntry } from '../types';
-import { cn, getHubUrl } from '../lib/utils';
+import { cn, getHubUrl, extractAuditTargetName } from '../lib/utils';
 import { motion } from 'motion/react';
 import {
   ArrowRight, ExternalLink, Clock, User, Activity, RefreshCw, Sparkles,
-  TrendingUp, Database, BookOpen, Users, HardDrive, CheckCircle2, XCircle,
+  Database, BookOpen, Users, CheckCircle2, Trash2, MoreVertical,
   FileText, File, FileSpreadsheet, Presentation, FileCode, Image, Globe,
-  Database as TableIcon, ArrowUpRight, BarChart3, Loader2
+  Database as TableIcon, BarChart3, Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api, type HubAPI, type AuditLogAPI } from '../services/api';
+import { api, type HubAPI, type AuditLogAPI, type SyncBatchAPI } from '../services/api';
 
 /* ── Map API Hub to frontend Hub type ── */
 function mapHubAPIToHub(h: HubAPI, docCount = 0, userCount = 0, pendingSync = 0): Hub {
@@ -59,7 +59,9 @@ function mapAuditLogToFE(log: AuditLogAPI): AuditLogEntry {
     user: log.user_name || (log.is_ai ? 'AI Agent' : 'Hệ thống'),
     isAI: log.is_ai,
     action: log.action as AuditLogEntry['action'],
-    target: log.target || '—',
+    // Ưu tiên payload.document_name / .email / .name etc thay vì UUID target_id
+    // (extractAuditTargetName shared với AuditLog.tsx — lib/utils.ts).
+    target: extractAuditTargetName(log.target || '', log.payload) || '—',
     hub: log.hub_name || '—',
     ip: log.ip_address || '—',
   };
@@ -94,37 +96,67 @@ const FileTypeBadge = ({ type, count }: { type: FileType; count: number }) => {
   );
 };
 
-/* ── Stat Card ── */
-const StatCard = ({ label, value, subValue, highlight, icon: Icon, trend, to }: {
-  label: string; value: string; subValue?: string; highlight?: boolean;
-  icon?: React.ElementType; trend?: string; to?: string;
+/* ── Stat Card (mẫu giao-dien-mau §"Key Metrics Summary") ── */
+type StatBadgeTone = 'success' | 'indigo' | 'amber' | 'slate';
+
+const StatCard = ({
+  label,
+  value,
+  subValue,
+  icon: Icon,
+  iconTone = 'indigo',
+  badge,
+  badgeTone = 'success',
+  to,
+}: {
+  label: string;
+  value: string;
+  subValue?: string;
+  icon?: React.ElementType;
+  iconTone?: 'indigo' | 'secondary' | 'tertiary';
+  badge?: string;
+  badgeTone?: StatBadgeTone;
+  to?: string;
 }) => {
+  const iconToneCls = {
+    indigo: 'text-primary',
+    secondary: 'text-sky-600 dark:text-sky-400',
+    tertiary: 'text-fuchsia-600 dark:text-fuchsia-400',
+  }[iconTone];
+
+  const badgeToneCls = {
+    success: 'text-emerald-600 dark:text-emerald-400',
+    indigo: 'text-primary',
+    amber: 'text-amber-600 dark:text-amber-400',
+    slate: 'text-on-surface-variant dark:text-slate-400',
+  }[badgeTone];
+
   const inner = (
     <div className={cn(
-      "glass-card p-5 sm:p-6 flex flex-col justify-between group relative overflow-hidden h-full transition-all",
-      highlight && "border-brand-indigo/30 bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08]",
-      to && "hover:shadow-md hover:border-brand-indigo/20 cursor-pointer"
+      "m3-card p-5 group h-full transition-all",
+      to && "hover:shadow-md hover:border-primary/20 cursor-pointer"
     )}>
-      {highlight && <div className="absolute top-0 right-0 w-24 h-24 bg-brand-indigo/5 rounded-full -mr-12 -mt-12" />}
-      <div className="flex justify-between items-start relative z-10">
-        <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">{label}</span>
-        {Icon && <Icon size={16} className={cn("text-slate-300 dark:text-slate-600 group-hover:text-brand-indigo transition-colors", highlight && "text-brand-indigo")} />}
+      <div className="flex items-center justify-between mb-4">
+        {Icon && (
+          <div className={cn(
+            "w-8 h-8 rounded-lg flex items-center justify-center border border-outline-variant dark:border-slate-700 bg-surface-container-low dark:bg-slate-800/50",
+            iconToneCls
+          )}>
+            <Icon size={18} />
+          </div>
+        )}
+        {badge && (
+          <span className={cn("text-[11px] font-bold flex items-center gap-1", badgeToneCls)}>
+            {badgeTone === 'success' && <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />}
+            {badge}
+          </span>
+        )}
       </div>
-      <div className="mt-3 flex items-baseline gap-2 relative z-10">
-        <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</span>
-        {subValue && <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{subValue}</span>}
+      <h4 className="text-[10px] uppercase tracking-wider font-bold text-outline dark:text-slate-500 mb-1">{label}</h4>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold text-on-surface dark:text-white tracking-tight">{value}</span>
+        {subValue && <span className="text-xs font-medium text-on-surface-variant dark:text-slate-400">{subValue}</span>}
       </div>
-      {trend && (
-        <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-success relative z-10">
-          <TrendingUp size={10} />
-          <span>{trend} so với tháng trước</span>
-        </div>
-      )}
-      {to && (
-        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-          <ArrowUpRight size={14} className="text-brand-indigo" />
-        </div>
-      )}
     </div>
   );
   if (to) return <Link to={to} className="block h-full">{inner}</Link>;
@@ -142,6 +174,8 @@ const Dashboard = () => {
   const [recentLogs, setRecentLogs] = useState<AuditLogEntry[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
   const [syncStats, setSyncStats] = useState<{ pending_batches: number; pending_pages: number }>({ pending_batches: 0, pending_pages: 0 });
+  const [pendingBatches, setPendingBatches] = useState<SyncBatchAPI[]>([]);
+  const [pendingBatchesLoading, setPendingBatchesLoading] = useState(true);
   const [totalKnowledge, setTotalKnowledge] = useState(0);
 
   // Fetch hubs with real document/user counts
@@ -201,6 +235,20 @@ const Dashboard = () => {
       }
     };
 
+    const fetchPendingBatches = async () => {
+      setPendingBatchesLoading(true);
+      try {
+        const res = await api.getSyncBatches({ status: 'pending', per_page: 5 });
+        if (res.success && res.data) {
+          setPendingBatches(res.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch pending sync batches:', err);
+      } finally {
+        setPendingBatchesLoading(false);
+      }
+    };
+
     const fetchDocuments = async () => {
       try {
         const res = await api.getDocuments({ status: 'completed', page: 1, per_page: 1 });
@@ -214,8 +262,27 @@ const Dashboard = () => {
 
     fetchAuditLogs();
     fetchSyncStats();
+    fetchPendingBatches();
     fetchDocuments();
   }, []);
+
+  // Helper format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Helper relative time
+  const timeAgo = (iso: string): string => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} phút trước`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    const days = Math.floor(hours / 24);
+    return `${days} ngày trước`;
+  };
 
   // Computed stats from fetched hubs + API data
   const stats = useMemo(() => {
@@ -234,18 +301,41 @@ const Dashboard = () => {
     };
   }, [hubs, syncStats, totalKnowledge]);
 
+  // Mapping action code BE emit → tiếng Việt người đọc được. Action thật từ DB
+  // (`SELECT DISTINCT action FROM audit_logs`) + grep `action=` toàn repo:
+  //   document_delete · document.version.create · document.version.restore
+  //   user.create · user.delete · user.password_reset
+  //   hub.create · hub.update
+  //   sync.replay · security.hub_isolation_violation · migration.role_seed
+  // Generic UPPERCASE legacy (UPDATE/CREATE/DELETE/...) giữ lại fallback M2.
   const getActionLabel = (action: string) => {
     switch (action) {
+      // Document lifecycle
+      case 'document_delete': return 'xoá tài liệu';
+      case 'document.version.create': return 'tạo phiên bản tài liệu';
+      case 'document.version.restore': return 'khôi phục phiên bản tài liệu';
+      // User lifecycle
+      case 'user.create': return 'tạo user';
+      case 'user.delete': return 'xoá user';
+      case 'user.password_reset': return 'reset mật khẩu user';
+      // Hub lifecycle
+      case 'hub.create': return 'tạo hub';
+      case 'hub.update': return 'cập nhật hub';
+      // Sync + security + migration
+      case 'sync.replay': return 'replay sync';
+      case 'security.hub_isolation_violation': return 'vi phạm hub isolation';
+      case 'migration.role_seed': return 'seed role hub_admin';
+      // Legacy UPPERCASE (giữ tương thích nếu còn audit row cũ)
       case 'UPDATE': return 'cập nhật';
       case 'CREATE': return 'tạo mới';
-      case 'DELETE': return 'xóa';
+      case 'DELETE': return 'xoá';
       case 'SYNC': return 'đồng bộ';
       case 'APPROVE_SYNC': return 'duyệt sync';
       case 'REJECT_SYNC': return 'từ chối sync';
       case 'LOGIN': return 'đăng nhập';
       case 'MCP_READ': return 'đọc dữ liệu';
       case 'MCP_WRITE': return 'ghi dữ liệu';
-      default: return 'thực hiện';
+      default: return action;  // hiện raw thay vì 'thực hiện' để forensic dễ debug
     }
   };
 
@@ -277,100 +367,117 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="space-y-8">
-      {/* AI Insight Banner */}
+    <div className="space-y-6">
+      {/* AI Insight Banner — mẫu giao-dien-mau dashboard §"AI Insight Banner" */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-4 border-brand-indigo/20 bg-brand-indigo/[0.03] dark:bg-brand-indigo/[0.08] flex flex-col sm:flex-row items-start sm:items-center gap-4"
+        className="m3-card p-5 sm:p-6 relative overflow-hidden"
       >
-        <div className="w-10 h-10 rounded-full bg-brand-indigo flex items-center justify-center text-white shadow-lg shrink-0">
-          <Sparkles size={20} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-brand-indigo">AI Insights</span>
-            {isAiLoading && <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">Đang phân tích...</span>}
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 flex items-center justify-center shrink-0">
+            <img src="/mascot.png" alt="AI Mascot" className="w-10 h-10 object-contain" />
           </div>
-          <p className="text-sm text-slate-700 dark:text-slate-200 font-medium line-clamp-2">
-            {isAiLoading ? 'Gemini đang tổng hợp dữ liệu hệ thống cho bạn...' : aiInsight}
-          </p>
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-center mb-1 gap-2">
+              <h3 className="font-bold text-base text-on-surface dark:text-white flex items-center gap-1.5">
+                {isAiLoading ? 'Gemini đang tổng hợp dữ liệu' : 'AI Insights'}
+                {isAiLoading && (
+                  <span className="flex gap-1 ml-1">
+                    <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                  </span>
+                )}
+              </h3>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] font-bold text-outline dark:text-slate-500 uppercase tracking-widest">Live Insight</span>
+                <button
+                  onClick={fetchAiInsight}
+                  className="p-1 hover:bg-surface-container-low dark:hover:bg-slate-700 rounded text-outline dark:text-slate-500 hover:text-primary transition-all"
+                  title="Làm mới nhận xét"
+                >
+                  <RefreshCw size={14} className={cn(isAiLoading && "animate-spin")} />
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-on-surface-variant dark:text-slate-300 max-w-4xl leading-relaxed">
+              {isAiLoading
+                ? 'Đang phân tích dữ liệu hệ thống — vui lòng chờ trong giây lát...'
+                : aiInsight}
+            </p>
+          </div>
         </div>
-        <button
-          onClick={fetchAiInsight}
-          className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-400 dark:text-slate-500 hover:text-brand-indigo transition-all self-end sm:self-center"
-          title="Làm mới nhận xét"
-        >
-          <RefreshCw size={16} className={cn(isAiLoading && "animate-spin")} />
-        </button>
       </motion.div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 items-stretch">
+      {/* Stats — 4 cards (mẫu giao-dien-mau dashboard §"Key Metrics Summary") */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-stretch">
         <StatCard
           label="Hub hoạt động"
-          value={String(stats.activeHubs)}
-          subValue={`/ ${stats.totalHubs} Hub`}
+          value={`${stats.activeHubs}/${stats.totalHubs}`}
+          subValue="Hub"
           icon={Database}
+          iconTone="secondary"
+          badge={stats.totalHubs > 0 ? `${Math.round((stats.activeHubs / stats.totalHubs) * 100)}%` : undefined}
+          badgeTone="success"
           to="/registry"
         />
         <StatCard
           label="Tổng tri thức"
           value={stats.totalPages.toLocaleString()}
-          subValue="trang"
+          subValue="trang nội dung"
           icon={BookOpen}
+          iconTone="indigo"
           to="/documents"
         />
         <StatCard
           label="Người dùng"
           value={String(stats.totalUsers)}
-          subValue="người"
+          subValue="nhân sự"
           icon={Users}
+          iconTone="tertiary"
           to="/users"
         />
         <StatCard
           label="Tri thức RAG"
           value={String(stats.totalKnowledge)}
-          subValue="đã nạp"
+          subValue="đã nạp vector"
           icon={BarChart3}
+          iconTone="indigo"
+          badge={stats.pendingBatches > 0 ? `${stats.pendingBatches} chờ` : undefined}
+          badgeTone={stats.pendingBatches > 0 ? 'indigo' : 'success'}
           to="/documents"
-        />
-        <StatCard
-          label="Sync chờ duyệt"
-          value={String(stats.pendingBatches)}
-          subValue={`batch · ${stats.pendingFileCount} tệp`}
-          highlight
-          icon={RefreshCw}
-          to="/sync"
         />
       </div>
 
-      {/* Hub Overview */}
-      <div className="glass-card overflow-hidden">
-        <div className="p-5 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-white tracking-tight">Tổng quan Hub</h2>
+      {/* Main Layout Grid — mẫu giao-dien-mau dashboard §"Main Layout Grid" (12-col: center 8 + right 4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* Center column: Hub Overview + Sync chờ duyệt (col-span-8) */}
+      <div className="lg:col-span-8 space-y-6">
+      {/* Hub Overview — mẫu giao-dien-mau dashboard §"Tổng quan Hub" (5 cột tinh giản) */}
+      <div className="m3-card overflow-hidden">
+        <div className="p-5 border-b border-outline-variant dark:border-slate-700 flex justify-between items-center">
+          <h2 className="font-bold text-body-lg text-on-surface dark:text-white">Tổng quan Hub</h2>
           <Link to="/registry" className="btn-ghost">
             Xem Registry
           </Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[750px]">
+          <table className="w-full text-left border-collapse min-w-[640px]">
             <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/50">
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Tên Hub</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Subdomain</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Tri thức</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Người dùng</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Cập nhật</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trạng thái</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Sync chờ</th>
+              <tr className="bg-surface-container-low/50 dark:bg-slate-800/50 border-b border-outline-variant dark:border-slate-700">
+                <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-outline dark:text-slate-500">Tên Hub</th>
+                <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-outline dark:text-slate-500">Tri thức</th>
+                <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-outline dark:text-slate-500">Người dùng</th>
+                <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-outline dark:text-slate-500">Trạng thái</th>
+                <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-outline dark:text-slate-500">Sync</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-outline-variant dark:divide-slate-700">
               {hubsLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center">
-                    <div className="flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500">
+                  <td colSpan={5} className="px-5 py-12 text-center">
+                    <div className="flex items-center justify-center gap-2 text-outline dark:text-slate-500">
                       <Loader2 size={18} className="animate-spin" />
                       <span className="text-sm">Đang tải dữ liệu Hub...</span>
                     </div>
@@ -378,49 +485,55 @@ const Dashboard = () => {
                 </tr>
               ) : hubs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-slate-400 dark:text-slate-500">
+                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-outline dark:text-slate-500">
                     Chưa có Hub nào trong hệ thống
                   </td>
                 </tr>
               ) : hubs.map((hub) => (
-                <tr key={hub.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors group">
+                <tr key={hub.id} className="hover:bg-surface-container-low/50 dark:hover:bg-slate-700/50 transition-colors group">
                   <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <div className={cn(
-                        "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0",
-                        hub.status === 'active' ? "bg-brand-indigo/10 dark:bg-brand-indigo/20 text-brand-indigo" : "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
+                        "w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 shadow-sm",
+                        hub.status === 'active'
+                          ? "bg-primary/10 dark:bg-primary/20 text-primary border border-primary/20"
+                          : "bg-surface-container-low dark:bg-slate-700 text-outline dark:text-slate-500"
                       )}>
                         {hub.name.charAt(0)}
                       </div>
-                      <div>
-                        <span className={cn("font-semibold text-sm", hub.status === 'inactive' ? "text-slate-400 dark:text-slate-500 italic" : "text-slate-900 dark:text-white")}>
+                      <div className="min-w-0">
+                        <p className={cn(
+                          "text-sm font-bold group-hover:text-primary transition-colors leading-tight",
+                          hub.status === 'inactive' ? "text-outline dark:text-slate-500 italic" : "text-on-surface dark:text-white"
+                        )}>
                           {hub.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-mono">{hub.code}</span>
+                        </p>
+                        <p className="text-[10px] text-outline dark:text-slate-500 truncate">
+                          <span className={cn("font-mono", hub.status === 'inactive' && "line-through")}>{getHubUrl(hub.code)}</span>
+                          <span className="mx-1.5 text-outline-variant dark:text-slate-600">·</span>
+                          Cập nhật {hub.lastUpdate}
+                        </p>
                       </div>
                     </div>
                   </td>
                   <td className="px-5 py-4">
-                    <span className={cn("text-xs font-mono", hub.status === 'inactive' ? "text-slate-400 dark:text-slate-500 line-through" : "text-accent")}>
-                      {getHubUrl(hub.code)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{hub.pages}</span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">trang</span>
+                    <span className="text-sm font-bold text-on-surface dark:text-slate-200">{hub.pages}</span>
+                    <span className="text-xs text-outline dark:text-slate-500 ml-1">trang</span>
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1.5">
-                      <Users size={13} className="text-slate-400 dark:text-slate-500" />
-                      <span className="text-sm text-slate-600 dark:text-slate-300">{hub.users}</span>
+                      <Users size={13} className="text-outline dark:text-slate-500" />
+                      <span className="text-sm font-semibold text-on-surface dark:text-slate-200">{hub.users}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{hub.lastUpdate}</td>
                   <td className="px-5 py-4">
                     <span className={cn(
-                      "badge",
-                      hub.status === 'active' ? "badge-success" : "badge-slate"
+                      "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border",
+                      hub.status === 'active'
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50"
+                        : "bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-400 border-outline-variant dark:border-slate-700"
                     )}>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", hub.status === 'active' ? "bg-emerald-500" : "bg-outline")} />
                       {hub.status === 'active' ? 'Hoạt động' : 'Vô hiệu'}
                     </span>
                   </td>
@@ -428,13 +541,16 @@ const Dashboard = () => {
                     {hub.pendingSync > 0 ? (
                       <Link
                         to="/sync"
-                        className="badge badge-accent hover:bg-accent hover:text-white transition-all flex items-center gap-1 w-fit"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                       >
-                        {hub.pendingSync} tệp
-                        <ArrowRight size={10} />
+                        <RefreshCw size={13} />
+                        {hub.pendingSync} chờ
                       </Link>
                     ) : (
-                      <span className="text-xs text-slate-300 dark:text-slate-600">Không có</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-outline dark:text-slate-500">
+                        <CheckCircle2 size={13} />
+                        0 chờ
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -444,94 +560,150 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Bottom Grid: Sync Queue + Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sync chờ duyệt */}
-        <div className="glass-card flex flex-col">
-          <div className="p-5 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <h2 className="text-h2 font-semibold text-slate-900 dark:text-white tracking-tight">Sync chờ duyệt</h2>
-              <span className="bg-brand-indigo/10 dark:bg-brand-indigo/20 text-brand-indigo text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {stats.pendingBatches}
+      {/* Sync chờ duyệt — mẫu giao-dien-mau dashboard §"Sync chờ duyệt" (file rows) */}
+      <div className="m3-card flex flex-col">
+        <div className="p-5 border-b border-outline-variant dark:border-slate-700 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <RefreshCw size={18} className="text-primary" />
+            <h2 className="font-bold text-body-lg text-on-surface dark:text-white">Sync chờ duyệt</h2>
+            {stats.pendingBatches > 0 && (
+              <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                {stats.pendingBatches} yêu cầu
               </span>
-            </div>
-            <Link to="/sync" className="text-accent text-xs font-medium hover:underline flex items-center gap-1">
-              Hàng đợi <ArrowRight size={14} />
-            </Link>
-          </div>
-          <div className="p-4 flex-1 space-y-3">
-            {stats.pendingBatches > 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 space-y-2 py-8">
-                <RefreshCw size={32} className="opacity-30" />
-                <p className="text-sm font-medium">{stats.pendingBatches} batch ({stats.pendingFileCount} tệp) đang chờ duyệt</p>
-                <Link
-                  to="/sync"
-                  className="text-accent text-xs font-bold hover:underline flex items-center gap-1 mt-2"
-                >
-                  Xem hàng đợi <ArrowRight size={12} />
-                </Link>
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-2 py-12">
-                <CheckCircle2 size={32} className="opacity-20" />
-                <p className="text-sm font-medium">Tất cả đã được duyệt</p>
-              </div>
             )}
           </div>
+          <Link to="/sync" className="text-primary text-xs font-bold hover:underline">
+            Xem tất cả
+          </Link>
         </div>
+        <div className="p-4 space-y-3">
+          {pendingBatchesLoading ? (
+            <div className="flex items-center justify-center gap-2 text-outline dark:text-slate-500 py-8">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-sm">Đang tải hàng đợi...</span>
+            </div>
+          ) : pendingBatches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-outline dark:text-slate-500 py-10 space-y-2">
+              <CheckCircle2 size={32} className="opacity-30 text-emerald-500" />
+              <p className="text-sm font-medium">Tất cả đã được duyệt</p>
+            </div>
+          ) : (
+            pendingBatches.map((batch) => {
+              const ext = Object.keys(batch.files_summary || {})[0]?.toUpperCase() || 'FILE';
+              const config = FILE_TYPE_CONFIG[ext.toLowerCase() as FileType];
+              const Icon = config?.icon || FileText;
+              const iconColor = config?.color.split(' ')[0] || 'text-primary';
+              const title = batch.pages?.[0]?.title || `Batch ${batch.id.slice(0, 8)} (${batch.page_count} tệp)`;
+              return (
+                <div
+                  key={batch.id}
+                  className="flex items-center justify-between p-4 bg-surface-container-low/50 dark:bg-slate-800/30 rounded-xl border border-slate-200/40 dark:border-slate-700/40 hover:border-primary/30 transition-all group"
+                >
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <div className="w-10 h-10 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center shadow-sm shrink-0">
+                      <span className="text-[8px] font-bold text-outline dark:text-slate-500 leading-none">{ext}</span>
+                      <Icon size={16} className={cn("mt-0.5", iconColor)} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-on-surface dark:text-white truncate group-hover:text-primary transition-colors">
+                        {title}
+                      </p>
+                      <p className="text-[11px] text-on-surface-variant dark:text-slate-400 truncate">
+                        Nguồn: {batch.hub_name} · {formatFileSize(batch.total_size)} · {timeAgo(batch.submitted_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <Link
+                      to="/sync"
+                      className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold hover:brightness-110 transition-all"
+                    >
+                      Duyệt nạp
+                    </Link>
+                    <Link
+                      to="/sync"
+                      className="p-1.5 text-outline dark:text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Xem chi tiết"
+                    >
+                      <Trash2 size={16} />
+                    </Link>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
 
-        {/* Hoạt động gần đây */}
-        <div className="glass-card flex flex-col">
-          <div className="p-5 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-white tracking-tight">Hoạt động gần đây</h2>
-            <Link to="/logs" className="text-accent text-xs font-medium hover:underline flex items-center gap-1">
-              Xem tất cả <ArrowRight size={14} />
-            </Link>
+      </div>{/* /center column */}
+
+      {/* Right column: Activity Feed (col-span-4) */}
+      <div className="lg:col-span-4">
+        {/* Hoạt động gần đây — mẫu giao-dien-mau dashboard §"Activity Feed" timeline */}
+        <div className="m3-card flex flex-col h-full">
+          <div className="p-5 border-b border-outline-variant dark:border-slate-700 flex justify-between items-center">
+            <h2 className="font-bold text-body-lg text-on-surface dark:text-white">Hoạt động gần đây</h2>
+            <button className="p-1 text-slate-400 hover:bg-surface-container-low dark:hover:bg-slate-700 rounded-lg transition-colors" title="Tuỳ chọn">
+              <MoreVertical size={18} />
+            </button>
           </div>
-          <div className="p-4 flex-1">
+          <div className="p-5 flex-1 flex flex-col">
             {logsLoading ? (
-              <div className="flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500 py-12">
+              <div className="flex items-center justify-center gap-2 text-outline dark:text-slate-500 py-12">
                 <Loader2 size={18} className="animate-spin" />
                 <span className="text-sm">Đang tải...</span>
               </div>
             ) : recentLogs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 py-12">
+              <div className="flex flex-col items-center justify-center text-outline dark:text-slate-500 py-12">
                 <Activity size={32} className="opacity-20 mb-2" />
                 <p className="text-sm">Chưa có hoạt động nào</p>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="relative space-y-5 before:absolute before:left-[17px] before:top-3 before:bottom-3 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
                 {recentLogs.map((log) => (
-                  <div key={log.id} className="flex gap-3 p-2.5 rounded-lg hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                    <div className="shrink-0 mt-0.5">
-                      <div className={cn(
-                        "w-7 h-7 rounded-full flex items-center justify-center",
-                        log.isAI ? "bg-brand-purple/10 dark:bg-brand-purple/20 text-brand-purple" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-                      )}>
-                        {log.isAI ? <Activity size={13} /> : <User size={13} />}
-                      </div>
+                  <div key={log.id} className="relative flex gap-4">
+                    <div className={cn(
+                      "relative z-10 w-9 h-9 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-sm shrink-0",
+                      log.isAI
+                        ? "bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400"
+                        : "bg-primary/10 dark:bg-primary/20 text-primary"
+                    )}>
+                      {log.isAI ? <Activity size={14} /> : <User size={14} />}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
-                        <span className={cn("font-bold", log.isAI && "text-brand-purple")}>
+                    <div className="flex-1 min-w-0 pt-1">
+                      <p className="text-sm text-on-surface dark:text-slate-200 leading-relaxed">
+                        <span className={cn("font-bold", log.isAI ? "text-fuchsia-600 dark:text-fuchsia-400" : "text-on-surface dark:text-white")}>
                           {log.user}
                         </span>
-                        {' '}{getActionLabel(log.action)}{' '}
-                        {log.target !== '—' && <span className="font-semibold text-slate-900 dark:text-white">{log.target}</span>}
+                        {' '}{getActionLabel(log.action)}
+                        {log.target !== '—' && (
+                          <> : <span className="font-semibold text-primary">{log.target}</span></>
+                        )}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">{log.timestamp}</span>
-                        <span className="text-[10px] text-slate-300 dark:text-slate-600">·</span>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">{log.hub}</span>
+                        <span className="text-[11px] text-outline dark:text-slate-500">{log.timestamp}</span>
+                        <span className="text-[11px] text-outline-variant dark:text-slate-600">·</span>
+                        <span className="text-[11px] text-outline dark:text-slate-500">{log.hub}</span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+            {/* Mẫu — "Xem nhật ký đầy đủ" button bottom */}
+            {!logsLoading && recentLogs.length > 0 && (
+              <Link
+                to="/logs"
+                className="w-full mt-8 py-2.5 bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-200 rounded-lg text-xs font-bold hover:bg-primary/10 dark:hover:bg-primary/20 hover:text-primary transition-colors text-center inline-flex items-center justify-center gap-1.5"
+              >
+                Xem nhật ký đầy đủ
+                <ArrowRight size={13} />
+              </Link>
+            )}
           </div>
         </div>
-      </div>
+      </div>{/* /right column */}
+      </div>{/* /grid 12-col */}
     </div>
   );
 };

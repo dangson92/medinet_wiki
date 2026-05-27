@@ -26,13 +26,13 @@ const fmtDate = (s: string) => new Date(s).toLocaleString('vi-VN');
 const StatCard = ({
   icon: Icon, label, value, accent,
 }: { icon: React.ElementType; label: string; value: string; accent: string }) => (
-  <div className="glass-card p-4 flex items-center gap-3">
+  <div className="m3-card p-4 flex items-center gap-3">
     <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', accent)}>
       <Icon size={18} />
     </div>
     <div className="min-w-0">
-      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{label}</p>
-      <p className="text-lg font-bold text-slate-900 dark:text-white">{value}</p>
+      <p className="text-[11px] text-on-surface-variant truncate">{label}</p>
+      <p className="text-lg font-bold text-on-surface dark:text-white">{value}</p>
     </div>
   </div>
 );
@@ -42,21 +42,21 @@ const GroupBar = ({
 }: { groups: { key: string; calls: number; total_tokens: number }[]; title: string }) => {
   const max = Math.max(1, ...groups.map(g => g.total_tokens));
   return (
-    <div className="glass-card p-4">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">{title}</h3>
-      {groups.length === 0 && <p className="text-xs text-slate-400 dark:text-slate-500">Chưa có dữ liệu</p>}
+    <div className="m3-card p-4">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">{title}</h3>
+      {groups.length === 0 && <p className="text-xs text-outline">Chưa có dữ liệu</p>}
       <div className="space-y-2">
         {groups.map(g => (
           <div key={g.key}>
             <div className="flex justify-between text-xs mb-1">
               <span className="font-mono text-slate-700 dark:text-slate-300 truncate">{g.key}</span>
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-on-surface-variant">
                 {formatNum(g.total_tokens)} tok · {formatNum(g.calls)} calls
               </span>
             </div>
             <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-brand-indigo rounded-full"
+                className="h-full bg-primary rounded-full"
                 style={{ width: `${Math.max(2, (g.total_tokens / max) * 100)}%` }}
               />
             </div>
@@ -217,34 +217,40 @@ const TokenUsage = () => {
   // ─── Render ───
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* Header — đồng bộ M3 với HubRegistry / UserManagement / Settings */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h1 className="text-h1 font-bold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="font-display text-headline-xl text-on-surface dark:text-white">
             Token & API Usage
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-body-md text-on-surface-variant mt-1">
             Theo dõi chi phí token Gemini / OpenAI — số liệu tổng hợp từ rollup, realtime từ Redis.
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 shrink-0">
           <button
             onClick={() => setRealtimeOn(v => !v)}
             className={cn(
-              'btn-secondary relative',
-              realtimeOn && 'ring-2 ring-brand-indigo/50 bg-brand-indigo/10 text-brand-indigo',
+              'inline-flex items-center gap-2 px-4 py-2 border rounded-lg text-body-sm font-semibold transition-colors',
+              realtimeOn
+                ? 'bg-primary/10 border-primary/40 text-primary'
+                : 'bg-white border-outline-variant text-on-surface hover:bg-surface-container-low dark:bg-slate-800 dark:border-slate-700 dark:text-white'
             )}
           >
             <Radio size={16} className={cn(realtimeOn && 'animate-pulse')} />
             {realtimeOn ? 'Realtime ON' : 'Realtime'}
           </button>
-          <button onClick={refreshAll} className="btn-secondary">
+          <button
+            onClick={refreshAll}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-outline-variant rounded-lg text-body-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+          >
             <RefreshCw size={16} /> Làm mới
           </button>
         </div>
       </div>
 
       {/* Range presets */}
-      <div className="glass-card p-4 space-y-3">
+      <div className="m3-card p-4 space-y-3">
         <div className="flex flex-wrap gap-2">
           {RANGE_PRESETS.map(p => (
             <button
@@ -253,8 +259,8 @@ const TokenUsage = () => {
               className={cn(
                 'px-3 py-1.5 text-xs rounded-full border transition-all',
                 rangeKey === p.key
-                  ? 'bg-brand-indigo text-white border-brand-indigo'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-brand-indigo/40',
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white dark:bg-slate-800 border-outline-variant dark:border-slate-700 text-on-surface-variant dark:text-slate-300 hover:border-primary/40',
               )}
             >
               {p.label}
@@ -265,7 +271,7 @@ const TokenUsage = () => {
         {rangeKey === 'custom' && (
           <div className="flex items-center gap-2">
             <div className="relative flex-1 lg:w-40">
-              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
               <input type="date" value={dateFrom}
                 onChange={e => { setDateFrom(e.target.value); setPage(1); }}
                 className="input-field w-full pl-8" />
@@ -308,35 +314,35 @@ const TokenUsage = () => {
 
       {/* Realtime panel */}
       {realtimeOn && (
-        <div className="glass-card p-4 border-2 border-brand-indigo/30">
+        <div className="m3-card p-4 border-2 border-primary/30">
           <div className="flex items-center gap-2 mb-3">
-            <Radio size={14} className="text-brand-indigo animate-pulse" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+            <Radio size={14} className="text-primary animate-pulse" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface dark:text-white">
               Realtime — 60 phút gần nhất (Redis, cập nhật mỗi 2s)
             </h3>
           </div>
-          {!realtime && <p className="text-xs text-slate-400">Đang tải…</p>}
+          {!realtime && <p className="text-xs text-outline">Đang tải…</p>}
           {realtime && (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-                <div className="glass-card p-3">
-                  <p className="text-[10px] text-slate-500">Calls (1h)</p>
+                <div className="m3-card p-3">
+                  <p className="text-[10px] text-on-surface-variant">Calls (1h)</p>
                   <p className="text-lg font-bold">{formatNum(realtime.totals.calls)}</p>
                 </div>
-                <div className="glass-card p-3">
-                  <p className="text-[10px] text-slate-500">Tokens (1h)</p>
+                <div className="m3-card p-3">
+                  <p className="text-[10px] text-on-surface-variant">Tokens (1h)</p>
                   <p className="text-lg font-bold">{formatNum(realtime.totals.total_tokens)}</p>
                 </div>
-                <div className="glass-card p-3">
-                  <p className="text-[10px] text-slate-500">Prompt</p>
+                <div className="m3-card p-3">
+                  <p className="text-[10px] text-on-surface-variant">Prompt</p>
                   <p className="text-lg font-bold">{formatNum(realtime.totals.prompt_tokens)}</p>
                 </div>
-                <div className="glass-card p-3">
-                  <p className="text-[10px] text-slate-500">Output</p>
+                <div className="m3-card p-3">
+                  <p className="text-[10px] text-on-surface-variant">Output</p>
                   <p className="text-lg font-bold">{formatNum(realtime.totals.output_tokens)}</p>
                 </div>
-                <div className="glass-card p-3">
-                  <p className="text-[10px] text-slate-500">Avg latency</p>
+                <div className="m3-card p-3">
+                  <p className="text-[10px] text-on-surface-variant">Avg latency</p>
                   <p className="text-lg font-bold">{Math.round(realtime.totals.avg_latency_ms)} ms</p>
                 </div>
               </div>
@@ -348,11 +354,11 @@ const TokenUsage = () => {
                       <div
                         className={cn(
                           'w-full rounded-t transition-all',
-                          p.errors > 0 ? 'bg-danger/70' : 'bg-brand-indigo/70 group-hover:bg-brand-indigo',
+                          p.errors > 0 ? 'bg-danger/70' : 'bg-primary/70 group-hover:bg-primary',
                         )}
                         style={{ height: `${Math.max(2, (p.total_tokens / max) * 100)}%` }}
                       />
-                      <span className="absolute -top-7 opacity-0 group-hover:opacity-100 bg-slate-900 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                      <span className="absolute -top-7 opacity-0 group-hover:opacity-100 bg-inverse-surface text-inverse-on-surface text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                         {p.minute}: {formatNum(p.total_tokens)} tok · {formatNum(p.calls)} calls
                       </span>
                     </div>
@@ -366,8 +372,8 @@ const TokenUsage = () => {
 
       {/* Aggregate stats (rollup-backed) */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard icon={Zap} label="Tổng tokens" value={statsLoading ? '...' : formatNum(stats?.total_tokens ?? 0)} accent="bg-brand-indigo/10 text-brand-indigo" />
-        <StatCard icon={Activity} label="Tổng lượt gọi" value={statsLoading ? '...' : formatNum(stats?.total_calls ?? 0)} accent="bg-brand-purple/10 text-brand-purple" />
+        <StatCard icon={Zap} label="Tổng tokens" value={statsLoading ? '...' : formatNum(stats?.total_tokens ?? 0)} accent="bg-primary/10 text-primary" />
+        <StatCard icon={Activity} label="Tổng lượt gọi" value={statsLoading ? '...' : formatNum(stats?.total_calls ?? 0)} accent="bg-tertiary/10 text-tertiary" />
         <StatCard icon={Zap} label="Prompt tokens" value={statsLoading ? '...' : formatNum(stats?.total_prompt_tokens ?? 0)} accent="bg-emerald-500/10 text-emerald-500" />
         <StatCard icon={Zap} label="Output tokens" value={statsLoading ? '...' : formatNum(stats?.total_output_tokens ?? 0)} accent="bg-sky-500/10 text-sky-500" />
         <StatCard icon={AlertTriangle} label="Lỗi" value={statsLoading ? '...' : formatNum(stats?.error_calls ?? 0)} accent="bg-danger/10 text-danger" />
@@ -380,12 +386,12 @@ const TokenUsage = () => {
       </div>
 
       {/* Timeline — granularity auto-picked by backend based on range */}
-      <div className="glass-card p-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
+      <div className="m3-card p-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3 flex items-center gap-2">
           <Clock size={14} /> Tokens theo thời gian
         </h3>
         {(stats?.daily?.length ?? 0) === 0 ? (
-          <p className="text-xs text-slate-400 dark:text-slate-500">Chưa có dữ liệu</p>
+          <p className="text-xs text-outline">Chưa có dữ liệu</p>
         ) : (
           <div className="flex items-end gap-1 h-32">
             {(() => {
@@ -393,10 +399,10 @@ const TokenUsage = () => {
               return (stats?.daily ?? []).map(d => (
                 <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
                   <div
-                    className="w-full bg-brand-indigo/70 hover:bg-brand-indigo rounded-t transition-all"
+                    className="w-full bg-primary/70 hover:bg-primary rounded-t transition-all"
                     style={{ height: `${Math.max(2, (d.total_tokens / max) * 100)}%` }}
                   />
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 bg-slate-900 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 bg-inverse-surface text-inverse-on-surface text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                     {d.date}: {formatNum(d.total_tokens)} tok
                   </span>
                 </div>
@@ -407,64 +413,64 @@ const TokenUsage = () => {
       </div>
 
       {/* Detail table (raw) — only for ranges ≤ 7 days */}
-      <div className="glass-card overflow-hidden">
+      <div className="m3-card overflow-hidden">
         <div className="p-4 border-b border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
             Chi tiết từng lời gọi (raw)
           </h3>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">
+          <span className="text-[10px] text-outline">
             Giới hạn dải {DETAIL_MAX_DAYS} ngày để bảo vệ DB
           </span>
         </div>
         <div className="overflow-x-auto">
           {detailErr ? (
-            <div className="flex items-center justify-center py-12 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-center py-12 text-xs text-on-surface-variant">
               {detailErr}
             </div>
           ) : logsLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-accent" size={28} />
+              <Loader2 className="animate-spin text-primary" size={28} />
             </div>
           ) : (
             <table className="w-full text-left border-collapse min-w-[900px]">
-              <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/50">
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Thời gian</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Provider</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Model</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Op</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Module</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-right">Prompt</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-right">Output</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-right">Total</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-right">Lat (ms)</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trạng thái</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">User</th>
+              <thead className="bg-surface-container-low border-b border-outline-variant dark:bg-slate-900/50">
+                <tr>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Thời gian</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Provider</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Model</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Op</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Module</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline text-right">Prompt</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline text-right">Output</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline text-right">Total</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline text-right">Lat (ms)</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Trạng thái</th>
+                  <th className="px-4 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">User</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              <tbody className="divide-y divide-outline-variant dark:divide-slate-700">
                 {logs.length === 0 && (
-                  <tr><td colSpan={11} className="text-center py-12 text-xs text-slate-400">
+                  <tr><td colSpan={11} className="text-center py-12 text-xs text-outline">
                     Chưa có lượt gọi nào trong dải đã chọn.
                   </td></tr>
                 )}
                 {logs.map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700 transition-colors">
-                    <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{fmtDate(l.timestamp)}</td>
-                    <td className="px-4 py-3 text-xs">
+                  <tr key={l.id} className="hover:bg-surface-container-low/50 dark:hover:bg-slate-700 transition-colors">
+                    <td className="px-4 py-3 text-body-sm text-on-surface-variant dark:text-slate-300 whitespace-nowrap">{fmtDate(l.timestamp)}</td>
+                    <td className="px-4 py-3 text-body-sm">
                       <span className={cn(
                         'px-2 py-0.5 rounded text-[10px] font-semibold uppercase',
-                        l.provider === 'gemini' ? 'bg-brand-purple/10 text-brand-purple' : 'bg-emerald-500/10 text-emerald-600',
+                        l.provider === 'gemini' ? 'bg-tertiary/10 text-tertiary' : 'bg-emerald-500/10 text-emerald-600',
                       )}>{l.provider}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300">{l.model}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{l.operation}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{l.source_module || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-right font-mono text-slate-600 dark:text-slate-300">{formatNum(l.prompt_tokens)}</td>
-                    <td className="px-4 py-3 text-xs text-right font-mono text-slate-600 dark:text-slate-300">{formatNum(l.output_tokens)}</td>
-                    <td className="px-4 py-3 text-xs text-right font-mono font-semibold text-slate-900 dark:text-white">{formatNum(l.total_tokens)}</td>
-                    <td className="px-4 py-3 text-xs text-right font-mono text-slate-500 dark:text-slate-400">{l.latency_ms}</td>
-                    <td className="px-4 py-3 text-xs">
+                    <td className="px-4 py-3 text-body-sm font-mono text-on-surface-variant dark:text-slate-300">{l.model}</td>
+                    <td className="px-4 py-3 text-body-sm text-on-surface-variant dark:text-slate-300">{l.operation}</td>
+                    <td className="px-4 py-3 text-body-sm text-on-surface-variant">{l.source_module || '—'}</td>
+                    <td className="px-4 py-3 text-body-sm text-right font-mono text-on-surface-variant dark:text-slate-300">{formatNum(l.prompt_tokens)}</td>
+                    <td className="px-4 py-3 text-body-sm text-right font-mono text-on-surface-variant dark:text-slate-300">{formatNum(l.output_tokens)}</td>
+                    <td className="px-4 py-3 text-body-sm text-right font-mono font-semibold text-on-surface dark:text-white">{formatNum(l.total_tokens)}</td>
+                    <td className="px-4 py-3 text-body-sm text-right font-mono text-on-surface-variant">{l.latency_ms}</td>
+                    <td className="px-4 py-3 text-body-sm">
                       <span
                         className={cn(
                           'px-2 py-0.5 rounded text-[10px] font-semibold uppercase cursor-default',
@@ -478,7 +484,7 @@ const TokenUsage = () => {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{l.user_name || '—'}</td>
+                    <td className="px-4 py-3 text-body-sm text-on-surface-variant">{l.user_name || '—'}</td>
                   </tr>
                 ))}
               </tbody>

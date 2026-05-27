@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { api, HubAPI, AuditLogAPI } from '../services/api';
 import { AuditLogEntry } from '../types';
-import { cn } from '../lib/utils';
+import { cn, extractAuditTargetName } from '../lib/utils';
 import { Search, Filter, Download, Calendar, User, Activity, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Pagination from '../components/Pagination';
@@ -50,15 +50,16 @@ const AuditLog = () => {
     fetchHubs();
   }, []);
 
-  // Map API audit log to FE type
+  // Map API audit log to FE type — `extractAuditTargetName` shared ở lib/utils.ts.
   const mapLog = useCallback((item: AuditLogAPI): AuditLogEntry => {
+    const rawTarget = item.target || '';
     return {
       id: item.id,
       timestamp: new Date(item.timestamp).toLocaleString('vi-VN'),
       user: item.user_name || 'Unknown',
       isAI: item.is_ai,
       action: item.action as AuditLogEntry['action'],
-      target: item.target || '',
+      target: extractAuditTargetName(rawTarget, item.payload),
       hub: item.hub_name || '',
       ip: item.ip_address || '',
       userAgent: item.user_agent,
@@ -156,24 +157,25 @@ const AuditLog = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* Mẫu — header h1 + CTA outlined "Xuất CSV" đồng bộ HubRegistry/UserManagement */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h1 className="text-h1 font-bold text-slate-900 dark:text-white tracking-tight">Audit Log</h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Lịch sử toàn bộ thao tác hệ thống</p>
+          <h1 className="font-display text-headline-xl text-on-surface dark:text-white">Audit Log</h1>
+          <p className="text-body-md text-on-surface-variant mt-1">Lịch sử toàn bộ thao tác hệ thống</p>
         </div>
         <button
           onClick={handleExport}
-          className="btn-secondary w-full sm:w-auto"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-outline-variant rounded-lg text-body-sm font-semibold text-on-surface hover:bg-surface-container-low transition-colors shrink-0 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
         >
           <Download size={18} /> Xuất CSV
         </button>
       </div>
 
       {/* Filter Bar */}
-      <div className="glass-card p-4 flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+      <div className="m3-card p-4 flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1 lg:w-32">
-            <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
             <input type="date" placeholder="Từ ngày" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input-field w-full pl-8" />
           </div>
           <span className="text-slate-300 dark:text-slate-600 shrink-0">&rarr;</span>
@@ -212,57 +214,57 @@ const AuditLog = () => {
       </div>
 
       {/* Log Table */}
-      <div className="glass-card overflow-hidden">
+      <div className="m3-card overflow-hidden">
         <div className="overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-accent" size={28} />
+              <Loader2 className="animate-spin text-primary" size={28} />
             </div>
           ) : (
           <table className="w-full text-left border-collapse min-w-[750px]">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/50">
+            <thead className="bg-surface-container-low border-b border-outline-variant dark:bg-slate-900/50">
+              <tr>
                 <th className="w-10"></th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Thời gian</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Người thực hiện</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Hành động</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trang bị ảnh hưởng</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Hub</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">IP</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Thời gian</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Người thực hiện</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Hành động</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Trang bị ảnh hưởng</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Hub</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-outline-variant dark:divide-slate-700">
               {logs.map((log) => (
                 <React.Fragment key={log.id}>
                   <tr
                     onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-                    className="hover:bg-slate-50/50 dark:hover:bg-slate-700 transition-colors cursor-pointer group"
+                    className="hover:bg-surface-container-low/50 dark:hover:bg-slate-700 transition-colors cursor-pointer group"
                   >
                     <td className="pl-5 py-4">
-                      {expandedId === log.id ? <ChevronUp size={14} className="text-slate-400 dark:text-slate-500" /> : <ChevronDown size={14} className="text-slate-400 dark:text-slate-500" />}
+                      {expandedId === log.id ? <ChevronUp size={14} className="text-outline" /> : <ChevronDown size={14} className="text-outline" />}
                     </td>
-                    <td className="px-5 py-4 text-xs font-medium text-slate-600 dark:text-slate-300">{log.timestamp}</td>
+                    <td className="px-5 py-4 text-body-sm font-medium text-on-surface-variant dark:text-slate-300">{log.timestamp}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
                         <div className={cn(
                           "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
-                          log.isAI ? "bg-brand-purple/10 text-brand-purple" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                          log.isAI ? "bg-tertiary/10 text-tertiary" : "bg-surface-container-low dark:bg-slate-700 text-on-surface-variant"
                         )}>
                           {log.isAI ? 'AI' : 'U'}
                         </div>
-                        <span className={cn("text-sm font-semibold", log.isAI ? "text-brand-purple" : "text-slate-900 dark:text-white")}>
+                        <span className={cn("text-body-sm font-bold", log.isAI ? "text-tertiary" : "text-on-surface dark:text-white")}>
                           {log.isAI ? `[AI Agent] ${log.user}` : log.user}
                         </span>
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-surface-container-high dark:bg-slate-700 text-on-surface-variant dark:text-slate-300 uppercase">
                         {log.action}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300 font-medium">{log.target}</td>
-                    <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{log.hub}</td>
-                    <td className="px-5 py-4 text-xs font-mono text-slate-400 dark:text-slate-500">{log.ip}</td>
+                    <td className="px-5 py-4 text-body-sm text-on-surface-variant dark:text-slate-300 font-medium">{log.target}</td>
+                    <td className="px-5 py-4 text-body-sm text-on-surface-variant">{log.hub}</td>
+                    <td className="px-5 py-4 text-body-sm font-mono text-outline">{log.ip}</td>
                   </tr>
                   <AnimatePresence>
                     {expandedId === log.id && (
@@ -270,26 +272,26 @@ const AuditLog = () => {
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="bg-slate-50/80 dark:bg-slate-800/50"
+                        className="bg-surface-container-low/80 dark:bg-slate-800/50"
                       >
                         <td colSpan={7} className="px-4 sm:px-10 py-6">
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8">
                             <div className="space-y-2">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">Request ID</p>
-                              <p className="text-xs font-mono text-slate-600 dark:text-slate-300">{log.requestId || '—'}</p>
+                              <p className="text-xs text-outline">Request ID</p>
+                              <p className="text-xs font-mono text-on-surface-variant dark:text-slate-300">{log.requestId || '—'}</p>
                             </div>
                             <div className="space-y-2">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">Duration</p>
-                              <p className="text-xs font-mono text-slate-600 dark:text-slate-300">{log.durationMs != null ? `${log.durationMs}ms` : '—'}</p>
+                              <p className="text-xs text-outline">Duration</p>
+                              <p className="text-xs font-mono text-on-surface-variant dark:text-slate-300">{log.durationMs != null ? `${log.durationMs}ms` : '—'}</p>
                             </div>
                             <div className="space-y-2">
-                              <p className="text-xs text-slate-400 dark:text-slate-500">User Agent</p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 truncate">{log.userAgent || '—'}</p>
+                              <p className="text-xs text-outline">User Agent</p>
+                              <p className="text-xs text-on-surface-variant dark:text-slate-300 truncate">{log.userAgent || '—'}</p>
                             </div>
                             {log.payload && (
                               <div className="col-span-full space-y-3">
-                                <p className="text-xs text-slate-400 dark:text-slate-500">Payload</p>
-                                <pre className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 font-mono text-xs overflow-x-auto whitespace-pre-wrap text-slate-600 dark:text-slate-300">
+                                <p className="text-xs text-outline">Payload</p>
+                                <pre className="bg-white dark:bg-slate-800 border border-outline-variant dark:border-slate-700 rounded-xl p-4 font-mono text-xs overflow-x-auto whitespace-pre-wrap text-on-surface-variant dark:text-slate-300">
                                   {typeof log.payload === 'string' ? log.payload : JSON.stringify(log.payload as Record<string, unknown>, null, 2)}
                                 </pre>
                               </div>
@@ -321,23 +323,23 @@ const AuditLog = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+              className="absolute inset-0 bg-inverse-surface/40 dark:bg-black/60"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-sm glass-card shadow-lg p-8 text-center"
+              className="relative w-full max-w-sm m3-card shadow-lg p-8 text-center"
             >
-              <div className="w-12 h-12 bg-accent/10 text-accent rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-12 h-12 bg-accent/10 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
                 <Download size={24} />
               </div>
-              <h3 className="text-lg font-semibold">Đang tải xuống...</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+              <h3 className="font-display text-headline-md text-on-surface dark:text-white">Đang tải xuống...</h3>
+              <p className="text-body-md text-on-surface-variant mt-2">
                 Đang xuất file CSV cho {totalItems.toLocaleString()} records.
               </p>
               <div className="mt-4">
-                <Loader2 className="animate-spin text-accent mx-auto" size={24} />
+                <Loader2 className="animate-spin text-primary mx-auto" size={24} />
               </div>
             </motion.div>
           </div>

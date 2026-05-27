@@ -18,7 +18,7 @@ describe('Phase 5 PROXY-04 — branding registry', () => {
       expect(cfg.title).toBe('Medinet Wiki');
       expect(cfg.tagline).toBe('Tri thức nội bộ Medinet');
       expect(cfg.themeColor).toBe('#6366f1');
-      expect(cfg.logo).toBe('/branding/central/logo.svg');
+      expect(cfg.logo).toBe('/logo-medinet-wiki-main.png');
     });
 
     it('returns yte config for hub="yte" (emerald #10b981)', () => {
@@ -93,8 +93,8 @@ describe('Phase 5 PROXY-04 — branding registry', () => {
       const hubs = ['central', 'yte', 'duoc', 'hcns'];
       for (const hub of hubs) {
         const cfg: BrandingConfig = getBranding(hub);
-        // T-5-03 mitigation: logo path locked schema ^/branding/<hub>/logo\.svg$
-        expect(cfg.logo).toMatch(/^\/branding\/[a-z][a-z0-9_]*\/logo\.svg$/);
+        // T-5-03 mitigation: logo path locked schema — per-hub SVG OR central wordmark PNG
+        expect(cfg.logo).toMatch(/^\/(branding\/[a-z][a-z0-9_]*\/logo\.svg|logo-medinet-wiki-main\.png)$/);
         expect(cfg.title.length).toBeGreaterThan(0);
         expect(cfg.title.length).toBeLessThanOrEqual(24);
         expect(cfg.tagline.length).toBeLessThanOrEqual(48);

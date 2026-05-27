@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const MOCK_HUBS = [
@@ -80,26 +80,30 @@ describe('Phase 3 v3.1 FE-02 — Layout sidebar hub switcher filter', () => {
 
   it('super admin → switcher show ALL hub (central + dmd + tdt)', async () => {
     await renderLayoutWithUser({ currentRole: 'admin', userHubIds: [] });
+    // Wait trigger button render (api.getHubs resolved)
+    const trigger = await screen.findByLabelText(/Chọn hub đang xem/);
+    // Click to open custom dropdown (mẫu giao-dien-mau hub switcher)
+    fireEvent.click(trigger);
     await waitFor(() => {
-      expect(screen.queryByLabelText(/Chọn hub đang xem/)).toBeTruthy();
+      const options = screen.getAllByRole('option');
+      const names = options.map((o) => o.textContent ?? '');
+      expect(names.some((n) => n.includes('Trung tâm'))).toBe(true);
+      expect(names.some((n) => n.includes('Đỗ Minh Đường'))).toBe(true);
+      expect(names.some((n) => n.includes('Thuốc Dân Tộc'))).toBe(true);
     });
-    const options = document.querySelectorAll('#hub-switcher option');
-    const optionValues = Array.from(options).map((o) => (o as HTMLOptionElement).value);
-    expect(optionValues).toContain('central');
-    expect(optionValues).toContain('dmd');
-    expect(optionValues).toContain('tdt');
   });
 
   it('hub_admin dmd → switcher CHỈ show dmd (filter central + tdt)', async () => {
     await renderLayoutWithUser({ currentRole: 'hub_admin', userHubIds: ['1'] });
+    const trigger = await screen.findByLabelText(/Chọn hub đang xem/);
+    fireEvent.click(trigger);
     await waitFor(() => {
-      expect(screen.queryByLabelText(/Chọn hub đang xem/)).toBeTruthy();
+      const options = screen.getAllByRole('option');
+      const names = options.map((o) => o.textContent ?? '');
+      expect(names.some((n) => n.includes('Đỗ Minh Đường'))).toBe(true);
+      expect(names.some((n) => n.includes('Trung tâm'))).toBe(false);
+      expect(names.some((n) => n.includes('Thuốc Dân Tộc'))).toBe(false);
     });
-    const options = document.querySelectorAll('#hub-switcher option');
-    const optionValues = Array.from(options).map((o) => (o as HTMLOptionElement).value);
-    expect(optionValues).toContain('dmd');
-    expect(optionValues).not.toContain('central');
-    expect(optionValues).not.toContain('tdt');
   });
 
   it('viewer với userHubIds=[] → empty state "Bạn chưa được gán hub nào — liên hệ admin."', async () => {

@@ -31,7 +31,7 @@ for (const path in modules) {
 
 // Fallback Medinet central (M2 brand) — silent fallback per UI-SPEC §1.1
 const FALLBACK: BrandingConfig = registry['central'] ?? {
-  logo: '/branding/central/logo.svg',
+  logo: '/logo-medinet-wiki-main.png',
   title: 'Medinet Wiki',
   tagline: 'Tri thức nội bộ Medinet',
   themeColor: '#6366f1', // indigo-500 M2 brand

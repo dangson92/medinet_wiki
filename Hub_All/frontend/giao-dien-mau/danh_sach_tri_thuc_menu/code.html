@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Medinet Wiki - Danh sách tri thức</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .sidebar-active { position: relative; }
+        .sidebar-active::after { content: ''; position: absolute; left: 0; top: 15%; height: 70%; width: 4px; background: #3f3bbd; border-radius: 0 4px 4px 0; }
+        .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface-variant": "#464554",
+                        "on-surface": "#1a1b1f",
+                        "on-secondary-fixed": "#001a41",
+                        "on-primary-fixed": "#0c006a",
+                        "inverse-on-surface": "#f1f0f5",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#5856d6",
+                        "tertiary-container": "#9739c6",
+                        "surface-container-high": "#e9e7ed",
+                        "primary": "#3f3bbd",
+                        "outline": "#777585",
+                        "tertiary-fixed": "#f6d9ff",
+                        "surface-container-low": "#f4f3f8",
+                        "on-tertiary-fixed": "#310048",
+                        "surface-bright": "#faf9fe",
+                        "secondary": "#0058bc",
+                        "primary-fixed": "#e2dfff",
+                        "surface-tint": "#4f4ccd",
+                        "surface-dim": "#dad9df",
+                        "on-background": "#1a1b1f",
+                        "error": "#ba1a1a",
+                        "tertiary": "#7c17ab",
+                        "outline-variant": "#c7c4d6",
+                        "surface": "#faf9fe",
+                        "on-primary-fixed-variant": "#3631b4",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "on-tertiary-fixed-variant": "#7201a2",
+                        "surface-container": "#eeedf3",
+                        "on-secondary-container": "#fefcff",
+                        "error-container": "#ffdad6",
+                        "on-primary-container": "#e7e4ff",
+                        "on-tertiary-container": "#f8deff",
+                        "primary-fixed-dim": "#c2c1ff",
+                        "secondary-container": "#0070eb",
+                        "on-secondary-fixed-variant": "#004493",
+                        "secondary-fixed": "#d8e2ff",
+                        "on-secondary": "#ffffff",
+                        "inverse-primary": "#c2c1ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "background": "#faf9fe",
+                        "surface-container-highest": "#e3e2e7",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#2f3034",
+                        "surface-variant": "#e3e2e7",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#e8b3ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "stack-sm": "8px",
+                        "gutter": "24px",
+                        "container-max": "1440px",
+                        "stack-lg": "32px",
+                        "stack-md": "16px",
+                        "sidebar-width": "260px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Manrope"],
+                        "headline-xl": ["Manrope"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Manrope"],
+                        "label-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-xl-mobile": ["Manrope"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-xl": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-xl-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Sidebar (Identical to SCREEN_10) -->
+<aside class="fixed left-0 top-0 h-full w-[260px] bg-surface-container-lowest border-r border-outline-variant flex flex-col py-6 px-4 space-y-2 z-40">
+<div class="flex items-center gap-3 mb-8 px-2">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" style='font-variation-settings: "FILL" 1;'>medical_services</span>
+</div>
+<div>
+<h1 class="text-headline-md font-headline-md font-bold text-on-surface">Medinet Wiki</h1>
+<p class="text-[10px] text-on-surface-variant leading-tight">Hệ thống quản lý tri thức</p>
+</div>
+</div>
+<div class="mb-6">
+<button class="w-full flex items-center justify-between p-2 rounded-lg border border-outline-variant hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">domain</span>
+<span class="text-body-md font-semibold">Đỗ Minh Đường</span>
+</div>
+<span class="material-symbols-outlined text-[16px]">unfold_more</span>
+</button>
+</div>
+<nav class="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="text-body-md">Dashboard</span>
+</a>
+<div class="pt-4 pb-2 px-3 text-[10px] font-bold text-outline uppercase tracking-wider">Tri thức</div>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">chat_bubble</span>
+<span class="text-body-md">Hỏi đáp AI</span>
+</a>
+<a class="sidebar-active bg-primary-container text-on-primary-container rounded-lg font-bold border-l-4 border-primary flex items-center gap-3 px-3 py-2 transition-all duration-150 scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px]" style='font-variation-settings: "FILL" 1;'>account_tree</span>
+<span class="text-body-md">Danh sách tri thức</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">sync_alt</span>
+<span class="text-body-md flex-1">Hàng đợi Sync</span>
+<span class="bg-error text-white text-[10px] px-1.5 py-0.5 rounded-full">3</span>
+</a>
+<div class="pt-4 pb-2 px-3 text-[10px] font-bold text-outline uppercase tracking-wider">Quản trị</div>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">group</span>
+<span class="text-body-md">Quản lý User</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+<span class="text-body-md">Hub Registry</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">vpn_key</span>
+<span class="text-body-md">Quản lý API Key</span>
+</a>
+<div class="pt-4 pb-2 px-3 text-[10px] font-bold text-outline uppercase tracking-wider">Hệ thống</div>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">history_edu</span>
+<span class="text-body-md">Audit Log</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">toll</span>
+<span class="text-body-md">Token &amp; API Usage</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="text-body-md">Cài đặt hệ thống</span>
+</a>
+</nav>
+<div class="pt-6 border-t border-outline-variant">
+<div class="flex items-center gap-3 px-3 py-2 hover:bg-surface-container-low rounded-lg cursor-pointer transition-colors group">
+<div class="w-8 h-8 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs">S</div>
+<div class="flex-1 min-w-0">
+<p class="text-body-md font-bold truncate">Super Admin</p>
+<p class="text-[10px] text-on-surface-variant truncate">admin@medinetgroup.vn</p>
+</div>
+<span class="material-symbols-outlined text-[18px] text-outline group-hover:translate-x-1 transition-transform">logout</span>
+</div>
+</div>
+</aside>
+<!-- Top Navigation (Identical to SCREEN_10) -->
+<header class="fixed top-0 right-0 left-[260px] h-16 bg-background/80 backdrop-blur-md z-30 flex items-center justify-between px-8">
+<div>
+<nav class="flex items-center gap-2 text-label-md text-on-surface-variant">
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative w-72">
+<input class="w-full bg-surface-container-low border-none rounded-full py-1.5 pl-10 pr-4 text-body-md focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Tìm nhanh (Cmd + K)..." type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">search</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">tune</span></button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">dark_mode</span></button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+</div>
+<button class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-body-md font-semibold hover:bg-primary-container transition-all">
+            Nạp tri thức mới
+        </button>
+<div class="flex items-center gap-2 border-l border-outline-variant pl-6">
+<span class="text-body-md font-semibold">Super Admin</span>
+<div class="w-8 h-8 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-bold text-xs shadow-sm">S</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-[260px] mt-16 p-8 min-h-[calc(100vh-64px)] flex flex-col">
+<!-- Page Header Section -->
+<div class="flex justify-between items-end mb-8 max-w-container-max mx-auto w-full">
+<div>
+<h2 class="text-headline-xl font-headline-xl text-on-surface">Danh sách tri thức</h2>
+<p class="text-body-md text-on-surface-variant mt-1">Quản lý các tri thức đã được nạp vào hệ thống</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="bg-surface-container-low px-3 py-2 rounded-lg text-[11px] font-bold text-outline border border-outline-variant uppercase tracking-wider">
+                9 Tiệp tin
+            </div>
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant rounded-lg text-body-sm font-semibold hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+                Bộ lọc
+            </button>
+</div>
+</div>
+<!-- Content Area: Knowledge Grid -->
+<div class="flex-1 max-w-container-max mx-auto w-full">
+<!-- Search and Filters within list -->
+<div class="mb-6 relative max-w-xl">
+<input class="w-full bg-white border border-outline-variant rounded-xl py-2.5 pl-11 pr-4 text-body-md shadow-sm focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all" placeholder="Tìm kiếm tri thức..." type="text"/>
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+</div>
+<!-- Table Header (Styled like Section Header in SCREEN_10) -->
+<div class="grid grid-cols-[1.5fr_1fr_120px_120px_48px] gap-6 px-6 py-3 text-[11px] font-bold text-outline uppercase tracking-wider">
+<div class="">Tri thức</div>
+<div class="">Hub tham chiếu</div>
+<div class="">Trạng thái</div>
+<div class="">Ngày tải</div>
+<div></div>
+</div>
+<!-- Document List -->
+<div class="space-y-4">
+<!-- Row 1 -->
+<div class="group bg-white border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all cursor-pointer">
+<div class="grid grid-cols-[1.5fr_1fr_120px_120px_48px] gap-6 items-center">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center text-[#2b579a] border border-outline-variant/30"><img alt="Word Icon" class="w-6 h-6 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQRN9R3OLBitXdTolEZwPocStdZFsjlSgJKH45me9gSnT47jspPRtuner7C24UhDHTMpOSPzOI6s6Kr32-zLz-q0Tim24Rb-MONvI84cGfHE6tYNnkbrzkltTcZNgFEVaacMk3CcuLN-mpLK29fhulKzO9saR8ZdInDzq1Arz_i1bl1i4ygf2I58-aqrh0Skakco8HiH--LwxL0KiClaAZ7TKjED2qplybDrcMeQN42CRINLgxO9eXQUjtCcwCD8fdvBDn3RGmiCZw"/></div>
+<div class="min-w-0">
+<h3 class="text-body-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">DMD_T5-02_Playbook_KenhTruyen_v1.docx</h3>
+<p class="text-[11px] text-on-surface-variant">34 KB • docx</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-primary text-[10px] text-on-primary rounded font-bold">Đỗ Minh Đường</span>
+</div>
+<div class="flex items-center gap-1.5 text-[11px] text-green-600 font-bold uppercase tracking-tight">
+<span class="material-symbols-outlined text-[18px]" style='font-variation-settings: "FILL" 1;'>check_circle</span>
+                        Đã nạp
+                    </div>
+<div class="text-[11px] text-on-surface-variant font-medium">25/5/2026</div>
+<div class="flex justify-end relative">
+<button class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-outline">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+<div class="absolute right-0 top-full mt-1 w-56 bg-white border border-outline-variant rounded-lg shadow-xl z-50 overflow-hidden py-1">
+<button class="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+<span>Xem file gốc</span>
+</button>
+<button class="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">history</span>
+<span>Lịch sử phiên bản</span>
+</button>
+<button class="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+<span>Phân tích bằng AI</span>
+</button>
+<div class="h-px bg-outline-variant/30 my-1"></div>
+<button class="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-error hover:bg-error/5 transition-colors">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+<span>Xóa tri thức</span>
+</button>
+</div></div>
+</div>
+</div>
+<!-- Row 2: Expanded Style Simulation -->
+<div class="group bg-white border border-primary/40 rounded-xl shadow-md transition-all overflow-hidden">
+<div class="p-4 grid grid-cols-[1.5fr_1fr_120px_120px_48px] gap-6 items-center border-b border-outline-variant/10">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-[#2b579a]"><img alt="Word Icon" class="w-6 h-6 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUCmG93AW-QUNm0S2bBa8ZaY_UGmvzZ9Lod5Ss9GKD5a_-hQfmoTUj3SpCXy5s32AuQ2qzh4SAQSFNcrNq3UP9w8zEbecXp1EDP6wNPn23qOdOLjZuK40cAZ-jtJ-17fkHKyMq8Db8jqbN8isGPpYQSyv-9jHPKKj09BsPlos1njJTfaQN0tgR03dyOEVrGpWXOchaZv9oBbL6GOj6xWZj6yUJ5OWGp6d5Vtcjll7FLgeSk3ePhI2HYfD3V-Y38M9pfOAmBNPXX1OO"/></div>
+<div class="min-w-0">
+<h3 class="text-body-sm font-bold text-primary truncate">DMD_T5-01_ContentStrategy_12TuyenND_v1.docx</h3>
+<p class="text-[11px] text-on-surface-variant">35 KB • docx</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-primary text-[10px] text-on-primary rounded font-bold">Đỗ Minh Đường</span>
+</div>
+<div class="flex items-center gap-1.5 text-[11px] text-green-600 font-bold uppercase tracking-tight">
+<span class="material-symbols-outlined text-[18px]" style='font-variation-settings: "FILL" 1;'>check_circle</span>
+                        Đã nạp
+                    </div>
+<div class="text-[11px] text-on-surface-variant font-medium">25/5/2026</div>
+<div class="flex justify-end">
+<button class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-primary">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Extraction Details (Similar to extraction info in AI chat) -->
+<div class="bg-primary/5 p-4 pl-16">
+<div class="flex items-start gap-3 mb-3">
+<span class="material-symbols-outlined text-[18px] text-green-600 mt-0.5">check_circle</span>
+<div class="flex-1">
+<p class="text-body-sm font-bold text-on-surface">Đã trích xuất thành công</p>
+<p class="text-[11px] text-on-surface-variant">Hệ thống đã hoàn tất xử lý 9 chunks dữ liệu từ tệp tin này.</p>
+</div>
+</div>
+<div class="flex flex-wrap gap-4 mt-2">
+<div class="flex items-center gap-1.5 text-[11px] text-on-surface-variant font-medium bg-white px-2 py-1 rounded border border-outline-variant/20">
+<span class="material-symbols-outlined text-[14px] text-primary">account_tree</span>
+                            Semantic Chunker • 512 tokens
+                        </div>
+<div class="flex items-center gap-1.5 text-[11px] text-on-surface-variant font-medium bg-white px-2 py-1 rounded border border-outline-variant/20">
+<span class="material-symbols-outlined text-[14px] text-primary">view_in_ar</span>
+                            text-embedding-3-small
+                        </div>
+</div>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="group bg-white border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all cursor-pointer">
+<div class="grid grid-cols-[1.5fr_1fr_120px_120px_48px] gap-6 items-center">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center text-[#2b579a] border border-outline-variant/30"><img alt="Word Icon" class="w-6 h-6 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUCmG93AW-QUNm0S2bBa8ZaY_UGmvzZ9Lod5Ss9GKD5a_-hQfmoTUj3SpCXy5s32AuQ2qzh4SAQSFNcrNq3UP9w8zEbecXp1EDP6wNPn23qOdOLjZuK40cAZ-jtJ-17fkHKyMq8Db8jqbN8isGPpYQSyv-9jHPKKj09BsPlos1njJTfaQN0tgR03dyOEVrGpWXOchaZv9oBbL6GOj6xWZj6yUJ5OWGp6d5Vtcjll7FLgeSk3ePhI2HYfD3V-Y38M9pfOAmBNPXX1OO"/></div>
+<div class="min-w-0">
+<h3 class="text-body-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">DMD_T3-01_HoSo_BacSi_EEAT_v1.docx</h3>
+<p class="text-[11px] text-on-surface-variant">32 KB • docx</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-primary text-[10px] text-on-primary rounded font-bold">Đỗ Minh Đường</span>
+</div>
+<div class="flex items-center gap-1.5 text-[11px] text-green-600 font-bold uppercase tracking-tight">
+<span class="material-symbols-outlined text-[18px]" style='font-variation-settings: "FILL" 1;'>check_circle</span>
+                        Đã nạp
+                    </div>
+<div class="text-[11px] text-on-surface-variant font-medium">25/5/2026</div>
+<div class="flex justify-end">
+<button class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-outline">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Row 4 -->
+<div class="group bg-white border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all cursor-pointer">
+<div class="grid grid-cols-[1.5fr_1fr_120px_120px_48px] gap-6 items-center">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center text-[#2b579a] border border-outline-variant/30"><img alt="Word Icon" class="w-6 h-6 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUCmG93AW-QUNm0S2bBa8ZaY_UGmvzZ9Lod5Ss9GKD5a_-hQfmoTUj3SpCXy5s32AuQ2qzh4SAQSFNcrNq3UP9w8zEbecXp1EDP6wNPn23qOdOLjZuK40cAZ-jtJ-17fkHKyMq8Db8jqbN8isGPpYQSyv-9jHPKKj09BsPlos1njJTfaQN0tgR03dyOEVrGpWXOchaZv9oBbL6GOj6xWZj6yUJ5OWGp6d5Vtcjll7FLgeSk3ePhI2HYfD3V-Y38M9pfOAmBNPXX1OO"/></div>
+<div class="min-w-0">
+<h3 class="text-body-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">DMD_T1-04_FAQ_ThuongHieu_v1.docx</h3>
+<p class="text-[11px] text-on-surface-variant">43 KB • docx</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-primary text-[10px] text-on-primary rounded font-bold">Đỗ Minh Đường</span>
+</div>
+<div class="flex items-center gap-1.5 text-[11px] text-green-600 font-bold uppercase tracking-tight">
+<span class="material-symbols-outlined text-[18px]" style='font-variation-settings: "FILL" 1;'>check_circle</span>
+                        Đã nạp
+                    </div>
+<div class="text-[11px] text-on-surface-variant font-medium">25/5/2026</div>
+<div class="flex justify-end">
+<button class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-outline">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Row 5 -->
+<div class="group bg-white border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all cursor-pointer">
+<div class="grid grid-cols-[1.5fr_1fr_120px_120px_48px] gap-6 items-center">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center text-[#2b579a] border border-outline-variant/30"><img alt="Word Icon" class="w-6 h-6 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUCmG93AW-QUNm0S2bBa8ZaY_UGmvzZ9Lod5Ss9GKD5a_-hQfmoTUj3SpCXy5s32AuQ2qzh4SAQSFNcrNq3UP9w8zEbecXp1EDP6wNPn23qOdOLjZuK40cAZ-jtJ-17fkHKyMq8Db8jqbN8isGPpYQSyv-9jHPKKj09BsPlos1njJTfaQN0tgR03dyOEVrGpWXOchaZv9oBbL6GOj6xWZj6yUJ5OWGp6d5Vtcjll7FLgeSk3ePhI2HYfD3V-Y38M9pfOAmBNPXX1OO"/></div>
+<div class="min-w-0">
+<h3 class="text-body-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">DMD_T1-03_Script_Library_v1.docx</h3>
+<p class="text-[11px] text-on-surface-variant">55 KB • docx</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-primary text-[10px] text-on-primary rounded font-bold">Đỗ Minh Đường</span>
+</div>
+<div class="flex items-center gap-1.5 text-[11px] text-green-600 font-bold uppercase tracking-tight">
+<span class="material-symbols-outlined text-[18px]" style='font-variation-settings: "FILL" 1;'>check_circle</span>
+                        Đã nạp
+                    </div>
+<div class="text-[11px] text-on-surface-variant font-medium">25/5/2026</div>
+<div class="flex justify-end">
+<button class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-outline">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="mt-8 flex items-center justify-between">
+<p class="text-[11px] font-bold text-outline uppercase tracking-wider">Trang 1 của 1</p>
+<div class="flex items-center gap-2">
+<button class="p-2 border border-outline-variant rounded-lg text-outline opacity-50 cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-primary text-white font-bold text-body-sm shadow-sm">1</button>
+<button class="p-2 border border-outline-variant rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<footer class="mt-auto pt-8 pb-4 text-center">
+<p class="text-[10px] text-outline tracking-widest font-bold uppercase">© 2024 Medinet Group — Knowledge Base Management System</p>
+</footer>
+</main>
+<script>
+    // Simple Interaction logic
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            document.querySelector('input[placeholder*="Tìm nhanh"]').focus();
+        }
+    });
+
+    // Micro-interactions
+    document.querySelectorAll('a, button').forEach(el => {
+        el.addEventListener('mousedown', () => {
+            if (!el.disabled) el.classList.add('scale-95');
+        });
+        el.addEventListener('mouseup', () => {
+            el.classList.remove('scale-95');
+        });
+        el.addEventListener('mouseleave', () => {
+            el.classList.remove('scale-95');
+        });
+    });
+</script>
+</body></html>

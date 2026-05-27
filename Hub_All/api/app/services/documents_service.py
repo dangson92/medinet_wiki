@@ -377,16 +377,20 @@ class DocumentService:
         Raises:
             HubIsolationError: editor/viewer cố xoá document ngoài hub được assign.
         """
-        # 1) Verify exists + lấy hub_id + file_path trước khi delete.
+        # 1) Verify exists + lấy hub_id + file_path + filename trước khi delete.
+        # `filename` cần để emit vào audit payload — FE hiển thị tên tài liệu thay UUID
+        # ở cột "Trang bị ảnh hưởng" (audit_log UI 2026-05-26).
+        # Tên cột thật trong bảng documents là `filename` (KHÔNG phải `name`) — schema
+        # 0001_initial_schema.py + verify production: `\d documents` returns `filename text`.
         row = (
             await self.db.execute(
-                text("SELECT hub_id, file_path FROM documents WHERE id = :id"),
+                text("SELECT hub_id, file_path, filename FROM documents WHERE id = :id"),
                 {"id": str(document_id)},
             )
         ).fetchone()
         if row is None:
             return False
-        hub_id, file_path = row[0], row[1]
+        hub_id, file_path, doc_name = row[0], row[1], row[2]
 
         # 2) HUB-02 / E4 — enforce hub isolation. `hub_id` lấy TỪ DB (KHÔNG payload).
         #    admin role bypass; editor/viewer cross-hub → audit emit + raise.
@@ -424,17 +428,26 @@ class DocumentService:
 
         # 4) Audit log entry — document_delete. GIỮ INSERT synchronous (preserve
         #    behavior Plan 04-05 — test_delete_happy_path_cascade assert ngay).
+        #    Payload jsonb_build_object include `document_name` để FE audit_log
+        #    hiển thị tên tài liệu thay UUID (forensic ergonomics).
+        #    `CAST(:doc_name AS text)` cast tường minh vì jsonb_build_object nhận
+        #    VARIADIC "any" → asyncpg prepared statement không infer được kiểu →
+        #    IndeterminateDatatypeError. Cú pháp `::text` BỊ SQLAlchemy `text()`
+        #    parser mis-parse (`:` collide với `:param`), BẮT BUỘC dùng `CAST()`
+        #    (pattern song song memory `project_asyncpg_timestamptz_param`).
         await self.db.execute(
             text(
                 "INSERT INTO audit_logs "
-                "(id, user_id, action, target_type, target_id, hub_id, request_id, created_at) "
+                "(id, user_id, action, target_type, target_id, hub_id, payload, request_id, created_at) "
                 "VALUES (gen_random_uuid(), :user_id, 'document_delete', 'document', "
-                ":target_id, :hub_id, :request_id, NOW())"
+                ":target_id, :hub_id, jsonb_build_object('document_name', CAST(:doc_name AS text)), "
+                ":request_id, NOW())"
             ),
             {
                 "user_id": str(actor.id),
                 "target_id": str(document_id),
                 "hub_id": str(hub_id) if hub_id else None,
+                "doc_name": doc_name,
                 "request_id": request_id,
             },
         )

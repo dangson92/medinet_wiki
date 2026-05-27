@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Hub } from '../types';
 import { cn, getHubUrl } from '../lib/utils';
-import { Plus, Edit2, Power, X, Search, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Power, X, Search, Loader2, AlertTriangle, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Pagination from '../components/Pagination';
 import { api, type HubAPI } from '../services/api';
@@ -161,98 +161,124 @@ const HubRegistry = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* Mẫu giao-dien-mau hub_registry — header h1 headline-xl + CTA "Thêm Hub Mới" bg-primary */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h1 className="text-h1 font-bold text-slate-900 dark:text-white tracking-tight">Hub Registry</h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý danh sách các Hub dự án trong hệ thống</p>
+          <h1 className="font-display text-headline-xl text-on-surface dark:text-white">Quản lý Hub</h1>
+          <p className="text-body-md text-on-surface-variant mt-1">Quản lý danh sách các Hub dự án trong hệ thống</p>
         </div>
         <button
           onClick={() => { resetForm(); setIsAddModalOpen(true); }}
-          className="btn-primary w-full sm:w-auto"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-lg font-bold text-body-sm shadow-lg shadow-primary/20 hover:bg-primary-container transition-all active:scale-[0.98]"
         >
-          <Plus size={18} /> Thêm Hub Mới
+          <Plus size={20} />
+          Thêm Hub Mới
         </button>
       </div>
 
-      <div className="glass-card overflow-hidden">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-            <input
-              type="text"
-              placeholder="Tìm kiếm Hub theo tên hoặc mã..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="input-field w-full pl-10"
-            />
-          </div>
+      {/* Search toolbar card — mẫu bg-surface-container-lowest p-4 border rounded-xl */}
+      <div className="m3-card p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none" size={20} />
+          <input
+            type="text"
+            placeholder="Tìm kiếm Hub theo tên hoặc mã..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-2 pl-10 pr-4 text-body-md focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+          />
         </div>
+        <button className="inline-flex items-center gap-2 px-3 py-2 text-on-surface-variant border border-outline-variant rounded-lg hover:bg-surface-container-low transition-all text-body-sm font-semibold dark:border-slate-700 dark:hover:bg-slate-800">
+          <Filter size={18} />
+          Bộ lọc
+        </button>
+      </div>
+
+      {/* Table card — mẫu rounded-xl border + thead bg-surface-container-low + uppercase outline-variant headers */}
+      <div className="m3-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/50">
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Tên Hub</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Mã Hub</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">URL Hub</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-center">Số trang</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-center">Số user</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trạng thái</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-right">Thao tác</th>
+          <table className="w-full text-left border-collapse min-w-[760px]">
+            <thead className="bg-surface-container-low border-b border-outline-variant dark:bg-slate-900/50">
+              <tr>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider">Tên Hub</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider">Mã Hub</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider">URL Hub</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider text-center">Số trang</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider text-center">Số user</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider">Trạng thái</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-outline uppercase tracking-wider text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-outline-variant dark:divide-slate-700">
               {hubsLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center">
-                    <div className="flex items-center justify-center gap-2 text-slate-400 dark:text-slate-500">
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex items-center justify-center gap-2 text-on-surface-variant">
                       <Loader2 size={18} className="animate-spin" />
-                      <span className="text-sm">Đang tải danh sách Hub...</span>
+                      <span className="text-body-sm">Đang tải danh sách Hub...</span>
                     </div>
                   </td>
                 </tr>
               ) : paginatedHubs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-slate-400 dark:text-slate-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-body-sm text-on-surface-variant">
                     {searchQuery ? 'Không tìm thấy Hub phù hợp' : 'Chưa có Hub nào trong hệ thống'}
                   </td>
                 </tr>
               ) : paginatedHubs.map((hub) => (
-                <tr key={hub.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors group">
-                  <td className="px-5 py-4">
-                    <span className={cn("font-semibold text-sm", hub.status === 'inactive' ? "text-slate-400 dark:text-slate-500 italic" : "text-slate-900 dark:text-white")}>
+                <tr key={hub.id} className="hover:bg-surface-container-low/50 transition-colors group dark:hover:bg-slate-700/30">
+                  <td className="px-6 py-5">
+                    <span className={cn(
+                      "text-body-md font-bold",
+                      hub.status === 'inactive'
+                        ? "text-on-surface-variant italic"
+                        : "text-on-surface dark:text-white"
+                    )}>
                       {hub.name}
                     </span>
                   </td>
-                  <td className="px-5 py-4">
-                    <code className="text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">{hub.code}</code>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-accent font-medium font-mono">{getHubUrl(hub.code)}</td>
-                  <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300 text-center">{hub.pages}</td>
-                  <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300 text-center">{hub.users}</td>
-                  <td className="px-5 py-4">
-                    <span className={cn(
-                      "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                      hub.status === 'active' ? "bg-success/10 text-success" : "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
-                    )}>
-                      {hub.status === 'active' ? 'Hoạt động' : 'Không hoạt động'}
+                  <td className="px-6 py-5">
+                    <span className="px-2 py-0.5 bg-surface-container-high rounded text-[11px] font-mono font-bold text-on-surface-variant uppercase dark:bg-slate-700">
+                      {hub.code}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-right">
+                  <td className="px-6 py-5 text-body-md text-primary font-medium hover:underline cursor-pointer">{getHubUrl(hub.code)}</td>
+                  <td className="px-6 py-5 text-body-md text-on-surface-variant text-center">{hub.pages}</td>
+                  <td className="px-6 py-5 text-body-md text-on-surface-variant text-center">{hub.users}</td>
+                  <td className="px-6 py-5">
+                    <span className={cn(
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold whitespace-nowrap",
+                      hub.status === 'active'
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        : "bg-surface-container-high text-on-surface-variant dark:bg-slate-700"
+                    )}>
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full mr-1.5",
+                        hub.status === 'active' ? "bg-emerald-500" : "bg-outline"
+                      )} />
+                      {hub.status === 'active' ? 'Hoạt động' : 'Vô hiệu'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => openEditModal(hub)}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-accent transition-colors"
+                        className="p-1.5 text-outline hover:text-primary transition-colors"
+                        title="Chỉnh sửa"
                       >
-                        <Edit2 size={16} />
+                        <Edit2 size={20} />
                       </button>
                       <button
                         onClick={() => { setSelectedHub(hub); setIsDisableDialogOpen(true); }}
                         className={cn(
-                          "p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
-                          hub.status === 'active' ? "text-slate-400 dark:text-slate-500 hover:text-danger" : "text-success hover:bg-success/10"
+                          "p-1.5 transition-colors",
+                          hub.status === 'active'
+                            ? "text-outline hover:text-error"
+                            : "text-emerald-600 hover:text-emerald-700"
                         )}
+                        title={hub.status === 'active' ? 'Tắt Hub' : 'Bật Hub'}
                       >
-                        <Power size={16} />
+                        <Power size={20} />
                       </button>
                     </div>
                   </td>
@@ -277,18 +303,18 @@ const HubRegistry = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+              className="absolute inset-0 bg-inverse-surface/40 dark:bg-black/60"
               onClick={() => setIsAddModalOpen(false)}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl glass-card shadow-lg overflow-hidden"
+              className="relative w-full max-w-2xl m3-card shadow-lg overflow-hidden"
             >
-              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
+              <div className="p-6 border-b border-outline-variant dark:border-slate-700 flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Thêm Hub Mới</h3>
-                <button onClick={() => setIsAddModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
+                <button onClick={() => setIsAddModalOpen(false)} className="p-1 rounded-lg hover:bg-surface-container-low dark:hover:bg-slate-700 text-outline"><X size={20} /></button>
               </div>
               <div className="p-6 overflow-y-auto max-h-[70vh] space-y-6">
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
@@ -305,11 +331,11 @@ const HubRegistry = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Tên Hub</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Tên Hub</label>
                       <input type="text" placeholder="Ví dụ: Tâm Đạo Y Quán" className="input-field w-full" value={formData.name} onChange={e => setFormData(f => ({ ...f, name: e.target.value }))} />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mã Hub</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Mã Hub</label>
                       <input
                         type="text"
                         placeholder="tamdao"
@@ -317,24 +343,24 @@ const HubRegistry = () => {
                         value={formData.code}
                         onChange={e => setFormData(f => ({ ...f, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
                       />
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">Chỉ chữ thường, số và dấu gạch dưới. Tối đa 16 ký tự.</p>
+                      <p className="text-[11px] text-outline">Chỉ chữ thường, số và dấu gạch dưới. Tối đa 16 ký tự.</p>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">URL Hub</label>
-                      <div className="input-field w-full bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono text-sm cursor-not-allowed">
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">URL Hub</label>
+                      <div className="input-field w-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-mono text-sm cursor-not-allowed">
                         {formData.code ? getHubUrl(formData.code) : `${getHubUrl(null)}/<mã hub>`}
                       </div>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mô tả</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Mô tả</label>
                       <textarea placeholder="Mô tả ngắn gọn về Hub..." className="input-field w-full h-[180px] resize-none" value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} />
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+              <div className="p-4 bg-surface-container-low dark:bg-slate-800/50 flex justify-end gap-3 border-t border-outline-variant dark:border-slate-700">
                 <button onClick={() => { setIsAddModalOpen(false); resetForm(); }} className="btn-ghost">Hủy</button>
                 <button
                   onClick={handleSaveHub}
@@ -354,27 +380,27 @@ const HubRegistry = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+              className="absolute inset-0 bg-inverse-surface/40 dark:bg-black/60"
               onClick={() => setIsDisableDialogOpen(false)}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md glass-card shadow-lg overflow-hidden"
+              className="relative w-full max-w-md m3-card shadow-lg overflow-hidden"
             >
               <div className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-on-surface dark:text-white">
                   {selectedHub?.status === 'active' ? 'Tắt' : 'Bật'} Hub {selectedHub?.name}?
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                <p className="text-sm text-on-surface-variant mt-2">
                   {selectedHub?.status === 'active'
-                    ? <>Hub <span className="font-bold text-slate-700 dark:text-slate-200">{selectedHub?.name}</span> sẽ không ai truy cập được. Dữ liệu vẫn được giữ nguyên.</>
-                    : <>Hub <span className="font-bold text-slate-700 dark:text-slate-200">{selectedHub?.name}</span> sẽ được kích hoạt lại và người dùng có thể truy cập.</>
+                    ? <>Hub <span className="font-bold text-on-surface dark:text-white">{selectedHub?.name}</span> sẽ không ai truy cập được. Dữ liệu vẫn được giữ nguyên.</>
+                    : <>Hub <span className="font-bold text-on-surface dark:text-white">{selectedHub?.name}</span> sẽ được kích hoạt lại và người dùng có thể truy cập.</>
                   }
                 </p>
                 <div className="mt-6 space-y-2">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Nhập lại tên Hub để xác nhận</label>
+                  <label className="text-label-md font-bold text-on-surface dark:text-white">Nhập lại tên Hub để xác nhận</label>
                   <input
                     type="text"
                     value={confirmName}
@@ -384,7 +410,7 @@ const HubRegistry = () => {
                   />
                 </div>
               </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+              <div className="p-4 bg-surface-container-low dark:bg-slate-800/50 flex justify-end gap-3 border-t border-outline-variant dark:border-slate-700">
                 <button onClick={() => { setIsDisableDialogOpen(false); setConfirmName(''); }} className="btn-ghost">Hủy</button>
                 <button
                   onClick={handleToggleStatus}
@@ -406,46 +432,46 @@ const HubRegistry = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60"
+              className="absolute inset-0 bg-inverse-surface/40 dark:bg-black/60"
               onClick={() => { setIsEditModalOpen(false); resetForm(); }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl glass-card shadow-lg overflow-hidden"
+              className="relative w-full max-w-2xl m3-card shadow-lg overflow-hidden"
             >
-              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center">
+              <div className="p-6 border-b border-outline-variant dark:border-slate-700 flex justify-between items-center">
                 <h3 className="text-lg font-semibold">Chỉnh sửa Hub: {selectedHub.name}</h3>
-                <button onClick={() => { setIsEditModalOpen(false); resetForm(); }} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500"><X size={20} /></button>
+                <button onClick={() => { setIsEditModalOpen(false); resetForm(); }} className="p-1 rounded-lg hover:bg-surface-container-low dark:hover:bg-slate-700 text-outline"><X size={20} /></button>
               </div>
               <div className="p-6 overflow-y-auto max-h-[70vh]">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Tên Hub</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Tên Hub</label>
                       <input type="text" placeholder="Tên Hub" className="input-field w-full" value={formData.name} onChange={e => setFormData(f => ({ ...f, name: e.target.value }))} />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mã Hub</label>
-                      <input type="text" className="input-field w-full bg-slate-50 dark:bg-slate-800 cursor-not-allowed font-mono" value={formData.code} disabled />
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Mã Hub</label>
+                      <input type="text" className="input-field w-full bg-surface-container-low dark:bg-slate-800 cursor-not-allowed font-mono" value={formData.code} disabled />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">URL Hub</label>
-                      <div className="input-field w-full bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono text-sm cursor-not-allowed">
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">URL Hub</label>
+                      <div className="input-field w-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-mono text-sm cursor-not-allowed">
                         {getHubUrl(formData.code)}
                       </div>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Mô tả</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Mô tả</label>
                       <textarea placeholder="Mô tả ngắn gọn về Hub..." className="input-field w-full h-[180px] resize-none" value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} />
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200/50 dark:border-slate-700/50">
+              <div className="p-4 bg-surface-container-low dark:bg-slate-800/50 flex justify-end gap-3 border-t border-outline-variant dark:border-slate-700">
                 <button onClick={() => { setIsEditModalOpen(false); resetForm(); }} className="btn-ghost">Hủy</button>
                 <button
                   onClick={handleUpdateHub}

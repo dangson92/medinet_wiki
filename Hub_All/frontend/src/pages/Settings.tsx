@@ -97,16 +97,16 @@ type SectionHeaderProps = {
 const SectionHeader = ({ number, title, badgeText, description }: SectionHeaderProps) => (
   <div className="mb-5">
     <div className="flex flex-wrap items-center gap-2">
-      <h2 className="text-h3 font-bold text-slate-900 dark:text-white">
+      <h2 className="font-display text-headline-md text-on-surface dark:text-white">
         {number}. {title}
       </h2>
       {badgeText && (
-        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded text-brand-indigo bg-brand-indigo/10">
+        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-primary bg-primary/10">
           {badgeText}
         </span>
       )}
     </div>
-    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{description}</p>
+    <p className="text-body-sm text-on-surface-variant mt-1 leading-relaxed">{description}</p>
   </div>
 );
 
@@ -498,11 +498,11 @@ export default function Settings() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Header — đồng bộ M3 với HubRegistry / UserManagement */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-h1 font-semibold text-slate-900 dark:text-white">Cài đặt hệ thống</h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý cấu hình toàn cục của Medinet Wiki Hub</p>
+          <h1 className="font-display text-headline-xl text-on-surface dark:text-white">Cài đặt hệ thống</h1>
+          <p className="text-body-md text-on-surface-variant mt-1">Quản lý cấu hình toàn cục của Medinet Wiki Hub</p>
         </div>
         <div className="flex items-center gap-3">
           <AnimatePresence>
@@ -511,7 +511,7 @@ export default function Settings() {
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
-                className="flex items-center gap-1.5 text-xs text-success font-medium bg-success/10 px-3 py-1.5 rounded-full"
+                className="flex items-center gap-1.5 text-body-sm text-emerald-700 font-medium bg-emerald-100 px-3 py-1.5 rounded-full dark:bg-emerald-900/30 dark:text-emerald-400"
               >
                 <CheckCircle2 size={14} /> Đã lưu thành công
               </motion.span>
@@ -521,7 +521,7 @@ export default function Settings() {
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
-                className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-full"
+                className="flex items-center gap-1.5 text-body-sm text-error font-medium bg-error-container px-3 py-1.5 rounded-full"
               >
                 <AlertTriangle size={14} /> {saveError}
               </motion.span>
@@ -530,7 +530,7 @@ export default function Settings() {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="btn-primary w-full sm:w-auto"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-lg font-bold text-body-sm shadow-lg shadow-primary/20 hover:bg-primary-container transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
             <span>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
@@ -539,23 +539,20 @@ export default function Settings() {
       </div>
 
       <div className="flex flex-col gap-6">
-        {/* Tab bar — horizontal underline style */}
-        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
+        {/* Tab bar — underline style M3 (đồng bộ Nạp tri thức tabs) */}
+        <div className="flex gap-1 border-b border-outline-variant overflow-x-auto no-scrollbar">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "relative px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
+                "relative px-4 py-3 text-body-sm font-semibold transition-colors whitespace-nowrap border-b-2 -mb-px",
                 activeTab === tab.id
-                  ? "text-brand-indigo"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  ? "border-primary text-primary font-bold"
+                  : "border-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-primary dark:hover:bg-slate-800"
               )}
             >
               {tab.label}
-              {activeTab === tab.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-indigo rounded-full" />
-              )}
             </button>
           ))}
         </div>
@@ -564,17 +561,17 @@ export default function Settings() {
         <div className="min-w-0">
           {/* ═══════════ TAB: General ═══════════ */}
           {activeTab === 'general' && (
-            <div className="glass-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
+            <div className="m3-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
               <motion.div
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-8"
               >
                 <div className="space-y-6">
-                  <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Thông tin hệ thống</h3>
+                  <h3 className="font-display text-headline-md text-on-surface dark:text-white border-b border-outline-variant dark:border-slate-700 pb-4">Thông tin hệ thống</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Tên hệ thống</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Tên hệ thống</label>
                       <input
                         type="text"
                         value={systemName}
@@ -583,7 +580,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">URL hệ thống</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">URL hệ thống</label>
                       <input
                         type="text"
                         value={systemUrl}
@@ -592,7 +589,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Email quản trị</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Email quản trị</label>
                       <input
                         type="email"
                         value={adminEmail}
@@ -601,7 +598,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Ngôn ngữ</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Ngôn ngữ</label>
                       <select
                         value={systemLanguage}
                         onChange={e => setSystemLanguage(e.target.value)}
@@ -619,28 +616,28 @@ export default function Settings() {
 
           {/* ═══════════ TAB: Security ═══════════ */}
           {activeTab === 'security' && (
-            <div className="glass-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
+            <div className="m3-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
               <motion.div
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-8"
               >
                 <div className="space-y-6">
-                  <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Chính sách bảo mật</h3>
+                  <h3 className="font-display text-headline-md text-on-surface dark:text-white border-b border-outline-variant dark:border-slate-700 pb-4">Chính sách bảo mật</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between p-4 bg-surface-container-low dark:bg-slate-800/50 rounded-2xl border border-outline-variant dark:border-slate-700">
                       <div className="flex items-center gap-4">
-                        <Lock size={20} className="text-slate-400" />
+                        <Lock size={20} className="text-outline" />
                         <div>
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Xác thực 2 bước (2FA)</p>
-                          <p className="text-xs text-slate-500">Yêu cầu mã OTP khi đăng nhập</p>
+                          <p className="text-sm font-medium text-on-surface dark:text-white">Xác thực 2 bước (2FA)</p>
+                          <p className="text-xs text-on-surface-variant">Yêu cầu mã OTP khi đăng nhập</p>
                         </div>
                       </div>
                       <button
                         onClick={() => setSecurity2FA(v => !v)}
                         className={cn(
                           "w-12 h-6 rounded-full relative transition-colors duration-200",
-                          security2FA ? "bg-brand-indigo" : "bg-slate-200 dark:bg-slate-700"
+                          security2FA ? "bg-primary" : "bg-slate-200 dark:bg-slate-700"
                         )}
                       >
                         <div className={cn(
@@ -649,12 +646,12 @@ export default function Settings() {
                         )} />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between p-4 bg-surface-container-low dark:bg-slate-800/50 rounded-2xl border border-outline-variant dark:border-slate-700">
                       <div className="flex items-center gap-4">
-                        <Eye size={20} className="text-slate-400" />
+                        <Eye size={20} className="text-outline" />
                         <div>
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Timeout phiên làm việc</p>
-                          <p className="text-xs text-slate-500">Tự động đăng xuất sau thời gian không hoạt động</p>
+                          <p className="text-sm font-medium text-on-surface dark:text-white">Timeout phiên làm việc</p>
+                          <p className="text-xs text-on-surface-variant">Tự động đăng xuất sau thời gian không hoạt động</p>
                         </div>
                       </div>
                       <select
@@ -677,14 +674,14 @@ export default function Settings() {
 
           {/* ═══════════ TAB: Notifications ═══════════ */}
           {activeTab === 'notifications' && (
-            <div className="glass-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
+            <div className="m3-card p-4 sm:p-8 min-h-[400px] sm:min-h-[500px]">
               <motion.div
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-8"
               >
                 <div className="space-y-6">
-                  <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-4">Kênh thông báo</h3>
+                  <h3 className="font-display text-headline-md text-on-surface dark:text-white border-b border-outline-variant dark:border-slate-700 pb-4">Kênh thông báo</h3>
                   <div className="space-y-4">
                     {([
                       {
@@ -695,21 +692,21 @@ export default function Settings() {
                         toggle: () => setNotifyEmail(v => !v),
                       },
                     ] as const).map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                      <div key={i} className="flex items-center justify-between p-4 bg-surface-container-low dark:bg-slate-800/50 rounded-2xl border border-outline-variant dark:border-slate-700">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-on-surface-variant">
                             <item.icon size={20} />
                           </div>
                           <div className="space-y-1">
-                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{item.label}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">{item.desc}</p>
+                            <p className="text-sm font-medium text-on-surface dark:text-white">{item.label}</p>
+                            <p className="text-xs text-on-surface-variant">{item.desc}</p>
                           </div>
                         </div>
                         <button
                           onClick={item.toggle}
                           className={cn(
                             "w-12 h-6 rounded-full relative transition-colors duration-200",
-                            item.active ? "bg-brand-indigo" : "bg-slate-200 dark:bg-slate-700"
+                            item.active ? "bg-primary" : "bg-slate-200 dark:bg-slate-700"
                           )}
                         >
                           <div className={cn(
@@ -724,20 +721,20 @@ export default function Settings() {
 
                 {/* ── SMTP configuration ── */}
                 <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-700 pb-4">
-                    <div className="w-9 h-9 rounded-xl bg-brand-indigo/10 flex items-center justify-center shrink-0">
-                      <Server size={18} className="text-brand-indigo" />
+                  <div className="flex items-center gap-3 border-b border-outline-variant dark:border-slate-700 pb-4">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Server size={18} className="text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-h2 font-semibold text-slate-800 dark:text-slate-100">Cấu hình SMTP</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Máy chủ gửi email — dùng cho thông báo hệ thống và reset mật khẩu.</p>
+                      <h3 className="text-h2 font-semibold text-on-surface dark:text-white">Cấu hình SMTP</h3>
+                      <p className="text-xs text-on-surface-variant">Máy chủ gửi email — dùng cho thông báo hệ thống và reset mật khẩu.</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* SMTP host */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">SMTP Host</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">SMTP Host</label>
                       <input
                         type="text"
                         value={smtpHost}
@@ -749,7 +746,7 @@ export default function Settings() {
                     </div>
                     {/* SMTP port */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">SMTP Port</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">SMTP Port</label>
                       <input
                         type="number"
                         min={1}
@@ -759,13 +756,13 @@ export default function Settings() {
                         placeholder="587"
                         className="input-field w-full font-mono text-sm"
                       />
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <p className="text-[11px] text-on-surface-variant">
                         Thường dùng <code className="font-mono">587</code> (TLS) hoặc <code className="font-mono">465</code> (SSL).
                       </p>
                     </div>
                     {/* SMTP username */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Username</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Username</label>
                       <input
                         type="text"
                         value={smtpUsername}
@@ -778,7 +775,7 @@ export default function Settings() {
                     </div>
                     {/* SMTP password — pencil edit pattern carry forward RAG API key */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Password</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">Password</label>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 min-w-0">
                           {editingSmtpPassword ? (
@@ -796,8 +793,8 @@ export default function Settings() {
                               spellCheck={false}
                             />
                           ) : (
-                            <div className="input-field w-full font-mono text-sm text-slate-500 dark:text-slate-400">
-                              {smtpPasswordMask || <span className="italic text-slate-400">Chưa cấu hình</span>}
+                            <div className="input-field w-full font-mono text-sm text-on-surface-variant">
+                              {smtpPasswordMask || <span className="italic text-outline">Chưa cấu hình</span>}
                             </div>
                           )}
                         </div>
@@ -806,7 +803,7 @@ export default function Settings() {
                             type="button"
                             onClick={() => setShowSmtpPassword(v => !v)}
                             title={showSmtpPassword ? 'Ẩn password' : 'Hiện password để kiểm tra'}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-outline hover:text-primary hover:bg-surface-container-low dark:hover:bg-slate-700 transition-colors shrink-0"
                           >
                             {showSmtpPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                           </button>
@@ -816,7 +813,7 @@ export default function Settings() {
                             type="button"
                             onClick={() => { setEditingSmtpPassword(false); setSmtpPassword(''); setShowSmtpPassword(false); }}
                             title="Hủy"
-                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-outline hover:text-slate-600 dark:hover:text-slate-300 hover:bg-surface-container-low dark:hover:bg-slate-700 transition-colors shrink-0"
                           >
                             <X size={16} />
                           </button>
@@ -825,7 +822,7 @@ export default function Settings() {
                             type="button"
                             onClick={() => setEditingSmtpPassword(true)}
                             title="Sửa / đổi password"
-                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-outline hover:text-primary hover:bg-surface-container-low dark:hover:bg-slate-700 transition-colors shrink-0"
                           >
                             <Pencil size={15} />
                           </button>
@@ -835,28 +832,28 @@ export default function Settings() {
                           Khi đang edit: hiển thị số ký tự đã nhập + gợi ý.
                           Khi không edit: vẫn giữ hint preserve-on-empty. */}
                       {editingSmtpPassword ? (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                        <p className="text-[11px] text-on-surface-variant flex items-center gap-1.5 flex-wrap">
                           {smtpPassword ? (
                             <>
                               <Check size={12} className="text-success" />
                               <span className="text-success font-medium">
                                 Đã nhập {smtpPassword.length} ký tự
                               </span>
-                              <span className="text-slate-400">— bấm Lưu thay đổi để cập nhật.</span>
+                              <span className="text-outline">— bấm Lưu thay đổi để cập nhật.</span>
                             </>
                           ) : (
                             <span className="italic">Chưa nhập ký tự nào — để trống khi lưu sẽ giữ password cũ.</span>
                           )}
                         </p>
                       ) : (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <p className="text-[11px] text-on-surface-variant">
                           Để trống khi lưu sẽ <strong>giữ password cũ</strong>.
                         </p>
                       )}
                     </div>
                     {/* SMTP from email */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">From Email</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">From Email</label>
                       <input
                         type="email"
                         value={smtpFromEmail}
@@ -865,13 +862,13 @@ export default function Settings() {
                         className="input-field w-full font-mono text-sm"
                         spellCheck={false}
                       />
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <p className="text-[11px] text-on-surface-variant">
                         Email gửi đi (thường trùng <strong>Username</strong>).
                       </p>
                     </div>
                     {/* SMTP from name */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">From Name</label>
+                      <label className="text-label-md font-bold text-on-surface dark:text-white">From Name</label>
                       <input
                         type="text"
                         value={smtpFromName}
@@ -883,19 +880,19 @@ export default function Settings() {
                   </div>
 
                   {/* SMTP use TLS toggle */}
-                  <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center justify-between p-4 bg-surface-container-low dark:bg-slate-800/50 rounded-2xl border border-outline-variant dark:border-slate-700">
                     <div className="flex items-center gap-4">
-                      <Lock size={20} className="text-slate-400" />
+                      <Lock size={20} className="text-outline" />
                       <div>
-                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Mã hóa STARTTLS</p>
-                        <p className="text-xs text-slate-500">Bật khi dùng port 587 (Gmail / Outlook). Tắt khi dùng port 465 (SSL trực tiếp) hoặc 25 (không mã hóa).</p>
+                        <p className="text-sm font-medium text-on-surface dark:text-white">Mã hóa STARTTLS</p>
+                        <p className="text-xs text-on-surface-variant">Bật khi dùng port 587 (Gmail / Outlook). Tắt khi dùng port 465 (SSL trực tiếp) hoặc 25 (không mã hóa).</p>
                       </div>
                     </div>
                     <button
                       onClick={() => setSmtpUseTls(v => !v)}
                       className={cn(
                         "w-12 h-6 rounded-full relative transition-colors duration-200 shrink-0",
-                        smtpUseTls ? "bg-brand-indigo" : "bg-slate-200 dark:bg-slate-700"
+                        smtpUseTls ? "bg-primary" : "bg-slate-200 dark:bg-slate-700"
                       )}
                     >
                       <div className={cn(
@@ -906,14 +903,14 @@ export default function Settings() {
                   </div>
 
                   {/* ── Test gửi email ── */}
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50/40 dark:bg-slate-800/30">
+                  <div className="rounded-2xl border border-outline-variant dark:border-slate-700 p-4 bg-slate-50/40 dark:bg-slate-800/30">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                         <Mail size={18} className="text-emerald-600" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Test gửi email</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <p className="text-sm font-semibold text-on-surface dark:text-white">Test gửi email</p>
+                        <p className="text-[11px] text-on-surface-variant">
                           Gửi email test với cấu hình SMTP đang nhập (chưa cần Lưu). Password rỗng = dùng password đã lưu.
                         </p>
                       </div>
@@ -975,9 +972,9 @@ export default function Settings() {
                   </div>
 
                   {/* SMTP info note */}
-                  <div className="flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
-                    <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <div className="flex items-start gap-2 p-3 bg-surface-container-low dark:bg-slate-800/50 border border-outline-variant dark:border-slate-700 rounded-xl">
+                    <Info size={12} className="text-outline shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-on-surface-variant leading-relaxed">
                       Cấu hình lưu vào DB; password lưu plain text — encrypt at-rest defer v4.0. Welcome / reset password email tự động kích hoạt khi bật toggle <strong>Thông báo qua Email</strong> ở trên.
                     </p>
                   </div>
@@ -994,21 +991,21 @@ export default function Settings() {
               className="space-y-6"
             >
               {/* ══ Domain config (admin set 1 lần cho cả deployment) ══ */}
-              <section className="glass-card p-5 sm:p-6">
+              <section className="m3-card p-5 sm:p-6">
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="w-9 h-9 rounded-xl bg-brand-indigo/10 flex items-center justify-center shrink-0">
-                    <Plug size={18} className="text-brand-indigo" />
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Plug size={18} className="text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Domain MCP Service</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <h3 className="text-h4 font-semibold text-on-surface dark:text-white">Domain MCP Service</h3>
+                    <p className="text-xs text-on-surface-variant">
                       Cấu hình chung deployment — admin set 1 lần, mọi user dùng. Credentials OAuth riêng từng user xem ở <strong>Profile → MCP Connector</strong>.
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <label className="text-label-md font-bold text-on-surface dark:text-white">
                     Domain public HTTPS của MCP Service
                   </label>
                   <input
@@ -1019,7 +1016,7 @@ export default function Settings() {
                     className="input-field w-full font-mono text-sm"
                     spellCheck={false}
                   />
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
                     URL gốc nơi MCP Service được expose ra Internet — khớp <code className="font-mono">MCP_OAUTH_ISSUER_URL</code> của container. Để trống thì frontend tự suy từ host đang chạy app. Sửa xong nhấn <strong>Lưu thay đổi</strong> ở góc trên.
                   </p>
                 </div>
@@ -1033,9 +1030,9 @@ export default function Settings() {
                   </div>
                 )}
 
-                <div className="mt-4 flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
-                  <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                <div className="mt-4 flex items-start gap-2 p-3 bg-surface-container-low dark:bg-slate-800/50 border border-outline-variant dark:border-slate-700 rounded-xl">
+                  <Info size={12} className="text-outline shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
                     Mỗi user có cặp <strong>client_id / client_secret riêng</strong> (bind cứng theo tài khoản). Vào <strong>Profile → tab MCP Connector</strong> để xem cặp của bạn, sao chép sang dialog "Add custom connector" của Claude web.
                   </p>
                 </div>
@@ -1051,7 +1048,7 @@ export default function Settings() {
               className="space-y-6"
             >
               {/* ══ SECTION 1 · API KEYS ══ */}
-              <section className="glass-card p-5 sm:p-6">
+              <section className="m3-card p-5 sm:p-6">
                 <SectionHeader
                   number="1"
                   title="API Keys"
@@ -1087,9 +1084,9 @@ export default function Settings() {
                   ] as const).map((k) => (
                     <div
                       key={k.id}
-                      className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20"
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-xl border border-outline-variant dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20"
                     >
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 sm:w-44 shrink-0">
+                      <span className="text-label-md font-bold text-on-surface dark:text-white sm:w-44 shrink-0">
                         {k.label}
                       </span>
                       <div className="flex-1 min-w-0">
@@ -1108,8 +1105,8 @@ export default function Settings() {
                             spellCheck={false}
                           />
                         ) : (
-                          <span className="block truncate font-mono text-sm text-slate-500 dark:text-slate-400">
-                            {k.mask || <span className="italic text-slate-400">Chưa cấu hình</span>}
+                          <span className="block truncate font-mono text-sm text-on-surface-variant">
+                            {k.mask || <span className="italic text-outline">Chưa cấu hình</span>}
                           </span>
                         )}
                       </div>
@@ -1119,7 +1116,7 @@ export default function Settings() {
                             type="button"
                             onClick={() => { k.setEditing(false); k.setVal(''); }}
                             title="Hủy"
-                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-outline hover:text-slate-600 dark:hover:text-slate-300 hover:bg-surface-container-low dark:hover:bg-slate-700 transition-colors"
                           >
                             <X size={16} />
                           </button>
@@ -1128,7 +1125,7 @@ export default function Settings() {
                             type="button"
                             onClick={() => k.setEditing(true)}
                             title="Sửa / đổi API key"
-                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-brand-indigo hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-outline hover:text-primary hover:bg-surface-container-low dark:hover:bg-slate-700 transition-colors"
                           >
                             <Pencil size={15} />
                           </button>
@@ -1165,7 +1162,7 @@ export default function Settings() {
               </section>
 
               {/* ══ SECTION 2 · KHI NẠP TÀI LIỆU MỚI ══ */}
-              <section className="glass-card p-5 sm:p-6">
+              <section className="m3-card p-5 sm:p-6">
                 <SectionHeader
                   number="2"
                   title="Khi nạp tài liệu mới"
@@ -1175,12 +1172,12 @@ export default function Settings() {
 
                 <div className="space-y-4">
                   {/* ── Embedding sub-card ── */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+                  <div className="rounded-xl border border-outline-variant dark:border-slate-700 p-4 sm:p-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                       {/* Provider */}
                       <div className="space-y-1.5">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Provider</label>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Chọn provider</p>
+                        <label className="text-sm font-semibold text-on-surface dark:text-white">Provider</label>
+                        <p className="text-xs text-on-surface-variant">Chọn provider</p>
                         <select
                           value={ragEmbeddingProvider}
                           onChange={(e) => {
@@ -1196,8 +1193,8 @@ export default function Settings() {
                       </div>
                       {/* Model */}
                       <div className="space-y-1.5">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Model</label>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Chọn model</p>
+                        <label className="text-sm font-semibold text-on-surface dark:text-white">Model</label>
+                        <p className="text-xs text-on-surface-variant">Chọn model</p>
                         <select
                           value={ragEmbeddingModel}
                           onChange={(e) => {
@@ -1235,8 +1232,8 @@ export default function Settings() {
 
                     {/* Batch size */}
                     <div className="space-y-1.5 mt-4 sm:mt-5">
-                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Batch Size</label>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Số chunks gửi mỗi lần gọi Embedding API</p>
+                      <label className="text-sm font-semibold text-on-surface dark:text-white">Batch Size</label>
+                      <p className="text-xs text-on-surface-variant">Số chunks gửi mỗi lần gọi Embedding API</p>
                       <div className="relative">
                         <input
                           type="number"
@@ -1246,28 +1243,28 @@ export default function Settings() {
                           onChange={(e) => setRagBatchSize(Number(e.target.value))}
                           className="input-field w-full pr-24"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500 pointer-events-none">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-outline pointer-events-none">
                           chunks/call
                         </span>
                       </div>
                     </div>
 
                     {/* Dimension warning */}
-                    <div className="mt-4 flex items-start gap-2 p-3 bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl">
+                    <div className="mt-4 flex items-start gap-2 p-3 bg-slate-100/70 dark:bg-slate-800/40 border border-outline-variant dark:border-slate-700 rounded-xl">
                       <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      <p className="text-[11px] text-on-surface-variant dark:text-slate-300 leading-relaxed">
                         <strong>Cảnh báo dimension:</strong> ChromaDB khóa dimension vào lần đầu tiên lưu. Đổi provider/model sang vector khác chiều sẽ làm <strong>hỏng search</strong> trên tài liệu cũ — cần xóa collection rồi re-embed.
                       </p>
                     </div>
 
                     {/* Collection inventory — per-hub dimension visibility */}
-                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <div className="mt-4 pt-4 border-t border-outline-variant dark:border-slate-700">
                       <div className="flex items-center justify-between mb-2.5">
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-outline">
                             Hiện trạng ChromaDB
                           </p>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                          <p className="text-[10px] text-outline mt-0.5">
                             Provider hiện tại sinh vector {currentDim > 0 ? <span className="font-mono font-semibold">{currentDim}d</span> : '—'} — mỗi hub cần khớp dimension.
                           </p>
                         </div>
@@ -1275,7 +1272,7 @@ export default function Settings() {
                           type="button"
                           onClick={loadCollections}
                           disabled={loadingCollections}
-                          className="text-[10px] text-brand-indigo hover:text-brand-purple disabled:opacity-50 flex items-center gap-1"
+                          className="text-[10px] text-primary hover:text-brand-purple disabled:opacity-50 flex items-center gap-1"
                         >
                           <RefreshCw size={10} className={loadingCollections ? 'animate-spin' : ''} />
                           Refresh
@@ -1283,7 +1280,7 @@ export default function Settings() {
                       </div>
 
                       {collections.length === 0 ? (
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 italic py-2">
+                        <p className="text-[11px] text-outline italic py-2">
                           {loadingCollections ? 'Đang tải...' : 'Chưa có hub nào hoặc chưa có quyền admin.'}
                         </p>
                       ) : (
@@ -1298,7 +1295,7 @@ export default function Settings() {
                                   col.mismatch
                                     ? 'border-danger/40 bg-danger/5 dark:bg-danger/10'
                                     : isEmpty
-                                    ? 'border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30'
+                                    ? 'border-outline-variant dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30'
                                     : 'border-success/30 bg-success/5 dark:bg-success/10'
                                 )}
                               >
@@ -1306,26 +1303,26 @@ export default function Settings() {
                                   <div className={cn(
                                     'w-6 h-6 rounded flex items-center justify-center shrink-0',
                                     col.mismatch ? 'bg-danger/15 text-danger'
-                                      : isEmpty ? 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                      : isEmpty ? 'bg-slate-200 dark:bg-slate-700 text-on-surface-variant'
                                       : 'bg-success/15 text-success'
                                   )}>
                                     {col.mismatch ? <AlertTriangle size={11} /> : isEmpty ? <Database size={11} /> : <Check size={11} />}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="font-semibold text-slate-700 dark:text-slate-200 truncate">{col.hub_name}</p>
-                                    <p className="font-mono text-[10px] text-slate-400 truncate">{col.collection}</p>
+                                    <p className="font-semibold text-on-surface dark:text-white truncate">{col.hub_name}</p>
+                                    <p className="font-mono text-[10px] text-outline truncate">{col.collection}</p>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <span className={cn(
                                     'font-mono font-semibold px-1.5 py-0.5 rounded',
-                                    isEmpty ? 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                    isEmpty ? 'bg-slate-200 dark:bg-slate-700 text-on-surface-variant'
                                       : col.mismatch ? 'bg-danger/10 text-danger'
                                       : 'bg-success/10 text-success'
                                   )}>
                                     {isEmpty ? 'trống' : `${col.dimension}d`}
                                   </span>
-                                  <span className="text-slate-400 font-mono">
+                                  <span className="text-outline font-mono">
                                     {col.doc_count > 0 ? `${col.doc_count} docs` : '0'}
                                   </span>
                                 </div>
@@ -1348,26 +1345,26 @@ export default function Settings() {
                   </div>
 
                   {/* ── Chunking sub-card ── */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+                  <div className="rounded-xl border border-outline-variant dark:border-slate-700 p-4 sm:p-5">
                     <div className="flex items-center gap-3 mb-5">
-                      <div className="w-9 h-9 rounded-xl bg-brand-indigo/10 flex items-center justify-center shrink-0">
-                        <Layers size={18} className="text-brand-indigo" />
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <Layers size={18} className="text-primary" />
                       </div>
                       <div>
-                        <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">Chia đoạn (Chunking)</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Cắt tài liệu thành từng đoạn để AI truy xuất chính xác.</p>
+                        <h3 className="text-h4 font-semibold text-on-surface dark:text-white">Chia đoạn (Chunking)</h3>
+                        <p className="text-xs text-on-surface-variant">Cắt tài liệu thành từng đoạn để AI truy xuất chính xác.</p>
                       </div>
                     </div>
 
                     {/* Pipeline viz */}
-                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700 mb-5 overflow-x-auto">
+                    <div className="flex items-center justify-between p-3 bg-surface-container-low dark:bg-slate-800/50 rounded-xl border border-outline-variant dark:border-slate-700 mb-5 overflow-x-auto">
                       {pipelineSteps.map((step, idx) => (
                         <React.Fragment key={step.label}>
                           <div className="flex flex-col items-center gap-1 min-w-[64px]">
                             <div className="w-9 h-9 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center shadow-sm">
-                              <step.icon size={16} className="text-brand-indigo" />
+                              <step.icon size={16} className="text-primary" />
                             </div>
-                            <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">{step.label}</span>
+                            <span className="text-[10px] font-semibold text-on-surface dark:text-white">{step.label}</span>
                           </div>
                           {idx < pipelineSteps.length - 1 && (
                             <ArrowRight size={14} className="text-slate-300 dark:text-slate-600 shrink-0 mx-0.5" />
@@ -1380,8 +1377,8 @@ export default function Settings() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Chunk Size</label>
-                          <span className="text-sm font-mono font-semibold text-brand-indigo">{ragChunkSize} tokens</span>
+                          <label className="text-label-md font-bold text-on-surface dark:text-white">Chunk Size</label>
+                          <span className="text-sm font-mono font-semibold text-primary">{ragChunkSize} tokens</span>
                         </div>
                         <input
                           type="range"
@@ -1390,16 +1387,16 @@ export default function Settings() {
                           step={50}
                           value={ragChunkSize}
                           onChange={(e) => setRagChunkSize(Number(e.target.value))}
-                          className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-brand-indigo"
+                          className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-primary"
                         />
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <p className="text-[11px] text-on-surface-variant">
                           ~{(ragChunkSize * 4).toLocaleString()} ký tự / chunk
                         </p>
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Chunk Overlap</label>
+                          <label className="text-label-md font-bold text-on-surface dark:text-white">Chunk Overlap</label>
                           <span className="text-sm font-mono font-semibold text-brand-purple">{ragChunkOverlap} tokens</span>
                         </div>
                         <input
@@ -1411,27 +1408,27 @@ export default function Settings() {
                           onChange={(e) => setRagChunkOverlap(Number(e.target.value))}
                           className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-brand-purple"
                         />
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <p className="text-[11px] text-on-surface-variant">
                           ~{(ragChunkOverlap * 4).toLocaleString()} ký tự overlap
                         </p>
                       </div>
                     </div>
 
                     {/* Separators */}
-                    <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Markdown Separators</label>
+                    <div className="mt-5 pt-4 border-t border-outline-variant dark:border-slate-700 space-y-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-wide text-outline">Markdown Separators</label>
                       <div className="flex flex-wrap gap-1.5">
                         {SEPARATORS.map((sep, i) => (
                           <span
                             key={i}
-                            className="inline-flex items-center gap-1 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-600"
+                            className="inline-flex items-center gap-1 text-[10px] font-medium bg-surface-container-low dark:bg-slate-700 text-on-surface-variant dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-600"
                           >
-                            {i > 0 && <ArrowRight size={8} className="text-slate-400 -ml-0.5" />}
+                            {i > 0 && <ArrowRight size={8} className="text-outline -ml-0.5" />}
                             {sep}
                           </span>
                         ))}
                       </div>
-                      <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <p className="text-[10px] text-outline flex items-center gap-1">
                         <Info size={9} className="shrink-0" />
                         tiktoken cl100k_base (99% chính xác)
                       </p>
@@ -1441,7 +1438,7 @@ export default function Settings() {
               </section>
 
               {/* ══ SECTION 3 · KHI TÌM KIẾM & TRẢ LỜI ══ */}
-              <section className="glass-card p-5 sm:p-6">
+              <section className="m3-card p-5 sm:p-6">
                 <SectionHeader
                   number="3"
                   title="Khi tìm kiếm & trả lời"
@@ -1449,19 +1446,19 @@ export default function Settings() {
                   description="Áp dụng ngay cho mọi search mới — hot-swap, không cần restart server."
                 />
 
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+                <div className="rounded-xl border border-outline-variant dark:border-slate-700 p-4 sm:p-5">
                   <div className="flex items-center gap-3 mb-5">
                     <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                       <Cpu size={18} className="text-emerald-600" />
                     </div>
                     <div>
-                      <h3 className="text-h4 font-semibold text-slate-800 dark:text-slate-100">LLM Chat Provider</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Mô hình AI sinh câu trả lời từ tài liệu đã tìm được.</p>
+                      <h3 className="text-h4 font-semibold text-on-surface dark:text-white">LLM Chat Provider</h3>
+                      <p className="text-xs text-on-surface-variant">Mô hình AI sinh câu trả lời từ tài liệu đã tìm được.</p>
                     </div>
                   </div>
 
                   {/* Provider picker — 3 modes */}
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-outline mb-2">
                     Chế độ
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
@@ -1479,7 +1476,7 @@ export default function Settings() {
                             ? opt.color === 'blue' ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                               : opt.color === 'emerald' ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20"
                               : "border-accent bg-accent/5 dark:bg-accent/10"
-                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                            : "border-outline-variant dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                         )}
                       >
                         {llmProvider === opt.id && (
@@ -1498,16 +1495,16 @@ export default function Settings() {
                         )}>
                           {opt.icon}
                         </div>
-                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{opt.label}</span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{opt.desc}</span>
+                        <span className="text-sm font-semibold text-on-surface dark:text-white">{opt.label}</span>
+                        <span className="text-[11px] text-on-surface-variant leading-relaxed">{opt.desc}</span>
                       </button>
                     ))}
                   </div>
 
                   {/* Gemini Chat Model selector (when Gemini is in the loop) */}
                   {(llmProvider === 'gemini' || llmProvider === 'auto') && (
-                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-                      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 block mb-2">
+                    <div className="pt-4 border-t border-outline-variant dark:border-slate-700">
+                      <label className="text-[11px] font-semibold uppercase tracking-wide text-outline block mb-2">
                         Gemini Chat Model
                       </label>
                       <select
@@ -1521,16 +1518,16 @@ export default function Settings() {
                         <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite · GA · miễn phí</option>
                         <option value="gemini-2.5-pro">gemini-2.5-pro · mạnh nhất · tốn phí</option>
                       </select>
-                      <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                      <p className="mt-1.5 text-[10px] text-outline">
                         Gemini ngừng hỗ trợ <code className="font-mono">gemini-2.0-flash</code> cho API key mới. Nếu gặp lỗi 404, đổi sang model khác ở đây.
                       </p>
                     </div>
                   )}
 
                   {/* Independence note */}
-                  <div className="mt-4 flex items-start gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-xl">
-                    <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <div className="mt-4 flex items-start gap-2 p-3 bg-surface-container-low dark:bg-slate-800/50 border border-outline-variant dark:border-slate-700 rounded-xl">
+                    <Info size={12} className="text-outline shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-on-surface-variant leading-relaxed">
                       LLM Chat <strong>độc lập</strong> với Embedding: bạn có thể embed bằng Gemini (miễn phí) và chat bằng OpenAI (chất lượng cao), hoặc ngược lại.
                     </p>
                   </div>
@@ -1542,7 +1539,7 @@ export default function Settings() {
       </div>
 
       {/* Sticky save button on mobile */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-t border-slate-200 dark:border-slate-700 sm:hidden z-40">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-t border-outline-variant dark:border-slate-700 sm:hidden z-40">
         <button
           onClick={handleSave}
           disabled={isSaving}

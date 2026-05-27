@@ -1,0 +1,407 @@
+<!DOCTYPE html><html lang="vi" style="width: 1280px; height: 1024px; overflow: hidden; position: relative;"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Hub Registry - Medinet Wiki</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-primary": "#c2c1ff",
+                    "on-tertiary-fixed-variant": "#7201a2",
+                    "tertiary-container": "#9739c6",
+                    "secondary-fixed-dim": "#adc6ff",
+                    "primary-fixed": "#e2dfff",
+                    "on-surface": "#1a1b1f",
+                    "on-secondary-fixed": "#001a41",
+                    "on-tertiary": "#ffffff",
+                    "primary": "#3f3bbd",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed-dim": "#e8b3ff",
+                    "inverse-surface": "#2f3034",
+                    "inverse-on-surface": "#f1f0f5",
+                    "surface-container-high": "#e9e7ed",
+                    "secondary-fixed": "#d8e2ff",
+                    "primary-container": "#5856d6",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed": "#0c006a",
+                    "surface-container-lowest": "#ffffff",
+                    "surface": "#faf9fe",
+                    "on-primary-container": "#e7e4ff",
+                    "outline": "#777585",
+                    "on-tertiary-fixed": "#310048",
+                    "on-error": "#ffffff",
+                    "surface-dim": "#dad9df",
+                    "secondary-container": "#0070eb",
+                    "on-tertiary-container": "#f8deff",
+                    "error": "#ba1a1a",
+                    "surface-container-low": "#f4f3f8",
+                    "on-primary": "#ffffff",
+                    "outline-variant": "#c7c4d6",
+                    "surface-tint": "#4f4ccd",
+                    "surface-container": "#eeedf3",
+                    "on-background": "#1a1b1f",
+                    "surface-container-highest": "#e3e2e7",
+                    "surface-variant": "#e3e2e7",
+                    "primary-fixed-dim": "#c2c1ff",
+                    "on-primary-fixed-variant": "#3631b4",
+                    "secondary": "#0058bc",
+                    "tertiary-fixed": "#f6d9ff",
+                    "tertiary": "#7c17ab",
+                    "on-surface-variant": "#464554",
+                    "on-secondary-fixed-variant": "#004493",
+                    "on-error-container": "#93000a",
+                    "on-secondary-container": "#fefcff",
+                    "surface-bright": "#faf9fe",
+                    "background": "#faf9fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sidebar-width": "260px",
+                    "stack-lg": "32px",
+                    "gutter": "24px",
+                    "stack-sm": "8px",
+                    "stack-md": "16px",
+                    "margin-mobile": "16px",
+                    "container-max": "1440px"
+            },
+            "fontFamily": {
+                    "body-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-md": ["Manrope"],
+                    "label-md": ["Inter"],
+                    "headline-xl-mobile": ["Manrope"],
+                    "headline-xl": ["Manrope"],
+                    "headline-lg": ["Manrope"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "headline-xl-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "headline-xl": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            background-color: #faf9fe;
+            color: #1a1b1f;
+        }
+        .sidebar-item-active {
+            background-color: #5856d6;
+            color: #e7e4ff;
+            border-radius: 0.5rem;
+            font-weight: 700;
+            border-left: 4px solid #3f3bbd;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c7c4d6;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="font-body-md overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[260px] bg-surface-container-lowest dark:bg-surface border-r border-outline-variant dark:border-outline flex flex-col py-6 px-4 space-y-2 z-40">
+<div class="flex items-center px-2 mb-8 space-x-3">
+<div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">medical_services</span>
+</div>
+<div>
+<h1 class="text-headline-md font-headline-md font-bold text-on-surface">Medinet Wiki</h1>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Hệ thống quản lý tri thức</p>
+</div>
+</div>
+<div class="mb-4">
+<div class="relative group">
+<button class="w-full flex items-center justify-between p-2 rounded-lg border border-outline-variant hover:bg-surface-container-low transition-all">
+<span class="text-label-md font-label-md">Đỗ Minh Đường</span>
+<span class="material-symbols-outlined text-on-surface-variant">unfold_more</span>
+</button>
+</div>
+</div>
+<nav class="flex-1 overflow-y-auto custom-scrollbar space-y-1">
+<div class="text-[11px] font-bold text-outline-variant px-2 py-2 uppercase">Chung</div>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<div class="text-[11px] font-bold text-outline-variant px-2 py-2 uppercase mt-4">Tri thức</div>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">chat_bubble</span>
+<span class="text-label-md font-label-md">Hỏi đáp AI</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">account_tree</span>
+<span class="text-label-md font-label-md">Danh sách tri thức</span>
+</a>
+<a class="flex items-center justify-between px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<div class="flex items-center space-x-3">
+<span class="material-symbols-outlined text-[20px]">sync_alt</span>
+<span class="text-label-md font-label-md">Hàng đợi Sync</span>
+</div>
+<span class="bg-error text-on-error text-[10px] px-1.5 py-0.5 rounded-full font-bold">3</span>
+</a>
+<div class="text-[11px] font-bold text-outline-variant px-2 py-2 uppercase mt-4">Quản trị</div>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">group</span>
+<span class="text-label-md font-label-md">Quản lý User</span>
+</a>
+<!-- Active State for Hub Registry -->
+<a class="flex items-center space-x-3 px-3 py-2.5 bg-primary-container text-on-primary-container rounded-lg font-bold border-l-4 border-primary group transform active:scale-[0.98] transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: &quot;FILL&quot; 1;">hub</span>
+<span class="text-label-md font-label-md">Quản lý Hub</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">vpn_key</span>
+<span class="text-label-md font-label-md">Quản lý API Key</span>
+</a>
+<div class="text-[11px] font-bold text-outline-variant px-2 py-2 uppercase mt-4">Hệ thống</div>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">history_edu</span>
+<span class="text-label-md font-label-md">Audit Log</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">toll</span>
+<span class="text-label-md font-label-md">Token &amp; API Usage</span>
+</a>
+<a class="flex items-center space-x-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="text-label-md font-label-md">Cài đặt hệ thống</span>
+</a>
+</nav>
+<div class="pt-4 border-t border-outline-variant mt-auto">
+<button class="w-full flex items-center space-x-3 px-3 py-3 text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-lg">
+<div class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-[12px]">S</div>
+<div class="flex-1 text-left">
+<p class="text-label-md font-bold leading-none">Super Admin</p>
+<p class="text-[10px] text-outline mt-0.5">admin@medinetgroup.vn</p>
+</div>
+<span class="material-symbols-outlined text-[18px]">logout</span>
+</button>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="pl-[260px] min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="sticky top-0 right-0 z-30 bg-background/80 backdrop-blur-md flex justify-between items-center h-16 w-full pr-8">
+<div class="flex items-center px-8">
+<nav class="flex items-center space-x-2 text-body-sm text-on-surface-variant">
+<span class="">Hệ thống</span>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-primary font-semibold">Hub Registry</span>
+</nav>
+</div>
+<div class="flex items-center space-x-4">
+<div class="relative focus-within:ring-2 focus-within:ring-primary/20 rounded-lg">
+<span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline text-[20px]">search</span>
+</span>
+<input class="bg-surface-container-low border-none rounded-lg py-1.5 pl-10 pr-4 w-64 text-body-md focus:ring-0 focus:bg-surface-container transition-all" placeholder="Tìm nhanh (Cmd + K)..." type="text">
+</div>
+<div class="flex items-center space-x-1 border-r border-outline-variant pr-4 mr-2">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-background"></span>
+</button>
+</div>
+<div class="flex items-center space-x-3">
+<span class="text-label-md text-on-surface-variant font-semibold">Super Admin</span>
+<div class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-[12px]">S</div>
+</div>
+</div>
+</header>
+<!-- Content Area -->
+<div class="flex-1 px-10 py-8 max-w-[1440px]"><div class="flex justify-between items-start mb-10">
+<div>
+<h2 class="text-headline-xl font-headline-xl text-on-surface">Quản lý Hub</h2>
+<p class="text-body-lg text-on-surface-variant mt-1">Quản lý danh sách các Hub dự án trong hệ thống</p>
+</div>
+<button class="flex items-center space-x-2 bg-primary hover:bg-primary-container text-white px-5 py-2.5 rounded-lg font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" onclick="openModal()">
+<span class="material-symbols-outlined text-[20px]">add</span>
+<span class="text-label-md">Thêm Hub Mới</span>
+</button>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant mb-6 flex items-center justify-between">
+<div class="relative w-full max-w-md">
+<span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline text-[20px]">search</span>
+</span>
+<input class="w-full bg-surface-container-low border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary/20 rounded-lg py-2 pl-10 pr-4 text-body-md transition-all" placeholder="Tìm kiếm Hub theo tên hoặc mã..." type="text">
+</div>
+<div class="flex items-center space-x-3">
+<button class="flex items-center space-x-2 px-3 py-2 text-on-surface-variant hover:bg-surface-container-low rounded-lg border border-outline-variant transition-all">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+<span class="text-label-md">Bộ lọc</span>
+</button>
+
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider">TÊN HUB</th>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider">MÃ HUB</th>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider">URL HUB</th>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider text-center">SỐ TRANG</th>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider text-center">SỐ USER</th>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider">TRẠNG THÁI</th>
+<th class="px-6 py-4 text-label-md font-semibold text-outline-variant uppercase tracking-wider text-right">THAO TÁC</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low/50 transition-colors duration-150">
+<td class="px-6 py-5"><span class="text-body-md font-bold text-on-surface">Đỗ Minh Đường</span></td>
+<td class="px-6 py-5"><span class="px-2 py-0.5 bg-surface-container-high rounded text-[11px] font-mono font-bold text-on-surface-variant uppercase">dmd</span></td>
+<td class="px-6 py-5"><a class="text-primary hover:underline font-medium text-body-md" href="#">wiki.medinet.work/dmd</a></td>
+<td class="px-6 py-5 text-center text-body-md text-on-surface-variant">410</td>
+<td class="px-6 py-5 text-center text-body-md text-on-surface-variant">6</td>
+<td class="px-6 py-5"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#D1FAE5] text-[#065F46] whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-1.5"></span>Hoạt động</span></td>
+<td class="px-6 py-5 text-right">
+<div class="flex justify-end space-x-1">
+<button class="p-1.5 text-outline hover:text-primary transition-colors"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+<button class="p-1.5 text-outline hover:text-error transition-colors"><span class="material-symbols-outlined text-[20px]">power_settings_new</span></button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors duration-150">
+<td class="px-6 py-5"><span class="text-body-md font-bold text-on-surface">Thuốc Dân Tộc</span></td>
+<td class="px-6 py-5"><span class="px-2 py-0.5 bg-surface-container-high rounded text-[11px] font-mono font-bold text-on-surface-variant uppercase">tdt</span></td>
+<td class="px-6 py-5"><a class="text-primary hover:underline font-medium text-body-md" href="#">wiki.medinet.work/tdt</a></td>
+<td class="px-6 py-5 text-center text-body-md text-on-surface-variant">276</td>
+<td class="px-6 py-5 text-center text-body-md text-on-surface-variant">8</td>
+<td class="px-6 py-5"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#D1FAE5] text-[#065F46] whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-1.5"></span>Hoạt động</span></td>
+<td class="px-6 py-5 text-right">
+<div class="flex justify-end space-x-1">
+<button class="p-1.5 text-outline hover:text-primary transition-colors"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+<button class="p-1.5 text-outline hover:text-error transition-colors"><span class="material-symbols-outlined text-[20px]">power_settings_new</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-6 py-4 border-t border-outline-variant flex items-center justify-between bg-surface-container-low/30">
+<p class="text-body-sm text-on-surface-variant">Hiển thị 1 - 2 trong tổng số 2 hubs</p>
+<div class="flex space-x-2">
+<button class="px-3 py-1.5 border border-outline-variant rounded-lg text-body-sm font-semibold hover:bg-surface transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled="">Trước</button>
+<button class="px-3 py-1.5 border border-primary rounded-lg bg-primary text-white text-body-sm font-semibold">1</button>
+<button class="px-3 py-1.5 border border-outline-variant rounded-lg text-body-sm font-semibold hover:bg-surface transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled="">Sau</button>
+</div>
+</div>
+</div></div>
+</main>
+<!-- Modal: Thêm Hub Mới -->
+<div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300" id="modalOverlay">
+<div class="bg-white rounded-[20px] w-full max-w-2xl overflow-hidden shadow-2xl transform scale-95 transition-all duration-300">
+<div class="flex justify-between items-center p-6 border-b border-outline-variant">
+<h3 class="text-headline-lg font-headline-lg text-on-surface">Thêm Hub Mới</h3>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors" onclick="closeModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-8 space-y-6">
+<!-- Info Alert -->
+<div class="bg-surface-container-low border border-primary/20 rounded-xl p-4 flex space-x-4">
+<span class="material-symbols-outlined text-primary">warning</span>
+<div class="text-body-sm text-on-surface-variant leading-relaxed">
+<p class="font-bold text-primary mb-1">Form này chỉ ghi metadata Hub vào DB.</p>
+<p class="">Hub thực sự truy cập được sau khi admin chạy <code class="bg-surface-container-high px-1.5 py-0.5 rounded text-primary font-mono text-[11px]">make hub-add HUB=&lt;mã hub&gt;</code> trên VPS để provision DB + container + Caddy regex. Xem <a class="text-primary underline" href="#">VPS_DEPLOY.md §9.4</a>.</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-4">
+<div>
+<label class="block text-label-md font-bold text-on-surface mb-1.5">Tên Hub</label>
+<input class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-lg py-2.5 px-4 text-body-md outline-none transition-all" placeholder="Ví dụ: Tâm Đạo Y Quán" type="text">
+</div>
+<div>
+<label class="block text-label-md font-bold text-on-surface mb-1.5">Mã Hub</label>
+<input class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-lg py-2.5 px-4 text-body-md outline-none transition-all" placeholder="tamdao" type="text">
+<p class="text-[10px] text-outline mt-1.5">Chỉ chữ thường, số và dấu gạch dưới. Tối đa 16 ký tự.</p>
+</div>
+<div>
+<label class="block text-label-md font-bold text-on-surface mb-1.5">URL Hub</label>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-2.5 px-4 text-body-md text-on-surface-variant outline-none" disabled="" type="text" value="wiki.medinet.work/&lt;mã hub&gt;">
+</div>
+</div>
+<div>
+<label class="block text-label-md font-bold text-on-surface mb-1.5">Mô tả</label>
+<textarea class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-lg py-2.5 px-4 text-body-md outline-none transition-all resize-none" placeholder="Mô tả ngắn gọn về Hub..." rows="8"></textarea>
+</div>
+</div>
+</div>
+<div class="p-6 border-t border-outline-variant bg-surface-container-low flex justify-end space-x-3">
+<button class="px-6 py-2 rounded-lg font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="closeModal()">Hủy</button>
+<button class="px-8 py-2 bg-primary hover:bg-primary-container text-white rounded-lg font-bold shadow-md shadow-primary/10 transition-all active:scale-[0.98]">Lưu Hub</button>
+</div>
+</div>
+</div>
+<script>
+        function openModal() {
+            const overlay = document.getElementById('modalOverlay');
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+            overlay.firstElementChild.classList.remove('scale-95');
+            overlay.firstElementChild.classList.add('scale-100');
+        }
+
+        function closeModal() {
+            const overlay = document.getElementById('modalOverlay');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.firstElementChild.classList.add('scale-95');
+            overlay.firstElementChild.classList.remove('scale-100');
+        }
+
+        // Search shortcut
+        window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                document.querySelector('input[placeholder*="Tìm nhanh"]').focus();
+            }
+        });
+    </script>
+
+
+
+
+</body></html>

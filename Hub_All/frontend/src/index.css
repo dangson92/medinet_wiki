@@ -4,6 +4,58 @@
 
 @theme {
   --font-sans: "Inter", -apple-system, "Segoe UI", "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Material 3 color tokens — mẫu giao-dien-mau/clinical_intelligence_system/DESIGN.md */
+  --color-primary: #3f3bbd;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #5856d6;
+  --color-on-primary-container: #e7e4ff;
+  --color-inverse-primary: #c2c1ff;
+  --color-primary-fixed: #e2dfff;
+  --color-primary-fixed-dim: #c2c1ff;
+  --color-on-primary-fixed: #0c006a;
+  --color-on-primary-fixed-variant: #3631b4;
+
+  --color-secondary: #0058bc;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #0070eb;
+  --color-on-secondary-container: #fefcff;
+  --color-secondary-fixed: #d8e2ff;
+  --color-secondary-fixed-dim: #adc6ff;
+  --color-on-secondary-fixed: #001a41;
+  --color-on-secondary-fixed-variant: #004493;
+
+  --color-tertiary: #7c17ab;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #9739c6;
+  --color-on-tertiary-container: #f8deff;
+  --color-tertiary-fixed: #f6d9ff;
+  --color-tertiary-fixed-dim: #e8b3ff;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --color-surface: #faf9fe;
+  --color-surface-dim: #dad9df;
+  --color-surface-bright: #faf9fe;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f4f3f8;
+  --color-surface-container: #eeedf3;
+  --color-surface-container-high: #e9e7ed;
+  --color-surface-container-highest: #e3e2e7;
+  --color-on-surface: #1a1b1f;
+  --color-on-surface-variant: #464554;
+  --color-inverse-surface: #2f3034;
+  --color-inverse-on-surface: #f1f0f5;
+  --color-outline: #777585;
+  --color-outline-variant: #c7c4d6;
+  --color-surface-tint: #4f4ccd;
+  --color-background: #faf9fe;
+  --color-on-background: #1a1b1f;
+  --color-surface-variant: #e3e2e7;
 
   --color-brand-indigo: #6366f1;
   --color-brand-purple: #a855f7;
@@ -90,6 +142,30 @@
     @apply bg-white border border-slate-200/60 rounded-card shadow-sm transition-colors duration-200
       dark:bg-slate-800 dark:border-slate-700/60 dark:shadow-slate-900/30;
   }
+
+  /* Material 3 card — mẫu giao-dien-mau "bg-white border border-outline-variant rounded-xl shadow-sm" */
+  .m3-card {
+    @apply bg-white border border-outline-variant rounded-xl shadow-sm
+      dark:bg-slate-800 dark:border-slate-700;
+  }
+
+  /* Ẩn scrollbar nhưng giữ khả năng scroll — dùng cho thanh chips ngang */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* M3 typography helpers — mẫu DESIGN.md */
+  .text-headline-md { @apply font-display text-[20px] font-semibold leading-7; }
+  .text-headline-lg { @apply font-display text-[24px] font-semibold leading-8; }
+  .text-headline-xl { @apply font-display text-[30px] font-bold leading-[38px] tracking-tight; }
+  .text-body-lg { @apply text-[16px] font-normal leading-6; }
+  .text-body-md { @apply text-[14px] font-normal leading-5; }
+  .text-body-sm { @apply text-[13px] font-normal leading-[18px]; }
+  .text-label-md { @apply text-[12px] font-semibold leading-4 tracking-[0.02em]; }
 
   .btn-primary {
     @apply bg-brand-indigo text-white text-sm font-semibold rounded-button transition-colors duration-150 hover:bg-brand-indigo/90 disabled:opacity-50 disabled:pointer-events-none px-4 py-2 flex items-center justify-center gap-2 whitespace-nowrap;

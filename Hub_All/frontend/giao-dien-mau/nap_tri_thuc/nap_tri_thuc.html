@@ -1,0 +1,396 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Nạp tri thức mới | Medinet Wiki</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#310048",
+                        "inverse-surface": "#2f3034",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-on-surface": "#f1f0f5",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#004493",
+                        "background": "#faf9fe",
+                        "primary-container": "#5856d6",
+                        "surface-container": "#eeedf3",
+                        "on-secondary-fixed": "#001a41",
+                        "secondary-fixed": "#d8e2ff",
+                        "outline": "#777585",
+                        "on-surface-variant": "#464554",
+                        "tertiary-fixed": "#f6d9ff",
+                        "on-secondary-container": "#fefcff",
+                        "inverse-primary": "#c2c1ff",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "on-primary-container": "#e7e4ff",
+                        "on-error": "#ffffff",
+                        "on-background": "#1a1b1f",
+                        "secondary": "#0058bc",
+                        "surface-dim": "#dad9df",
+                        "error": "#ba1a1a",
+                        "tertiary": "#7c17ab",
+                        "surface-bright": "#faf9fe",
+                        "outline-variant": "#c7c4d6",
+                        "on-surface": "#1a1b1f",
+                        "primary-fixed-dim": "#c2c1ff",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#e9e7ed",
+                        "on-secondary": "#ffffff",
+                        "surface-tint": "#4f4ccd",
+                        "secondary-container": "#0070eb",
+                        "primary": "#3f3bbd",
+                        "surface-variant": "#e3e2e7",
+                        "on-error-container": "#93000a",
+                        "surface": "#faf9fe",
+                        "on-tertiary-fixed-variant": "#7201a2",
+                        "on-tertiary-container": "#f8deff",
+                        "surface-container-highest": "#e3e2e7",
+                        "tertiary-fixed-dim": "#e8b3ff",
+                        "tertiary-container": "#9739c6",
+                        "on-primary-fixed": "#0c006a",
+                        "primary-fixed": "#e2dfff",
+                        "on-primary-fixed-variant": "#3631b4",
+                        "surface-container-low": "#f4f3f8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "stack-md": "16px",
+                        "gutter": "24px",
+                        "container-max": "1440px",
+                        "sidebar-width": "260px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-xl": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "body-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-xl-mobile": ["Manrope"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "headline-xl": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                        "headline-xl-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            background-color: #faf9fe;
+            color: #1a1b1f;
+        }
+        .bento-card {
+            background: #ffffff;
+            border: 1px solid #e3e2e7;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .bento-card:hover {
+            box-shadow: 0 4px 12px rgba(63, 59, 189, 0.05);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(227, 226, 231, 0.5);
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- SideNavBar -->
+<aside class="w-sidebar-width h-screen fixed left-0 top-0 bg-surface dark:bg-inverse-surface border-r border-outline-variant dark:border-outline flex flex-col py-stack-lg z-50">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-headline-md">M</div>
+<div>
+<h1 class="text-headline-md font-headline-md font-bold text-primary dark:text-inverse-primary leading-tight">Medinet Wiki</h1>
+<p class="text-label-md font-label-md text-on-surface-variant">Clinical Intelligence</p>
+</div>
+</div>
+</div>
+<div class="px-3 mb-6">
+<div class="bg-surface-container-low rounded-xl p-3 flex items-center justify-between border border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="hub">hub</span>
+<span class="font-label-md text-on-surface">Thuốc Dân Tộc</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">expand_more</span>
+</div>
+</div>
+<nav class="flex-1 space-y-1 overflow-y-auto px-2">
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high px-4 py-3 flex items-center gap-3 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md">Dashboard</span>
+</a>
+<div class="px-4 py-2 mt-4">
+<p class="text-label-md text-on-surface-variant uppercase tracking-wider opacity-60">TRI THỨC</p>
+</div>
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high px-4 py-3 flex items-center gap-3 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="font-label-md">Hỏi đáp AI</span>
+</a>
+<a class="bg-primary-fixed-dim/10 text-primary dark:text-inverse-primary border-l-4 border-primary dark:border-inverse-primary px-4 py-3 flex items-center gap-3 rounded-r-lg" href="#">
+<span class="material-symbols-outlined" data-icon="library_books" style="font-variation-settings: &quot;FILL&quot; 1;">library_books</span>
+<span class="font-label-md">Danh sách tri thức</span>
+</a>
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high px-4 py-3 flex items-center gap-3 transition-all rounded-lg relative" href="#">
+<span class="material-symbols-outlined" data-icon="sync">sync</span>
+<span class="font-label-md">Hàng đợi Sync</span>
+<span class="absolute right-4 bg-error text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full">3</span>
+</a>
+<div class="px-4 py-2 mt-4">
+<p class="text-label-md text-on-surface-variant uppercase tracking-wider opacity-60">QUẢN TRỊ</p>
+</div>
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high px-4 py-3 flex items-center gap-3 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-md">Quản lý User</span>
+</a>
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high px-4 py-3 flex items-center gap-3 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+<span class="font-label-md">Hub Registry</span>
+</a>
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high px-4 py-3 flex items-center gap-3 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="vpn_key">vpn_key</span>
+<span class="font-label-md">Quản lý API Key</span>
+</a>
+</nav>
+<div class="px-2 pt-4 border-t border-outline-variant mt-4">
+<a class="text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low px-4 py-3 flex items-center gap-3 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md">Cài đặt hệ thống</span>
+</a>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 h-16 bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline z-40 flex items-center justify-between px-gutter ml-sidebar-width w-[calc(100%-260px)]">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full py-2 pl-10 pr-4 text-body-md focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/60" placeholder="Tìm kiếm tri thức, bác sĩ, phác đồ... (Cmd+K)" type="text">
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-container transition-colors rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<button class="p-2 hover:bg-surface-container transition-colors rounded-full text-on-surface-variant relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-full font-label-md hover:shadow-lg transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="">Nạp tri thức mới</span>
+</button>
+<div class="h-8 w-px bg-outline-variant mx-2"></div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-label-md font-bold text-on-surface">Administrator</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">System Owner</p>
+</div>
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-headline-md ring-2 ring-surface border-2 border-primary/20">A</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-sidebar-width pt-16 min-h-screen">
+<div class="max-w-[1440px] mx-auto p-gutter">
+<!-- Page Header -->
+<div class="mb-8 flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center rounded-full border border-outline-variant hover:bg-white hover:shadow-sm transition-all">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div>
+<h2 class="text-headline-xl font-headline-xl text-on-surface">Nạp tri thức mới</h2>
+<p class="text-body-md text-on-surface-variant">Chọn phương thức nạp tri thức vào kho dữ liệu Hub Tổng</p>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-8 items-start">
+<!-- Main Upload Area -->
+<div class="col-span-12 lg:col-span-8">
+<div class="bento-card rounded-2xl overflow-hidden shadow-sm">
+<!-- Tabs -->
+<div class="flex border-b border-outline-variant bg-surface-container-lowest">
+<button class="flex-1 py-4 px-6 flex items-center justify-center gap-2 border-b-2 border-primary text-primary font-bold transition-all">
+<span class="material-symbols-outlined text-[20px]">upload_file</span>
+<span class="">Tải lên tệp tin</span>
+</button>
+<button class="flex-1 py-4 px-6 flex items-center justify-center gap-2 text-on-surface-variant hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-[20px]">edit_note</span>
+<span class="">Soạn thảo văn bản</span>
+</button>
+<button class="flex-1 py-4 px-6 flex items-center justify-center gap-2 text-on-surface-variant hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-[20px]">link</span>
+<span class="">Trích xuất từ URL</span>
+</button>
+</div>
+<!-- Upload Zone Content -->
+<div class="p-stack-lg">
+<div class="border-2 border-dashed border-outline-variant rounded-xl bg-surface-container-low/30 p-12 flex flex-col items-center justify-center text-center transition-all hover:border-primary/50 group">
+<div class="w-20 h-20 bg-primary-container/10 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-[40px]" data-icon="cloud_upload">cloud_upload</span>
+</div>
+<h3 class="text-headline-md font-headline-md text-on-surface mb-2">Kéo thả tệp tin vào đây</h3>
+<p class="text-body-md text-on-surface-variant mb-8 max-w-md">
+                                    Hỗ trợ PDF, DOCX, TXT, MD. Tối đa 20MB.
+                                </p>
+<button class="px-8 py-3 bg-white border border-outline-variant rounded-full font-label-md text-on-surface hover:shadow-md hover:border-primary transition-all active:scale-95">
+                                    Chọn tệp từ máy tính
+                                </button>
+</div>
+</div>
+</div>
+<!-- Subtle Decoration/Status Area -->
+<div class="mt-8 grid grid-cols-3 gap-4">
+<div class="glass-panel p-4 rounded-xl flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary-container/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-[20px]">verified_user</span>
+</div>
+<div>
+<p class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wide">Bảo mật</p>
+<p class="text-body-sm font-semibold">Mã hóa AES-256</p>
+</div>
+</div>
+<div class="glass-panel p-4 rounded-xl flex items-center gap-3">
+<div class="w-10 h-10 bg-tertiary-container/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-[20px]">auto_awesome</span>
+</div>
+<div>
+<p class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wide">Trí tuệ nhân tạo</p>
+<p class="text-body-sm font-semibold">Tự động phân đoạn</p>
+</div>
+</div>
+<div class="glass-panel p-4 rounded-xl flex items-center gap-3">
+<div class="w-10 h-10 bg-success-container/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-emerald-600 text-[20px]">speed</span>
+</div>
+<div>
+<p class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wide">Tốc độ</p>
+<p class="text-body-sm font-semibold">Xử lý tức thì</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar Information Panels -->
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<!-- Target Hub Card -->
+<div class="bento-card p-6 rounded-2xl shadow-sm" style="--mouse-x: 39.671875px; --mouse-y: 40px;">
+<h4 class="text-label-md font-bold text-on-surface-variant uppercase tracking-wider mb-4">Kho tri thức đích</h4>
+<div class="p-4 bg-primary-fixed-dim/5 border border-primary/20 rounded-xl flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: &quot;FILL&quot; 1;">hub</span>
+</div>
+<div>
+<p class="text-body-md font-bold text-on-surface">Thuốc Dân Tộc</p>
+<p class="text-[11px] text-on-surface-variant">Tri thức sẽ được vector hóa và lưu trữ vào kho dữ liệu này.</p>
+</div>
+</div>
+</div>
+<!-- Important Notes Card -->
+<div class="bento-card p-6 rounded-2xl shadow-sm">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-amber-500 text-[20px]">info</span>
+<h4 class="text-label-md font-bold text-on-surface-variant uppercase tracking-wider">Lưu ý quan trọng</h4>
+</div>
+<div class="space-y-6">
+<div class="flex gap-4">
+<span class="flex-shrink-0 w-6 h-6 rounded-full bg-surface-container-highest text-[12px] font-bold flex items-center justify-center">1</span>
+<div>
+<h5 class="text-body-md font-bold text-on-surface">Cấu trúc rõ ràng</h5>
+<p class="text-body-sm text-on-surface-variant">Tri thức có tiêu đề và phân đoạn sẽ giúp AI hiểu tốt hơn.</p>
+</div>
+</div>
+<div class="flex gap-4">
+<span class="flex-shrink-0 w-6 h-6 rounded-full bg-surface-container-highest text-[12px] font-bold flex items-center justify-center">2</span>
+<div>
+<h5 class="text-body-md font-bold text-on-surface">Chất lượng file</h5>
+<p class="text-body-sm text-on-surface-variant">Tránh các file scan mờ hoặc không có lớp văn bản (OCR).</p>
+</div>
+</div>
+<div class="flex gap-4">
+<span class="flex-shrink-0 w-6 h-6 rounded-full bg-surface-container-highest text-[12px] font-bold flex items-center justify-center">3</span>
+<div>
+<h5 class="text-body-md font-bold text-on-surface">Tự động Chunking</h5>
+<p class="text-body-sm text-on-surface-variant">Hệ thống sẽ tự động chia nhỏ tri thức để tối ưu tìm kiếm.</p>
+</div>
+</div>
+<div class="flex gap-4">
+<span class="flex-shrink-0 w-6 h-6 rounded-full bg-surface-container-highest text-[12px] font-bold flex items-center justify-center">4</span>
+<div>
+<h5 class="text-body-md font-bold text-on-surface">Bảo mật dữ liệu</h5>
+<p class="text-body-sm text-on-surface-variant">Dữ liệu được mã hóa và chỉ có thể truy cập từ Hub đã chọn.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Promotional / Stats Widget -->
+
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Atmosphere Elements -->
+<div class="fixed top-0 left-0 w-full h-full pointer-events-none -z-10 overflow-hidden">
+<div class="absolute top-[10%] right-[5%] w-[400px] h-[400px] bg-primary/5 rounded-full blur-[100px]"></div>
+<div class="absolute bottom-[5%] left-[20%] w-[300px] h-[300px] bg-tertiary/5 rounded-full blur-[80px]"></div>
+</div>
+<script>
+        // Simple tab switching logic for demonstration
+        document.querySelectorAll('.flex-1.py-4').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.flex-1.py-4').forEach(t => {
+                    t.classList.remove('border-primary', 'text-primary', 'font-bold');
+                    t.classList.add('text-on-surface-variant');
+                });
+                this.classList.add('border-primary', 'text-primary', 'font-bold');
+                this.classList.remove('text-on-surface-variant');
+            });
+        });
+
+        // Hover animation for cards
+        const cards = document.querySelectorAll('.bento-card');
+        cards.forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+
+
+</body></html>

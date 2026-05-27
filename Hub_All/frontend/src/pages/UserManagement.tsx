@@ -59,6 +59,19 @@ const UserManagement = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  // Position cho dropdown floating — compute từ button getBoundingClientRect
+  // để escape mọi parent overflow context (table/main). Dùng position: fixed.
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+
+  const openActionMenu = (userId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (actionMenuId === userId) {
+      setActionMenuId(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    setActionMenuId(userId);
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -639,80 +652,88 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6">
+      {/* Mẫu giao-dien-mau quan_ly_user — h1 headline-xl + CTA "Thêm User" bg-primary */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-headline-xl text-on-surface dark:text-white">Danh sách người dùng</h1>
+          <p className="text-body-md text-on-surface-variant mt-1">Quản lý phân quyền và thông tin tài khoản trong hệ thống</p>
+        </div>
+        <button
+          onClick={handleOpenAddModal}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-lg font-bold text-body-sm shadow-lg shadow-primary/20 hover:bg-primary-container transition-all active:scale-[0.98] shrink-0"
+        >
+          <Plus size={20} />
+          Thêm User
+        </button>
+      </div>
+
       {/* 2026-05-24 UI redesign — bỏ tab navigation per-hub, gộp all hub vào 1
           màn hình + filter dropdown + cột Hub trong bảng. Trước đây mỗi hub 1 tab
           force admin click qua-lại; với user thuộc nhiều hub trùng email gây
           confusion "đã tồn tại nhưng không thấy". */}
-      <div className="flex flex-col lg:flex-row justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-4xl">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-            <input
-              type="text"
-              placeholder="Tìm theo tên hoặc email..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="input-field w-full pl-10"
-            />
-          </div>
-          <select
-            value={hubFilter}
-            onChange={handleHubFilterChange}
-            className="input-field min-w-[160px]"
-            aria-label="Lọc theo hub"
-          >
-            {/* Super admin được chọn 'Tất cả hub'; hub_admin BUỘC chọn 1 hub
-                (BE 400 HUB_ID_REQUIRED — Plan 02-03 DEP-03). */}
-            {isSuperAdmin && <option value="all">Tất cả hub</option>}
-            {filterableHubs.map(hub => (
-              <option key={hub.id} value={hub.id}>{hub.name}</option>
-            ))}
-          </select>
-          <select
-            value={roleFilter}
-            onChange={handleRoleFilterChange}
-            className="input-field min-w-[140px]"
-            aria-label="Lọc theo quyền"
-          >
-            <option value="all">Tất cả quyền</option>
-            <option value="admin">Admin</option>
-            <option value="hub_admin">Hub Admin</option>
-            <option value="editor">Editor</option>
-            <option value="viewer">Viewer</option>
-          </select>
+      <div className="m3-card p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none" size={20} />
+          <input
+            type="text"
+            placeholder="Tìm theo tên hoặc email..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-2 pl-10 pr-4 text-body-md focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+          />
         </div>
-        <button
-          onClick={handleOpenAddModal}
-          className="btn-primary shrink-0"
+        <select
+          value={hubFilter}
+          onChange={handleHubFilterChange}
+          className="bg-surface-container-low border border-outline-variant rounded-lg py-2 px-3 text-body-sm font-semibold text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none min-w-[160px] cursor-pointer dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+          aria-label="Lọc theo hub"
         >
-          <Plus size={18} /> Thêm User
-        </button>
+          {/* Super admin được chọn 'Tất cả hub'; hub_admin BUỘC chọn 1 hub
+              (BE 400 HUB_ID_REQUIRED — Plan 02-03 DEP-03). */}
+          {isSuperAdmin && <option value="all">Tất cả hub</option>}
+          {filterableHubs.map(hub => (
+            <option key={hub.id} value={hub.id}>{hub.name}</option>
+          ))}
+        </select>
+        <select
+          value={roleFilter}
+          onChange={handleRoleFilterChange}
+          className="bg-surface-container-low border border-outline-variant rounded-lg py-2 px-3 text-body-sm font-semibold text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none min-w-[140px] cursor-pointer dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+          aria-label="Lọc theo quyền"
+        >
+          <option value="all">Tất cả quyền</option>
+          <option value="admin">Admin</option>
+          <option value="hub_admin">Hub Admin</option>
+          <option value="editor">Editor</option>
+          <option value="viewer">Viewer</option>
+        </select>
       </div>
 
-      <div className="glass-card">
-        <div className="">
+      <div className="m3-card">
+        {/* KHÔNG dùng overflow-x-auto — sẽ ngầm clip overflow-y (CSS spec quirk) làm dropdown action menu bị cắt.
+            Table width = min-w-[860px], hầu hết desktop đủ rộng; narrow viewport trigger page scroll thay vì clip. */}
+        <div className="rounded-t-xl">
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-accent" size={28} />
+              <Loader2 className="animate-spin text-primary" size={28} />
             </div>
           ) : (
           <table className="w-full text-left border-collapse min-w-[860px]">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/50">
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Tên</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Email</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Quyền</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Hub thành viên</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Ngày tạo</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Đăng nhập cuối</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">Trạng thái</th>
-                <th className="px-5 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 text-right">Thao tác</th>
+            <thead className="bg-surface-container-low border-b border-outline-variant dark:bg-slate-900/50">
+              <tr>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Họ tên & Email</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Vai trò</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Hub thành viên</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Ngày tạo</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Đăng nhập cuối</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline">Trạng thái</th>
+                <th className="px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-outline text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-outline-variant dark:divide-slate-700">
               {users.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+                  <td colSpan={7} className="px-5 py-10 text-center text-body-sm text-on-surface-variant">
                     Không có user phù hợp với bộ lọc.
                   </td>
                 </tr>
@@ -721,13 +742,19 @@ const UserManagement = () => {
                 const effective = effectiveRoleOf(user);
                 const hasPerHubOverride = user.perHubRoles.some(r => r.role !== user.role);
                 return (
-                <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors group">
+                <tr key={user.id} className="hover:bg-surface-container-low/50 transition-colors group dark:hover:bg-slate-700/30">
+                  {/* Mẫu giao-dien-mau quan_ly_user — gộp Tên + Email vào 1 cột */}
                   <td className="px-5 py-4">
-                    <span className="font-semibold text-sm text-slate-900 dark:text-white">{user.name}</span>
+                    <div className="font-body-md font-bold text-on-surface dark:text-white">{user.name}</div>
+                    <div className="text-[12px] text-outline">{user.email}</div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">{user.email}</td>
                   <td className="px-5 py-4">
                     <div className="flex flex-col gap-1">
+                      {/* Mẫu — role badge với M3 fixed colors:
+                          admin → tertiary-fixed (purple) "Super Admin"
+                          hub_admin → primary-fixed (indigo) "Hub Admin"
+                          editor → secondary-fixed (blue) "Editor"
+                          viewer → surface-container-highest (grey) "Viewer" */}
                       <span
                         title={
                           hasPerHubOverride
@@ -735,20 +762,18 @@ const UserManagement = () => {
                             : `Quyền: ${effective}`
                         }
                         className={cn(
-                          "inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap w-fit",
-                          effective === 'admin' && "bg-slate-800 text-white",
-                          effective === 'hub_admin' && "bg-brand-indigo/10 text-brand-indigo dark:text-brand-indigo/90 border border-brand-indigo/30",
-                          effective === 'editor' && "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
-                          effective === 'viewer' && "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+                          "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase whitespace-nowrap w-fit",
+                          effective === 'admin' && "bg-tertiary-fixed text-on-tertiary-fixed",
+                          effective === 'hub_admin' && "bg-primary-fixed text-on-primary-fixed-variant",
+                          effective === 'editor' && "bg-secondary-fixed text-on-secondary-fixed",
+                          effective === 'viewer' && "bg-surface-container-highest text-on-surface-variant",
                         )}
                       >
-                        {effective === 'hub_admin' ? 'hub admin' : effective}
+                        {effective === 'admin' ? 'Super Admin'
+                          : effective === 'hub_admin' ? 'Hub Admin'
+                          : effective === 'editor' ? 'Editor'
+                          : 'Viewer'}
                       </span>
-                      {hasPerHubOverride && (
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">
-                          mặc định: {user.role === 'hub_admin' ? 'hub admin' : user.role}
-                        </span>
-                      )}
                     </div>
                   </td>
                   <td className="px-5 py-4">
@@ -757,7 +782,7 @@ const UserManagement = () => {
                         hub name. */}
                     <div className="flex flex-wrap gap-1 max-w-[260px]">
                       {user.hubIds.length === 0 ? (
-                        <span className="text-[10px] text-slate-400 italic">orphan</span>
+                        <span className="text-[10px] text-outline italic">orphan</span>
                       ) : (
                         user.hubIds.map(hId => {
                           const hub = hubs.find(h => h.id === hId);
@@ -769,8 +794,8 @@ const UserManagement = () => {
                               className={cn(
                                 "inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
                                 isHubAdminHere
-                                  ? "bg-brand-indigo/10 text-brand-indigo dark:text-brand-indigo/90 border border-brand-indigo/30"
-                                  : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+                                  ? "bg-primary/10 text-primary border border-primary/30"
+                                  : "bg-surface-container-low text-on-surface-variant border border-outline-variant/40",
                               )}
                               title={isHubAdminHere ? `Hub admin tại ${hub?.name ?? hId}` : hub?.name ?? hId}
                             >
@@ -782,26 +807,31 @@ const UserManagement = () => {
                       )}
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{user.createdAt}</td>
-                  <td className="px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{user.lastLogin}</td>
+                  <td className="px-5 py-4 text-body-sm text-on-surface-variant">{user.createdAt}</td>
+                  <td className="px-5 py-4 text-body-sm text-on-surface-variant">{user.lastLogin}</td>
                   <td className="px-5 py-4">
-                    <span className={cn(
-                      "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                      user.status === 'active' ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+                    {/* Mẫu — status: dot + text inline (KHÔNG pill) */}
+                    <div className={cn(
+                      "flex items-center gap-1.5 font-semibold text-[13px]",
+                      user.status === 'active' ? "text-emerald-600" : "text-outline"
                     )}>
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        user.status === 'active' ? "bg-emerald-500" : "bg-outline-variant"
+                      )} />
                       {user.status === 'active' ? 'Hoạt động' : 'Đã vô hiệu'}
-                    </span>
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="relative inline-flex">
+                    <div className="inline-flex">
                       <button
-                        onClick={() => setActionMenuId(actionMenuId === user.id ? null : user.id)}
+                        onClick={(e) => openActionMenu(user.id, e)}
                         className={cn(
-                          "p-1.5 rounded-lg transition-colors text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700",
-                          actionMenuId === user.id && "text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700"
+                          "p-1.5 rounded-lg transition-colors hover:bg-surface-container-high",
+                          actionMenuId === user.id ? "text-primary bg-surface-container-high" : "text-on-surface-variant"
                         )}
                       >
-                        <MoreVertical size={16} />
+                        <MoreVertical size={20} />
                       </button>
                       <AnimatePresence>
                         {actionMenuId === user.id && (
@@ -811,13 +841,14 @@ const UserManagement = () => {
                               initial={{ opacity: 0, scale: 0.95, y: -4 }}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                              className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden py-1"
+                              style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
+                              className="w-56 bg-white border border-outline-variant rounded-lg shadow-xl z-50 overflow-hidden py-1 dark:bg-slate-800 dark:border-slate-700"
                             >
                               <button
                                 onClick={() => handleOpenManageHub(user)}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
                               >
-                                <Building2 size={14} className="text-accent" />
+                                <Building2 size={18} className="text-on-surface-variant" />
                                 Quản lý hub & quyền
                               </button>
                               {user.status === 'active' ? (
@@ -827,9 +858,9 @@ const UserManagement = () => {
                                     setIsDisableDialogOpen(true);
                                     setActionMenuId(null);
                                   }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-danger hover:bg-danger/5 transition-colors"
+                                  className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-error hover:bg-error/5 transition-colors"
                                 >
-                                  <UserX size={14} />
+                                  <UserX size={18} />
                                   Vô hiệu hóa
                                 </button>
                               ) : (
@@ -837,9 +868,9 @@ const UserManagement = () => {
                                   onClick={() => {
                                     handleEnableUser(user);
                                   }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-success hover:bg-success/5 transition-colors"
+                                  className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-emerald-600 hover:bg-emerald-50 transition-colors dark:hover:bg-emerald-900/20"
                                 >
-                                  <UserCheck size={14} />
+                                  <UserCheck size={18} />
                                   Kích hoạt lại
                                 </button>
                               )}
@@ -849,20 +880,20 @@ const UserManagement = () => {
                               {isSuperAdmin && currentUser?.user.id !== user.id && (
                                 <button
                                   onClick={() => handleOpenReset(user)}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                                  className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-on-surface hover:bg-surface-container-low transition-colors dark:text-white dark:hover:bg-slate-700"
                                 >
-                                  <RotateCcw size={14} />
+                                  <RotateCcw size={18} className="text-on-surface-variant" />
                                   Cấp lại mật khẩu
                                 </button>
                               )}
                               {currentUser?.user.id !== user.id && (
                                 <>
-                                  <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                                  <div className="h-px bg-outline-variant/30 my-1" />
                                   <button
                                     onClick={() => handleOpenDelete(user)}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-danger hover:bg-danger/10 transition-colors"
+                                    className="w-full flex items-center gap-3 px-4 py-2 text-body-sm text-error hover:bg-error/5 transition-colors"
                                   >
-                                    <Trash2 size={14} />
+                                    <Trash2 size={18} />
                                     Xoá vĩnh viễn
                                   </button>
                                 </>

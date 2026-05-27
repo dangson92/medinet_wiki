@@ -61,9 +61,12 @@ describe('Phase 5 PROXY-04 — Layout sidebar branding', () => {
     delete (window as unknown as { __HUB_CONFIG__?: unknown }).__HUB_CONFIG__;
   });
 
-  it('CURRENT_HUB=central → renders "Medinet Wiki" title in sidebar', async () => {
+  it('CURRENT_HUB=central → renders Medinet Wiki wordmark logo in sidebar', async () => {
     await renderLayoutWithCurrentHub('central');
-    expect(screen.queryByText(/Medinet Wiki/i)).toBeInTheDocument();
+    // Central uses wordmark PNG logo (no separate title text — wordmark contains brand).
+    const logo = screen.queryByAltText(/Medinet Wiki/i) as HTMLImageElement | null;
+    expect(logo).not.toBeNull();
+    expect(logo!.src).toMatch(/\/logo-medinet-wiki-main\.png$/);
   });
 
   it('CURRENT_HUB=yte → renders "Hub Y tế Medinet" title in sidebar', async () => {
