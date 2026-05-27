@@ -137,8 +137,46 @@ if [ "$FE_ONLY" = "0" ]; then
   else
     log "${BOLD}[3/3] Recreate containers${NC} (--force-recreate, infra services KHÔNG đụng)"
   fi
+  # 2026-05-27 fix race condition — recreate central TRUOC, wait healthy, ROI
+  # recreate hub con + mcp. Ly do: hub con boot blocking JWKSCache.fetch_initial()
+  # 5s timeout (Phase 3 Plan 03-02 D-V3-Phase3-B), central can ~50-90s boot xong
+  # (Alembic + cocoindex SETUP + JWKS publish + checksum scheduler). Parallel
+  # recreate gay hub con httpx.ConnectError -> exit 3 (xem docker-compose.override.yml
+  # python-api-dmd depends_on now include python-api-central: service_healthy
+  # nhung --no-deps trong `docker compose up` BYPASS depends_on -> phai split here).
   # Không đụng postgres + redis + caddy (infra) — tránh interrupt DB/cache.
-  docker compose up -d --force-recreate --no-deps "${ALL_SERVICES[@]}"
+  log "Recreate central truoc + wait healthy (tranh race JWKS fetch hub con)..."
+  docker compose up -d --force-recreate --no-deps python-api-central
+
+  # Wait central healthy max 120s (start_period 90s + retries 5 × 10s buffer)
+  HEALTH_TIMEOUT=120
+  WAITED=0
+  while [ $WAITED -lt $HEALTH_TIMEOUT ]; do
+    HEALTH=$(docker inspect -f '{{.State.Health.Status}}' medinet-api-central 2>/dev/null || echo "missing")
+    if [ "$HEALTH" = "healthy" ]; then
+      ok "medinet-api-central healthy sau ${WAITED}s"
+      break
+    fi
+    sleep 3
+    WAITED=$((WAITED + 3))
+    printf "."
+  done
+  echo
+  if [ "$HEALTH" != "healthy" ]; then
+    err "medinet-api-central KHONG healthy sau ${HEALTH_TIMEOUT}s — abort recreate hub con (tranh boot fail JWKS)"
+    err "Kiem tra: docker logs medinet-api-central --tail 80"
+    exit 1
+  fi
+
+  # Central healthy → recreate hub con + mcp_service parallel (mcp da co depends_on
+  # central service_healthy san; hub con qua override.yml fix 2026-05-27).
+  REMAINING=()
+  for svc in "${ALL_SERVICES[@]}"; do
+    [ "$svc" = "python-api-central" ] && continue
+    REMAINING+=("$svc")
+  done
+  log "Recreate hub con + mcp: ${REMAINING[*]}"
+  docker compose up -d --force-recreate --no-deps "${REMAINING[@]}"
   ok "Containers recreated"
 
   # ── Health check ────────────────────────────────────────────────────────────

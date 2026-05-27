@@ -338,7 +338,7 @@ const Layout = () => {
           className={cn(
             "flex items-center gap-3 border-b border-outline-variant dark:border-slate-700",
             HUB_BRANDING.logo.endsWith('.png') && (!collapsed || isMobileMenuOpen)
-              ? "pl-2 pr-2 py-0"
+              ? "px-3 py-3"
               : "px-6 py-5"
           )}
         >
@@ -354,11 +354,10 @@ const Layout = () => {
               {HUB_BRANDING.logo.endsWith('.png') ? (
                 // Wordmark logo (Medinet Wiki main) — render full image only,
                 // no colored container, no text (wordmark already contains brand).
-                // Negative vertical margin to crop ~half of the PNG's transparent padding.
                 <img
                   src={HUB_BRANDING.logo}
                   alt={HUB_BRANDING.title}
-                  className="w-full h-auto max-w-none object-contain -my-2"
+                  className="w-full h-auto max-w-none object-contain"
                 />
               ) : (
                 <>

@@ -55,4 +55,12 @@
         condition: service_healthy
       redis:
         condition: service_healthy
+      # 2026-05-27 fix race condition rebuild-all.sh — hub con boot blocking
+      # JWKSCache.fetch_initial() (Phase 3 Plan 03-02 D-V3-Phase3-B fail-loud
+      # 5s timeout) goi CENTRAL_JWKS_URL. Khi recreate parallel central + dmd,
+      # central can ~50-90s boot xong (Alembic + cocoindex SETUP + JWKS publish
+      # + checksum scheduler) nhung dmd timeout 5s -> httpx.ConnectError -> exit 3.
+      # Bat buoc wait central healthy truoc khi start hub con.
+      python-api-central:
+        condition: service_healthy
     networks: [medinet_net]
